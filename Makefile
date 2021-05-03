@@ -5,6 +5,9 @@ init:
 compile:
 	mill -i HuanCun.compile
 
+test:
+	mill -i HuanCun.test.test
+
 bsp:
 	mill -i mill.bsp.BSP/install
 
