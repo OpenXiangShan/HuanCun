@@ -57,12 +57,11 @@ class HuanCun(val cache: CacheParameters)(implicit p: Parameters)
     require(node.in.size == node.out.size)
 
     (node.in zip node.out) foreach { case ((in, edgeIn), (out, edgeOut)) =>
-      out.a.bits := in.a.bits
-      in.d.bits := out.d.bits
-      in.a.ready := out.a.ready
-      out.a.valid := in.a.valid
-      in.d.valid := out.d.valid
-      out.d.ready := in.d.ready
+      in.a <> out.a
+      in.b <> out.b
+      in.c <> out.c
+      in.d <> out.d
+      in.e <> out.e
     }
 
   }
