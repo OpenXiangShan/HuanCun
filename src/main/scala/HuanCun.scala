@@ -1,4 +1,3 @@
 package HuanCun
 
-class HuanCun {
-}
+class HuanCun {}
