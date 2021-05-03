@@ -1,47 +1,68 @@
 package HuanCun
 
+import chisel3._
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
+import freechips.rocketchip.util.BundleField
 
-class HuanCun(val cache: CacheParameters)(implicit p: Parameters) extends LazyModule {
+trait HasHuanCunParameters {
+  val p: Parameters
+  val cacheParams = p(CacheParamsKey)
+  val blockBytes = cacheParams.blockBytes
 
-  val xfer = TransferSizes(cache.blockBytes, cache.blockBytes)
-  val atom = TransferSizes(1, cache.beatBytes)
-  val access = TransferSizes(1, cache.blockBytes)
+  val blocks = cacheParams.ways * cacheParams.sets
+  val sizeBytes = blocks * blockBytes
+}
+
+abstract class HuanCunModule(implicit p: Parameters) extends LazyModule with HasHuanCunParameters
+
+class HuanCun(implicit p: Parameters) extends HuanCunModule {
+
+  val xfer = TransferSizes(blockBytes, blockBytes)
+  val atom = TransferSizes(1, cacheParams.channelBytes.d.get)
+  val access = TransferSizes(1, blockBytes)
 
   val node: TLAdapterNode = TLAdapterNode(
     clientFn = { _ =>
-      TLClientPortParameters(
+      TLMasterPortParameters.v2(
         Seq(
-          TLClientParameters(
-            name = "L2 HuanCun",
-            supportsProbe = xfer
+          TLMasterParameters.v2(
+            name = cacheParams.name,
+            supports = TLSlaveToMasterTransferSizes(
+              probe = xfer
+            )
           )
-        )
+        ),
+        channelBytes = cacheParams.channelBytes,
+        minLatency = 1,
+        echoFields = cacheParams.echoField,
+        requestFields = cacheParams.reqField,
+        responseKeys = cacheParams.respKey
       )
     },
     managerFn = { m =>
-      TLManagerPortParameters(
-        managers = m.managers.map { m =>
-          m.copy(
-            regionType =
-              if (m.regionType >= RegionType.UNCACHED) RegionType.CACHED
-              else m.regionType,
-            supportsAcquireB = xfer,
-            supportsAcquireT = if (m.supportsAcquireT) xfer else TransferSizes.none,
-            supportsArithmetic = if (m.supportsAcquireT) atom else TransferSizes.none,
-            supportsLogical = if (m.supportsAcquireT) atom else TransferSizes.none,
-            supportsGet = access,
-            supportsPutFull = if (m.supportsAcquireT) access else TransferSizes.none,
-            supportsPutPartial = if (m.supportsAcquireT) access else TransferSizes.none,
-            supportsHint = access,
-            alwaysGrantsT = false,
+      TLSlavePortParameters.v1(
+        m.managers.map { m =>
+          m.v2copy(
+            regionType = if (m.regionType >= RegionType.UNCACHED) RegionType.CACHED else m.regionType,
+            supports = TLMasterToSlaveTransferSizes(
+              acquireB = xfer,
+              acquireT = if (m.supportsAcquireT) xfer else TransferSizes.none,
+              arithmetic = if (m.supportsAcquireT) atom else TransferSizes.none,
+              logical = if (m.supportsAcquireT) atom else TransferSizes.none,
+              get = access,
+              putFull = if (m.supportsAcquireT) access else TransferSizes.none,
+              putPartial = if (m.supportsAcquireT) access else TransferSizes.none,
+              hint = access
+            ),
             fifoId = None
           )
         },
-        beatBytes = cache.beatBytes,
-        minLatency = 2
+        beatBytes = 32,
+        minLatency = 2,
+        responseFields = cacheParams.respField,
+        requestKeys = cacheParams.reqKey
       )
     }
   )
@@ -50,13 +71,9 @@ class HuanCun(val cache: CacheParameters)(implicit p: Parameters) extends LazyMo
 
     require(node.in.size == node.out.size)
 
-    (node.in.zip(node.out)).foreach {
+    node.in.zip(node.out).foreach {
       case ((in, edgeIn), (out, edgeOut)) =>
-        in.a <> out.a
-        in.b <> out.b
-        in.c <> out.c
-        in.d <> out.d
-        in.e <> out.e
+        in <> out
     }
 
   }
