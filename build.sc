@@ -33,14 +33,10 @@ trait CommonModule extends ScalaModule {
 
 object `rocket-chip` extends SbtModule with CommonModule {
 
-  override def scalacPluginIvyDeps = super.scalacPluginIvyDeps() ++ Agg(
-    getVersion("chisel3-plugin", cross = true)
-  )
-
   override def ivyDeps = super.ivyDeps() ++ Agg(
-    getVersion("chisel3"),
     ivy"${scalaOrganization()}:scala-reflect:${scalaVersion()}",
     ivy"org.json4s::json4s-jackson:3.6.1",
+    getVersion("chisel3"),
   )
 
   object macros extends SbtModule with CommonModule
@@ -67,7 +63,6 @@ object HuanCun extends SbtModule with ScalafmtModule with CommonModule {
   override def ivyDeps = super.ivyDeps() ++ Agg(
     getVersion("chisel3"),
     getVersion("chiseltest"),
-    getVersion("chisel3-plugin", cross = true)
   )
 
   override def moduleDeps = super.moduleDeps ++ Seq(`rocket-chip`)
