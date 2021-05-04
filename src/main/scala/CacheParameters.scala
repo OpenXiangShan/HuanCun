@@ -15,7 +15,7 @@ case class CacheParameters(
   sets:         Int = 1024,
   blockBytes:   Int = 64,
   replacement:  String = "plru",
-  mshrs: Int = 16,
+  mshrs:        Int = 16,
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   echoField:    Seq[BundleFieldBase] = Nil,
   reqField:     Seq[BundleFieldBase] = Nil, // master
