@@ -4,7 +4,6 @@ import chisel3._
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util.BundleField
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -15,9 +14,9 @@ trait HasHuanCunParameters {
   val sizeBytes = blocks * blockBytes
 }
 
-abstract class HuanCunModule(implicit p: Parameters) extends LazyModule with HasHuanCunParameters
+abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
 
-class HuanCun(implicit p: Parameters) extends HuanCunModule {
+class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
   val xfer = TransferSizes(blockBytes, blockBytes)
   val atom = TransferSizes(1, cacheParams.channelBytes.d.get)
@@ -74,6 +73,22 @@ class HuanCun(implicit p: Parameters) extends HuanCunModule {
     node.in.zip(node.out).foreach {
       case ((in, edgeIn), (out, edgeOut)) =>
         in <> out
+    }
+
+    // Dump Client Map
+    node.edges.in.headOption.foreach { n =>
+      println(s"L${cacheParams.level} HuanCun Client Map:")
+      n.client.clients.zipWithIndex.foreach { case (c,i) =>
+        println(s"\t${i} <= ${c.name}")
+      }
+      println("")
+    }
+
+    // Create Banks
+    val banks = node.in.zip(node.out).zipWithIndex.foreach {
+      case (((in, edgeIn), (out, edgeOut)), i) =>
+        val slice = Module(new Slice())
+        slice
     }
 
   }
