@@ -4,20 +4,20 @@ import chisel3._
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util.BundleField
 
 trait HasHuanCunParameters {
   val p: Parameters
   val cacheParams = p(CacheParamsKey)
   val blockBytes = cacheParams.blockBytes
 
+  val mshrs = cacheParams.mshrs
   val blocks = cacheParams.ways * cacheParams.sets
   val sizeBytes = blocks * blockBytes
 }
 
-abstract class HuanCunModule(implicit p: Parameters) extends LazyModule with HasHuanCunParameters
+abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
 
-class HuanCun(implicit p: Parameters) extends HuanCunModule {
+class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
   val xfer = TransferSizes(blockBytes, blockBytes)
   val atom = TransferSizes(1, cacheParams.channelBytes.d.get)
@@ -31,7 +31,8 @@ class HuanCun(implicit p: Parameters) extends HuanCunModule {
             name = cacheParams.name,
             supports = TLSlaveToMasterTransferSizes(
               probe = xfer
-            )
+            ),
+            sourceId = IdRange(0, cacheParams.mshrs)
           )
         ),
         channelBytes = cacheParams.channelBytes,
@@ -62,7 +63,8 @@ class HuanCun(implicit p: Parameters) extends HuanCunModule {
         beatBytes = 32,
         minLatency = 2,
         responseFields = cacheParams.respField,
-        requestKeys = cacheParams.reqKey
+        requestKeys = cacheParams.reqKey,
+        endSinkId = cacheParams.mshrs + 2
       )
     }
   )
@@ -73,7 +75,19 @@ class HuanCun(implicit p: Parameters) extends HuanCunModule {
 
     node.in.zip(node.out).foreach {
       case ((in, edgeIn), (out, edgeOut)) =>
-        in <> out
+        out <> in
+        val header = s"======== HuanCun: ${cacheParams.name} ========"
+        println(header)
+        println("clients: " + edgeIn.client.clients.map(_.name).mkString(" "))
+        println("managers: " + edgeOut.manager.managers.map(_.name).mkString(" "))
+        println(header.map(_ => "=").mkString(""))
+    }
+
+    // Create Banks
+    val banks = node.in.zip(node.out).zipWithIndex.foreach {
+      case (((in, edgeIn), (out, edgeOut)), i) =>
+        val slice = Module(new Slice())
+        slice
     }
 
   }
