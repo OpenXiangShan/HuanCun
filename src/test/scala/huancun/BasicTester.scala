@@ -1,11 +1,10 @@
-package HuanCun
+package huancun
 
-import org.scalatest._
-import chiseltest._
 import chisel3._
+import chiseltest._
 import chiseltest.experimental.TestOptionBuilder.ChiselScalatestOptionBuilder
-import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp, LazyModuleImpLike}
-import freechips.rocketchip.tilelink.{TLCacheCork, TLFuzzer, TLIdentityNode, TLRAM}
+import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
+import freechips.rocketchip.tilelink.{TLCacheCork, TLFuzzer, TLRAM}
 
 class BasicTester extends L2Tester {
 

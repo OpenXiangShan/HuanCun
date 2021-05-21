@@ -1,4 +1,4 @@
-package HuanCun
+package huancun
 
 import chipsalliance.rocketchip.config.Config
 import chiseltest._

@@ -1,8 +1,6 @@
-package HuanCun
+package huancun
 
 import chipsalliance.rocketchip.config.Field
-import chisel3._
-import chisel3.util._
 import freechips.rocketchip.tilelink.TLChannelBeatBytes
 import freechips.rocketchip.util.{BundleFieldBase, BundleKeyBase}
 

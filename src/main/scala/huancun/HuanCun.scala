@@ -1,7 +1,7 @@
-package HuanCun
+package huancun
 
-import chisel3._
 import chipsalliance.rocketchip.config.Parameters
+import chisel3._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 
