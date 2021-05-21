@@ -13,6 +13,9 @@ trait HasHuanCunParameters {
   val mshrs = cacheParams.mshrs
   val blocks = cacheParams.ways * cacheParams.sets
   val sizeBytes = blocks * blockBytes
+
+  lazy val edgeInSeq = p(EdgeInSeqKey)
+  lazy val edgeOut = p(EdgeOutKey)
 }
 
 abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
@@ -105,9 +108,16 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
 
     println(s"====== ${cacheParams.name} ======")
     node.in.grouped(node.nBanks).toList.transpose.zip(node.out).zipWithIndex.foreach {
-      case ((inGroup, out), idx) =>
+      case ((inGroup, (_, edgeOut)), idx) =>
+        val inputIds = TLXbar.mapInputIds(inGroup.map(_._2.client))
+        for((id, edge) <- inputIds.zip(inGroup.map(_._2))){
+          println(s"$id - ${edge.client.clients.map(_.name).mkString(" ")}")
+        }
         println(s"slice # $idx [${inGroup.flatMap(_._2.client.clients.map(_.name)).mkString(" ")}]")
-        out._1 <> inGroup.head._1 // FIXME
+        val slice = Module(new Slice()(p.alterPartial{
+          case EdgeInSeqKey => inGroup.map(_._2)
+          case EdgeOutKey => edgeOut
+        }))
     }
   }
 

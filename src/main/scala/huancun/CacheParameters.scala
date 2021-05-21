@@ -1,7 +1,7 @@
 package huancun
 
 import chipsalliance.rocketchip.config.Field
-import freechips.rocketchip.tilelink.TLChannelBeatBytes
+import freechips.rocketchip.tilelink.{TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
 import freechips.rocketchip.util.{BundleFieldBase, BundleKeyBase}
 
 case object CacheParamsKey extends Field[CacheParameters](CacheParameters())
@@ -24,3 +24,6 @@ case class CacheParameters(
   require(sets > 0)
   require(channelBytes.d.get >= 8)
 }
+
+case object EdgeInSeqKey extends Field[Seq[TLEdgeIn]]
+case object EdgeOutKey extends Field[TLEdgeOut]
