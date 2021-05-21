@@ -108,16 +108,16 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
 
     println(s"====== ${cacheParams.name} ======")
     node.in.grouped(node.nBanks).toList.transpose.zip(node.out).zipWithIndex.foreach {
-      case ((inGroup, (_, edgeOut)), idx) =>
-        val inputIds = TLXbar.mapInputIds(inGroup.map(_._2.client))
-        for((id, edge) <- inputIds.zip(inGroup.map(_._2))){
-          println(s"$id - ${edge.client.clients.map(_.name).mkString(" ")}")
-        }
+      case ((inGroup, (out, edgeOut)), idx) => {
         println(s"slice # $idx [${inGroup.flatMap(_._2.client.clients.map(_.name)).mkString(" ")}]")
-        val slice = Module(new Slice()(p.alterPartial{
-          case EdgeInSeqKey => inGroup.map(_._2)
-          case EdgeOutKey => edgeOut
+        val (newIn, newEdgesIn) = SourceIdConverter.convert(inGroup).unzip
+        val slice = Module(new Slice()(p.alterPartial {
+          case EdgeInSeqKey => newEdgesIn
+          case EdgeOutKey   => edgeOut
         }))
+        slice.io.inSeq.zip(newIn).foreach { case (x, y) => x <> y }
+        out <> slice.io.out
+      }
     }
   }
 

@@ -3,8 +3,18 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util.{DecoupledIO, MixedVec, ValidIO}
-import freechips.rocketchip.tilelink.{TLArbiter, TLBundle, TLBundleA, TLBundleB, TLBundleC, TLBundleD, TLBundleE, TLBundleParameters, TLEdgeIn, TLEdgeOut}
-
+import freechips.rocketchip.tilelink.{
+  TLArbiter,
+  TLBundle,
+  TLBundleA,
+  TLBundleB,
+  TLBundleC,
+  TLBundleD,
+  TLBundleE,
+  TLBundleParameters,
+  TLEdgeIn,
+  TLEdgeOut
+}
 
 class MSHRRequest extends Bundle
 
@@ -51,7 +61,6 @@ class SinkE(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   })
 }
 
-
 class SourceAReq extends Bundle
 class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
@@ -89,7 +98,6 @@ class SourceE(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val task = Flipped(DecoupledIO(new SourceEReq))
   })
 }
-
 
 class MSHRStatus extends Bundle
 class MSHRTasks extends Bundle {
@@ -134,13 +142,11 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val sourceDs = edgeInSeq.map(e => Module(new SourceD(e)))
   val sinkEs = cohEdges.map(e => Module(new SinkE(e)))
 
-
   val sourceA = Module(new SourceA(edgeOut))
   val sinkB = Module(new SinkB(edgeOut))
   val sourceC = Module(new SourceC(edgeOut))
   val sinkD = Module(new SinkD(edgeOut))
   val sourceE = Module(new SourceE(edgeOut))
-
 
   io.inSeq <> DontCare
   io.out <> DontCare
