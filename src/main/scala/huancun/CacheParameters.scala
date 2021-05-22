@@ -19,7 +19,8 @@ case class CacheParameters(
   reqField:     Seq[BundleFieldBase] = Nil, // master
   respKey:      Seq[BundleKeyBase] = Nil,
   reqKey:       Seq[BundleKeyBase] = Nil, // slave
-  respField:    Seq[BundleFieldBase] = Nil) {
+  respField:    Seq[BundleFieldBase] = Nil)
+{
   require(ways > 0)
   require(sets > 0)
   require(channelBytes.d.get >= 8)

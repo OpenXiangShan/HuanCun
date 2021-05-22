@@ -1,18 +1,43 @@
 package huancun
 
+import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 
-class SinkAReq extends Bundle
-class SourceBReq extends Bundle
-class SinkCReq extends Bundle
-class SourceDReq extends Bundle
-class SourceAReq extends Bundle
-class SourceCReq extends Bundle
-class SourceEReq extends Bundle
+class SinkAReq(implicit p: Parameters) extends HuanCunBundle
+class SourceBReq(implicit p: Parameters) extends HuanCunBundle
+class SinkCReq(implicit p: Parameters) extends HuanCunBundle
+class SourceDReq(implicit p: Parameters) extends HuanCunBundle
+class SourceAReq(implicit p: Parameters) extends HuanCunBundle
+class SourceCReq(implicit p: Parameters) extends HuanCunBundle
+class SourceEReq(implicit p: Parameters) extends HuanCunBundle
 
-class MSHRRequest extends Bundle
-class MSHRStatus extends Bundle
+class MSHRRequest(implicit p: Parameters) extends HuanCunBundle
+class MSHRStatus(implicit p: Parameters) extends HuanCunBundle
 
-class DirWrite extends Bundle
-class DirRead extends Bundle
-class DirResult extends Bundle
+class TagWrite(implicit p: Parameters) extends HuanCunBundle {
+  val set = UInt(setBits.W)
+  val way = UInt(wayBits.W)
+  val tag = UInt(tagBits.W)
+}
+
+class DirectoryEntry(implicit p: Parameters) extends HuanCunBundle {
+  val dirty = Bool()
+  val state = UInt(stateBits.W)
+  val clients = UInt(clientBits.W)
+}
+
+class DirWrite(implicit p: Parameters) extends HuanCunBundle {
+  val set = UInt(setBits.W)
+  val way = UInt(wayBits.W)
+  val data = new DirectoryEntry
+}
+
+class DirRead(implicit p: Parameters) extends HuanCunBundle {
+  val tag = UInt(tagBits.W)
+  val set = UInt(setBits.W)
+}
+
+class DirResult(implicit p: Parameters) extends DirectoryEntry {
+  val hit = Bool()
+  val way = UInt(wayBits.W)
+}
