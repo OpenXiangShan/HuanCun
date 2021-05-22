@@ -73,5 +73,9 @@ object HuanCun extends SbtModule with ScalafmtModule with CommonModule {
     )
 
     def testFrameworks = Seq("org.scalatest.tools.Framework")
+
+    def testOnly(args: String*) = T.command {
+      super.runMain("org.scalatest.tools.Runner", args: _*)
+    }
   }
 }
