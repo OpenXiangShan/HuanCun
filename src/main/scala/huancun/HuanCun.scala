@@ -139,7 +139,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case ((inGroup, (out, edgeOut)), idx) => {
         println(s"slice # $idx [${inGroup.flatMap(_._2.client.clients.map(_.name)).mkString(" ")}]")
         val (newIn, newEdgesIn) = SourceIdConverter.convert(inGroup).unzip
-        val slice = Module(new Slice()(p.alterPartial {
+        val inputIds = TLXbar.mapInputIds(inGroup.unzip._2.map(_.client))
+        val slice = Module(new Slice(inputIds)(p.alterPartial {
           case EdgeInSeqKey => newEdgesIn
           case EdgeOutKey   => edgeOut
         }))
