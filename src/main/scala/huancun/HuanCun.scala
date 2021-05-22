@@ -12,8 +12,10 @@ trait HasHuanCunParameters {
   val blockBytes = cacheParams.blockBytes
 
   val mshrs = cacheParams.mshrs
+  val mshrsAll = cacheParams.mshrs+2
   val blocks = cacheParams.ways * cacheParams.sets
   val sizeBytes = blocks * blockBytes
+  val dirReadPorts = cacheParams.dirReadPorts
 
   lazy val edgeInSeq = p(EdgeInSeqKey)
   lazy val edgeOut = p(EdgeOutKey)
@@ -111,7 +113,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         minLatency = 2,
         responseFields = cacheParams.respField,
         requestKeys = cacheParams.reqKey,
-        endSinkId = cacheParams.mshrs + 2
+        endSinkId = mshrsAll
       )
     }
   )
