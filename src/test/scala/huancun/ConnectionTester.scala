@@ -3,9 +3,9 @@ import chisel3._
 import chiseltest._
 import chiseltest.experimental.TestOptionBuilder.ChiselScalatestOptionBuilder
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
-import freechips.rocketchip.tilelink.{BankBinder, TLAdapterNode, TLCacheCork, TLFuzzer, TLRAM, TLXbar}
+import freechips.rocketchip.tilelink.{BankBinder, TLRAM, TLXbar}
 
-class ConnectionTester extends L2Tester {
+class ConnectionTester extends L2Tester with WithFixSubModuleInputs {
 
   val nBanks = 2
 

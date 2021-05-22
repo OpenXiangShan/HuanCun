@@ -4,6 +4,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
+import huancun.utils.SourceIdConverter
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -18,7 +19,18 @@ trait HasHuanCunParameters {
   lazy val edgeOut = p(EdgeOutKey)
 }
 
-abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
+trait DontCareInnerLogic { this: Module =>
+  override def IO[T <: Data](iodef: T): T = {
+    val p = chisel3.experimental.IO.apply(iodef)
+    p <> DontCare
+    p
+  }
+}
+
+abstract class HuanCunModule(implicit val p: Parameters)
+    extends Module
+    with HasHuanCunParameters
+    with DontCareInnerLogic
 
 /**
   * We want to create hierarchy like this:

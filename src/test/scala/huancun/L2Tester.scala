@@ -4,6 +4,8 @@ import chipsalliance.rocketchip.config.Config
 import chiseltest._
 import chiseltest.internal.{VerilatorBackendAnnotation, WriteVcdAnnotation}
 import firrtl.AnnotationSeq
+import firrtl.stage.RunFirrtlTransformAnnotation
+import huancun.utils.FixSubModuleInputs
 import org.scalatest.flatspec._
 import org.scalatest.matchers.should._
 
@@ -24,4 +26,8 @@ trait UseVerilatorBackend { this: HasTestAnnos =>
 
 trait DumpVCD { this: HasTestAnnos =>
   testAnnos = testAnnos :+ WriteVcdAnnotation
+}
+
+trait WithFixSubModuleInputs { this: HasTestAnnos =>
+  testAnnos = testAnnos :+ RunFirrtlTransformAnnotation(new FixSubModuleInputs)
 }

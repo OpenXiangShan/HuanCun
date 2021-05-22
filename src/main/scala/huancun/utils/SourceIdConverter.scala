@@ -1,4 +1,4 @@
-package huancun
+package huancun.utils
 
 import chisel3._
 import chisel3.util._
