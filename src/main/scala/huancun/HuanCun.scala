@@ -17,31 +17,63 @@ trait HasHuanCunParameters {
 
 abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
 
+/**
+  * We want to create hierarchy like this:
+  *   <= L2-bank0 <= { L1D-bank0, L1I-bank0, PTW-bank0 }
+  *   <= L2-bank1 <= { L1D-bank1, L1I-bank1, PTW-bank1 }
+  * So a custom node is needed.
+  */
+case class L2Node(
+  clientPortParameters: TLClientPortParameters,
+  managerFn:            TLManagerPortParameters => TLManagerPortParameters
+)(
+  implicit valName: ValName)
+    extends TLCustomNode {
+
+  def nClients: Int = iPorts.map(_._2).distinct.size
+  def nBanks:   Int = iPorts.size / nClients
+
+  override def resolveStar(iKnown: Int, oKnown: Int, iStars: Int, oStars: Int): (Int, Int) = {
+    require(iStars == 0 && iKnown > 0)
+    require((oStars == 0 && oKnown == nBanks) || oKnown == 0)
+    val oStar = if (oStars == 0) 0 else nBanks
+    (0, oStar)
+  }
+
+  override def mapParamsD(n: Int, p: Seq[TLClientPortParameters]): Seq[TLClientPortParameters] = {
+    Seq.fill(n)(clientPortParameters)
+  }
+
+  override def mapParamsU(n: Int, p: Seq[TLManagerPortParameters]): Seq[TLManagerPortParameters] = {
+    Seq.fill(nClients)(p.map(managerFn)).flatten
+  }
+}
+
 class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
   val xfer = TransferSizes(blockBytes, blockBytes)
   val atom = TransferSizes(1, cacheParams.channelBytes.d.get)
   val access = TransferSizes(1, blockBytes)
 
-  val node: TLAdapterNode = TLAdapterNode(
-    clientFn = { _ =>
-      TLMasterPortParameters.v2(
-        Seq(
-          TLMasterParameters.v2(
-            name = cacheParams.name,
-            supports = TLSlaveToMasterTransferSizes(
-              probe = xfer
-            ),
-            sourceId = IdRange(0, cacheParams.mshrs)
-          )
+  val clientPortParams = TLMasterPortParameters.v2(
+    Seq(
+      TLMasterParameters.v2(
+        name = cacheParams.name,
+        supports = TLSlaveToMasterTransferSizes(
+          probe = xfer
         ),
-        channelBytes = cacheParams.channelBytes,
-        minLatency = 1,
-        echoFields = cacheParams.echoField,
-        requestFields = cacheParams.reqField,
-        responseKeys = cacheParams.respKey
+        sourceId = IdRange(0, cacheParams.mshrs)
       )
-    },
+    ),
+    channelBytes = cacheParams.channelBytes,
+    minLatency = 1,
+    echoFields = cacheParams.echoField,
+    requestFields = cacheParams.reqField,
+    responseKeys = cacheParams.respKey
+  )
+
+  val node: L2Node = L2Node(
+    clientPortParams,
     managerFn = { m =>
       TLSlavePortParameters.v1(
         m.managers.map { m =>
@@ -71,24 +103,12 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
 
   lazy val module = new LazyModuleImp(this) {
 
-    require(node.in.size == node.out.size)
-
-    node.in.zip(node.out).foreach {
-      case ((in, edgeIn), (out, edgeOut)) =>
-        out <> in
-        val header = s"======== HuanCun: ${cacheParams.name} ========"
-        println(header)
-        println("clients: " + edgeIn.client.clients.map(_.name).mkString(" "))
-        println("managers: " + edgeOut.manager.managers.map(_.name).mkString(" "))
-        println(header.map(_ => "=").mkString(""))
+    println(s"====== ${cacheParams.name} ======")
+    node.in.grouped(node.nBanks).toList.transpose.zip(node.out).zipWithIndex.foreach {
+      case ((inGroup, out), idx) =>
+        println(s"slice # $idx [${inGroup.flatMap(_._2.client.clients.map(_.name)).mkString(" ")}]")
+        out._1 <> inGroup.head._1 // FIXME
     }
-
-    // Create Banks
-    val banks = node.in.zip(node.out).zipWithIndex.foreach {
-      case (((in, edgeIn), (out, edgeOut)), i) =>
-        val slice = Module(new Slice())
-        slice
-    }
-
   }
+
 }
