@@ -73,7 +73,7 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
     val sinkATaskArb = Module(new Arbiter(new SinkAReq, mshrs))
     for (i <- 0 until mshrs) {
       sinkATaskArb.io.in(i) <> ms(i).io.tasks.sink_a
-      sinkATaskArb.io.in(i).valid := ms(i).io.tasks.sink_a.valid && idRange.contains(ms(i).io.tasks.sink_a.bits.id)
+      sinkATaskArb.io.in(i).valid := ms(i).io.tasks.sink_a.valid && idRange.contains(ms(i).io.tasks.sink_a.bits.sourceId)
     }
     sinkA.io.task <> sinkATaskArb.io.out
   }
@@ -82,7 +82,7 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
     val sourceDTaskArb = Module(new Arbiter(new SourceDReq, mshrs))
     for (i <- 0 until mshrs) {
       sourceDTaskArb.io.in(i) <> ms(i).io.tasks.source_d
-      sourceDTaskArb.io.in(i).valid := ms(i).io.tasks.source_d.valid && idRange.contains(ms(i).io.tasks.source_d.bits.id)
+      sourceDTaskArb.io.in(i).valid := ms(i).io.tasks.source_d.valid && idRange.contains(ms(i).io.tasks.source_d.bits.sourceId)
     }
     sourceD.io.task <> sourceDTaskArb.io.out
   }
@@ -91,7 +91,7 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
     val sourceBTaskArb = Module(new Arbiter(new SourceBReq, mshrs))
     for (i <- 0 until mshrs) {
       sourceBTaskArb.io.in(i) <> ms(i).io.tasks.source_b
-      sourceBTaskArb.io.in(i).valid := ms(i).io.tasks.source_b.valid && cohIdRange.contains(ms(i).io.tasks.source_b.bits.id)
+      sourceBTaskArb.io.in(i).valid := ms(i).io.tasks.source_b.valid && cohIdRange.contains(ms(i).io.tasks.source_b.bits.sourceId)
     }
     sourceB.io.task <> sourceBTaskArb.io.out
   }
@@ -100,7 +100,7 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
     val sinkCTaskArb = Module(new Arbiter(new SinkCReq, mshrs))
     for (i <- 0 until mshrs) {
       sinkCTaskArb.io.in(i) <> ms(i).io.tasks.sink_c
-      sinkCTaskArb.io.in(i).valid := ms(i).io.tasks.sink_c.valid && cohIdRange.contains(ms(i).io.tasks.sink_c.bits.id)
+      sinkCTaskArb.io.in(i).valid := ms(i).io.tasks.sink_c.valid && cohIdRange.contains(ms(i).io.tasks.sink_c.bits.sourceId)
     }
     sinkC.io.task <> sinkCTaskArb.io.out
   }
