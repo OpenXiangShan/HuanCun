@@ -14,19 +14,31 @@ class FixSubModuleInputs extends Transform with DependencyAPIMigration {
 
     def findModule(name: String) = state.circuit.modules.find(m => m.name == name)
 
-    def getFlow(parent: SubField, field: Field) = (parent.flow, field.flip) match {
+    type Ref = Expression with RefLikeExpression
+
+    def getFlow(parent: Ref, field: Field) = (parent.flow, field.flip) match {
       case (SourceFlow, Flip) => SinkFlow
       case (SinkFlow, Flip)   => SourceFlow
       case _                  => parent.flow
     }
 
-    def getAllSinks(t: Type, parent: SubField): Seq[Expression] = {
+    def isReset(parent: Ref): Boolean = parent match {
+      case SubField(expr, name, tpe, SinkFlow) => if (name == "reset") true else false
+      case _                                   => false
+    }
+
+    def getAllSinks(t: Type, parent: Ref): Seq[Expression] = {
       t match {
         case BundleType(fields) =>
           fields.flatMap(f => getAllSinks(f.tpe, SubField(parent, f.name, f.tpe, getFlow(parent, f))))
         case VectorType(tpe, size) =>
-          Seq.tabulate(size) { i => SubIndex(SubField(parent, parent.name, tpe, parent.flow), i, tpe) }
-        case UIntType(width) if parent.name != "reset" && parent.flow == SinkFlow =>
+          Seq
+            .tabulate(size) { i =>
+              val elem = SubIndex(parent, i, tpe, parent.flow)
+              getAllSinks(elem.tpe, elem)
+            }
+            .flatten
+        case UIntType(width) if parent.flow == SinkFlow && !isReset(parent) =>
           Seq(parent)
         case SIntType(width) =>
           Seq(parent)
