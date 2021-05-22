@@ -24,7 +24,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val id = Input(UInt())
     val alloc = Flipped(ValidIO(new MSHRRequest))
-    val status = Output(new MSHRStatus)
+    val status = ValidIO(new MSHRStatus)
     val tasks = new MSHRTasks
     val dirResult = Flipped(ValidIO(new DirResult))
   })

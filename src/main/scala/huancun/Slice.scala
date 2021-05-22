@@ -41,8 +41,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   // Connect to MSHR Allocator
   val mshrAlloc = Module(new MSHRAlloc(sinkAs.size, 1, sinkCs.size))
-  mshrAlloc.io.inA.zip(sinkAs).foreach{ case (m, a) => m := a.io.alloc }
-  mshrAlloc.io.inB := sinkB.io.alloc
-  mshrAlloc.io.inC.zip(sinkCs).foreach{ case (m, c) => m := c.io.alloc }
+  mshrAlloc.io.inA.zip(sinkAs).foreach { case (m, a) => m <> a.io.alloc }
+  mshrAlloc.io.inB.head <> sinkB.io.alloc
+  mshrAlloc.io.inC.zip(sinkCs).foreach { case (m, c) => m <> c.io.alloc }
 
 }

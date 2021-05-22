@@ -33,11 +33,13 @@ class DirWrite(implicit p: Parameters) extends HuanCunBundle {
 }
 
 class DirRead(implicit p: Parameters) extends HuanCunBundle {
+  val id = UInt(mshrsAll.W)
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
 }
 
 class DirResult(implicit p: Parameters) extends DirectoryEntry {
+  val id = UInt(mshrsAll.W)
   val hit = Bool()
   val way = UInt(wayBits.W)
 }
