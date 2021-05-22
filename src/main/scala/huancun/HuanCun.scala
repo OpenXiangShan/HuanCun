@@ -2,6 +2,7 @@ package huancun
 
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
+import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import huancun.utils.SourceIdConverter
@@ -17,8 +18,19 @@ trait HasHuanCunParameters {
   val sizeBytes = blocks * blockBytes
   val dirReadPorts = cacheParams.dirReadPorts
 
+  val wayBits = log2Ceil(cacheParams.ways)
+  val setBits = log2Ceil(cacheParams.sets)
+  val offsetBits = log2Ceil(blockBytes)
+
+  val stateBits = 2
+
   lazy val edgeInSeq = p(EdgeInSeqKey)
   lazy val edgeOut = p(EdgeOutKey)
+
+  lazy val clientBits = edgeInSeq.map(e => e.client.clients.count(_.supports.probe)).sum
+
+  lazy val addressBits = edgeOut.bundle.addressBits
+  lazy val tagBits = addressBits - setBits - offsetBits
 }
 
 trait DontCareInnerLogic { this: Module =>
@@ -28,6 +40,8 @@ trait DontCareInnerLogic { this: Module =>
     p
   }
 }
+
+abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with HasHuanCunParameters
 
 abstract class HuanCunModule(implicit val p: Parameters)
     extends Module
