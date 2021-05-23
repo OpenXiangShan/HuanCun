@@ -23,7 +23,7 @@ trait HasHuanCunParameters {
   val setBits = log2Ceil(cacheParams.sets)
   val offsetBits = log2Ceil(blockBytes)
 
-  val stateBits = 2
+  val stateBits = MetaData.stateBits
 
   lazy val edgeInSeq = p(EdgeInSeqKey)
   lazy val edgeOut = p(EdgeOutKey)

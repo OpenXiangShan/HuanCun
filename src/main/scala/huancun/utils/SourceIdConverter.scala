@@ -23,7 +23,6 @@ object SourceIdConverter {
     val newBundles = newEdges.map(e => Wire(TLBundle(e.bundle)))
     for (((n, o), range) <- newBundles.zip(rawIn).zip(inputIds)) {
       n <> o
-      println(n.a.bits.source.getWidth)
       n.a.bits.source := o.a.bits.source | range.start.U // o -> n
       o.b.bits.source := cut(n.b.bits.source, range.size) // o <- n
       n.c.bits.source := o.c.bits.source | range.start.U // o -> n

@@ -46,12 +46,16 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   mshrAlloc.io.cohClints.map(_.a).zip(sinkAs.filter(_.edge.client.anySupportProbe)).foreach(c => c._1 <> c._2.io.alloc)
   mshrAlloc.io.cohClints.map(_.b).zip(Seq(sinkB)).foreach(c => c._1 <> c._2.io.alloc)
   mshrAlloc.io.cohClints.map(_.c).zip(sinkCs).foreach(c => c._1 <> c._2.io.alloc)
-  mshrAlloc.io.relaxClints.map(_.a).zip(sinkAs.filter(!_.edge.client.anySupportProbe)).foreach(c => c._1 <> c._2.io.alloc)
+  mshrAlloc.io.relaxClints
+    .map(_.a)
+    .zip(sinkAs.filter(!_.edge.client.anySupportProbe))
+    .foreach(c => c._1 <> c._2.io.alloc)
 
   // MSHRs
   val ms = Seq.fill(mshrs) { Module(new MSHR()) }
-  ms.zipWithIndex.foreach { case (mshr, i) =>
-    mshr.io.id := i.U
+  ms.zipWithIndex.foreach {
+    case (mshr, i) =>
+      mshr.io.id := i.U
   }
 
   // Send tasks
