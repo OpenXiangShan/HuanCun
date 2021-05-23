@@ -2,7 +2,7 @@ package huancun
 
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
-import chisel3.util.{Cat, Decoupled, DecoupledIO, PopCount, UIntToOH, ValidIO, log2Up}
+import chisel3.util._
 import huancun.utils.ParallelOR
 
 class CohClint(implicit p: Parameters) extends HuanCunBundle() {
@@ -59,18 +59,25 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
   val relaxMaskVec2 = io.relaxClints.map(_.a).map(c =>
     ParallelOR(io.status.map(s => s.bits.set === c.bits.set)))
 
+  // TODO: implement nest & block logic
+  val nestB = false.B
+  val nestC = false.B
+  val blockB = false.B
+  val blockC = false.B
+
+
   /*
    * Find idle MSHR entries
    */
   val mshrIdle = Wire(Vec(dirReadPorts, ValidIO(UInt(log2Up(mshrsAll).W)))) // TODO: refill logic here
-
+  mshrIdle := DontCare
   /*
    * Arbitration & allocation of directory read ports
    */
 
   // Collision mask
   val relaxMask = relaxMaskVec1.zip(relaxMaskVec2).map(c => c._1 || c._2)
-  val cohMask = WireInit(VecInit(Seq.fill(3)(false.B)))  // TODO
+  val cohMask = VecInit(Seq.fill(3)(false.B)) // TODO
 
   // Arbiter relaxReqs
   val relaxReqs = Wire(Vec(nrRelaxClints, DecoupledIO(new MSHRRequest)))
@@ -100,9 +107,6 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
       dir.bits.set := req.bits.set
       dir.bits.id  := alloc.bits
       req.ready    := dir.ready && alloc.valid
-  }
-  io.relaxClints.map(_.a).zip(relaxMask).foreach{
-    case (c, mask) => c.ready := c.ready && !mask
   }
 
   /*
