@@ -16,6 +16,19 @@ class SourceAReq(implicit p: Parameters) extends HuanCunBundle
 class SourceCReq(implicit p: Parameters) extends HuanCunBundle
 class SourceEReq(implicit p: Parameters) extends HuanCunBundle
 
+class SinkCResp(implicit p: Parameters) extends HuanCunBundle {
+  // ProbeAck
+  val set = UInt(setBits.W) // The target address of the transfer, but only set is enough
+}
+class SinkDResp(implicit p: Parameters) extends HuanCunBundle {
+  // Grant / AccessAck / ReleaseAck
+  val source = UInt(mshrBits.W) // The master source id receiving the resp
+}
+class SinkEResp(implicit p: Parameters) extends HuanCunBundle {
+  // GrantAck
+  val sink = UInt(mshrBits.W) // The slave sink id accepting this resp
+}
+
 class MSHRRequest(implicit p: Parameters) extends HuanCunBundle {
   val set = UInt(setBits.W)
   val tag = UInt(tagBits.W)

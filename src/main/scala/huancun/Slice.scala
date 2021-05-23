@@ -137,6 +137,20 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
     arbInnerTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), idRange, Some("sinkC"))
   }
 
+  // Resps to MSHRs
+  ms.zipWithIndex.foreach {
+    case (mshr, i) =>
+      val sinkCRespMatch = sinkCs.map(s => s.io.resp.valid && s.io.resp.bits.set === mshr.io.status.bits.set)
+      val sinkERespMatch = sinkEs.map(s => s.io.resp.valid && s.io.resp.bits.sink === i.U)
+      mshr.io.resps.sink_c.valid := Cat(sinkCRespMatch).orR
+      mshr.io.resps.sink_d.valid := sinkD.io.resp.valid && sinkD.io.resp.bits.source === i.U
+      mshr.io.resps.sink_e.valid := Cat(sinkERespMatch).orR
+      mshr.io.resps.sink_c.bits := ParallelMux(sinkCRespMatch.zip(sinkCs.map(_.io.resp.bits)))
+      mshr.io.resps.sink_d.bits := sinkD.io.resp.bits
+      mshr.io.resps.sink_e.bits := ParallelMux(sinkERespMatch.zip(sinkEs.map(_.io.resp.bits)))
+  }
+
+  // Directory read results to MSHRs
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
       val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.id(i))

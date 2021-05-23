@@ -9,7 +9,7 @@ class SinkC(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val c = Flipped(DecoupledIO(new TLBundleC(edge.bundle)))
     val alloc = DecoupledIO(new MSHRRequest)
-    val resp = ValidIO(new TLBundleC(edge.bundle))
+    val resp = ValidIO(new SinkCResp)
     val task = Flipped(DecoupledIO(new SinkCReq))
   })
 }

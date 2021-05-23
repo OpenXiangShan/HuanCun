@@ -14,6 +14,7 @@ trait HasHuanCunParameters {
 
   val mshrs = cacheParams.mshrs
   val mshrsAll = cacheParams.mshrs + 2
+  val mshrBits = log2Up(mshrsAll)
   val blocks = cacheParams.ways * cacheParams.sets
   val sizeBytes = blocks * blockBytes
   val dirReadPorts = cacheParams.dirReadPorts

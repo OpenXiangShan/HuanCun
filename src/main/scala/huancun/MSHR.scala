@@ -20,6 +20,12 @@ class MSHRTasks(implicit p: Parameters) extends HuanCunBundle {
   val tag_write = DecoupledIO(new TagWrite)
 }
 
+class MSHRResps(implicit p: Parameters) extends HuanCunBundle {
+  val sink_c = ValidIO(new SinkCResp)
+  val sink_d = ValidIO(new SinkDResp)
+  val sink_e = ValidIO(new SinkEResp)
+}
+
 class MSHR()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val id = Input(UInt())
@@ -27,5 +33,6 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     val status = ValidIO(new MSHRStatus)
     val tasks = new MSHRTasks
     val dirResult = Flipped(ValidIO(new DirResult))
+    val resps = Flipped(new MSHRResps)
   })
 }
