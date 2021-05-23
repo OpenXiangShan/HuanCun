@@ -24,6 +24,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle {
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val set = UInt(setBits.W)
   val tag = UInt(tagBits.W)
+  val reload = Bool()
 }
 
 class TagWrite(implicit p: Parameters) extends HuanCunBundle {

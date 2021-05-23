@@ -3,7 +3,7 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.utils.ParallelOR
+import huancun.utils.{ParallelOR, ParallelPriorityMux}
 
 class CohClint(implicit p: Parameters) extends HuanCunBundle() {
   val a = Flipped(DecoupledIO(new MSHRRequest))
@@ -13,6 +13,31 @@ class CohClint(implicit p: Parameters) extends HuanCunBundle() {
 
 class RelaxClint(implicit p: Parameters) extends HuanCunBundle() {
   val a = Flipped(DecoupledIO(new MSHRRequest()))
+}
+
+class MSHRSelector(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) extends HuanCunModule {
+  val io = IO(new Bundle() {
+    val idle = Input(Vec(mshrsAll, Bool()))
+    val result = Vec(dirReadPorts, ValidIO(UInt(log2Up(mshrsAll).W)))
+  })
+  val relaxBatch: Int = mshrs / (nrRelaxClints + nrCohClints)
+  val cohBatch: Int = mshrs - relaxBatch * nrRelaxClints
+  // Select idle position for relax client
+  for (i <- 0 until dirReadPorts-1) {
+    val batch = io.idle.zipWithIndex.filter(s => (s._2 >= i*relaxBatch) && (s._2 < (i+1)*relaxBatch)).map(s => s._1)
+    io.result(i).valid := ParallelOR(batch)
+    io.result(i).bits := ParallelPriorityMux(batch.zipWithIndex.map{
+      case (b, index) => (b, (index + i * relaxBatch).U)
+    })
+  }
+  // Select idle position for coh client
+  val batch = io.idle.takeRight(cohBatch)
+  io.result(dirReadPorts-1).valid := ParallelOR(batch)
+  io.result(dirReadPorts-1).bits := ParallelPriorityMux(batch.zipWithIndex.map{
+    case (b, index) => (b, (index + nrRelaxClints * relaxBatch).U)
+  })
+
+  // TODO: append nestB & nestC select logic
 }
 
 class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) extends HuanCunModule {
@@ -65,19 +90,27 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
   val blockB = false.B
   val blockC = false.B
 
+  val cohMaskVec2 = Seq() :+
+    ParallelOR(io.status.map(s => s.bits.set === cohClient.a.bits.set)) :+
+    (!nestB && !blockB) :+
+    (!nestC && !blockC)
 
   /*
    * Find idle MSHR entries
    */
+
   val mshrIdle = Wire(Vec(dirReadPorts, ValidIO(UInt(log2Up(mshrsAll).W)))) // TODO: refill logic here
-  mshrIdle := DontCare
+  val selector = Module(new MSHRSelector(nrRelaxClints, nrCohClints))
+  selector.io.idle := io.status.map(_.valid)
+  mshrIdle := selector.io.result
+
   /*
    * Arbitration & allocation of directory read ports
    */
 
   // Collision mask
   val relaxMask = relaxMaskVec1.zip(relaxMaskVec2).map(c => c._1 || c._2)
-  val cohMask = VecInit(Seq.fill(3)(false.B)) // TODO
+  val cohMask = VecInit(cohMaskVec2)
 
   // Arbiter relaxReqs
   val relaxReqs = Wire(Vec(nrRelaxClints, DecoupledIO(new MSHRRequest)))
@@ -100,7 +133,8 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
   cohClient.b.ready := !cohMask(1) && cohReq.ready && !cohClient.c.valid
   cohClient.a.ready := !cohMask(2) && cohReq.ready && !cohClient.c.valid && !cohClient.b.valid
 
-  io.dirReads.zip(relaxReqs ++ cohReqs).zip(mshrIdle).foreach {
+  val allReqs = (relaxReqs ++ cohReqs)
+  io.dirReads.zip(allReqs).zip(mshrIdle).foreach {
     case ((dir, req), alloc) =>
       dir.valid    := req.valid && alloc.valid
       dir.bits.tag := req.bits.tag
@@ -112,9 +146,10 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
   /*
    * Provide MSHR allocation response
    */
+
   io.alloc.foreach(_.valid := false.B)
-  mshrIdle.foreach {
-    c => io.alloc(UIntToOH(c.bits)).valid := c.valid
+  for (i <- 0 until dirReadPorts) {
+    io.alloc(UIntToOH(mshrIdle(i).bits)).valid := mshrIdle(i).valid
+    io.alloc(UIntToOH(mshrIdle(i).bits)).bits := allReqs(i).bits
   }
-  // TODO: assign io.alloc.bits
 }
