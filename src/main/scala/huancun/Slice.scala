@@ -42,14 +42,15 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   io.out.e <> sourceE.io.e
 
   // Connect to MSHR Allocator
-  val mshrAlloc = Module(new MSHRAlloc(sinkAs.size, 1, sinkCs.size))
-  mshrAlloc.io.inA.zip(sinkAs).foreach { case (m, a) => m <> a.io.alloc }
-  mshrAlloc.io.inB.head <> sinkB.io.alloc
-  mshrAlloc.io.inC.zip(sinkCs).foreach { case (m, c) => m <> c.io.alloc }
+  val mshrAlloc = Module(new MSHRAlloc(edgeInSeq.size - cohEdges.size, cohEdges.size))
+  mshrAlloc.io.cohClints.map(_.a).zip(sinkAs.filter(_.edge.client.anySupportProbe)).foreach(c => c._1 <> c._2.io.alloc)
+  mshrAlloc.io.cohClints.map(_.b).zip(Seq(sinkB)).foreach(c => c._1 <> c._2.io.alloc)
+  mshrAlloc.io.cohClints.map(_.c).zip(sinkCs).foreach(c => c._1 <> c._2.io.alloc)
+  mshrAlloc.io.relaxClints.map(_.a).zip(sinkAs.filter(!_.edge.client.anySupportProbe)).foreach(c => c._1 <> c._2.io.alloc)
 
   // MSHRs
   val ms = Seq.fill(mshrs) { Module(new MSHR()) }
-  ms.zipWithIndex.map { case (mshr, i) =>
+  ms.zipWithIndex.foreach { case (mshr, i) =>
     mshr.io.id := i.U
   }
 

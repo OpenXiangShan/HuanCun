@@ -19,8 +19,15 @@ class SourceAReq(implicit p: Parameters) extends HuanCunBundle
 class SourceCReq(implicit p: Parameters) extends HuanCunBundle
 class SourceEReq(implicit p: Parameters) extends HuanCunBundle
 
-class MSHRRequest(implicit p: Parameters) extends HuanCunBundle
-class MSHRStatus(implicit p: Parameters) extends HuanCunBundle
+class MSHRRequest(implicit p: Parameters) extends HuanCunBundle {
+  val set = UInt(setBits.W)
+  val tag = UInt(tagBits.W)
+}
+
+class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
+  val set = UInt(setBits.W)
+  val tag = UInt(tagBits.W)
+}
 
 class TagWrite(implicit p: Parameters) extends HuanCunBundle {
   val set = UInt(setBits.W)
