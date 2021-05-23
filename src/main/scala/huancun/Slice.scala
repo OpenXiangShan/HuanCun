@@ -52,18 +52,23 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
     .foreach(c => c._1 <> c._2.io.alloc)
 
   // MSHRs
-  val ms = Seq.fill(mshrs) { Module(new MSHR()) }
+  val ms = Seq.fill(mshrsAll) { Module(new MSHR()) }
+  require(mshrsAll == mshrs + 2)
+  val ms_abc = ms.init.init
+  val ms_bc = ms.init.last
+  val ms_c = ms.last
+
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
       mshr.io.id := i.U
   }
 
   // Send tasks
-  val sourceATaskArb = Module(new Arbiter(new SourceAReq, mshrs))
-  val sourceCTaskArb = Module(new Arbiter(new SourceCReq, mshrs))
-  val sourceETaskArb = Module(new Arbiter(new SourceEReq, mshrs))
+  val sourceATaskArb = Module(new Arbiter(new SourceAReq, mshrsAll))
+  val sourceCTaskArb = Module(new Arbiter(new SourceCReq, mshrsAll))
+  val sourceETaskArb = Module(new Arbiter(new SourceEReq, mshrsAll))
 
-  for (i <- 0 until mshrs) {
+  for (i <- 0 until mshrsAll) {
     sourceATaskArb.io.in(i) <> ms(i).io.tasks.source_a
     sourceCTaskArb.io.in(i) <> ms(i).io.tasks.source_c
     sourceETaskArb.io.in(i) <> ms(i).io.tasks.source_e
