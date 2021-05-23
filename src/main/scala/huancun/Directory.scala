@@ -49,9 +49,9 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
       case ((sram, rreq), rdata) =>
         val wen = io.tagWReq.fire()
         sram.io.w(wen, io.tagWReq.bits.tag, io.tagWReq.bits.set, UIntToOH(io.tagWReq.bits.way))
-        assert(wen && sram.io.w.req.ready)
+        assert(!wen || (wen && sram.io.w.req.ready))
         rdata := sram.io.r(!wen, rreq.bits.set).resp.data
-        assert(!wen && sram.io.r.req.ready)
+        assert(wen || (!wen && sram.io.r.req.ready))
     })
 
   val rreqIds = io.reads.map(r => RegEnable(r.bits.id, enable = r.fire()))
