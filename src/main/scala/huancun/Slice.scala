@@ -4,7 +4,8 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.diplomacy.{IdRange}
+import freechips.rocketchip.diplomacy.IdRange
+import huancun.utils.ParallelMux
 
 class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
@@ -63,7 +64,21 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
       mshr.io.id := i.U
   }
 
+  val directory = Module(new Directory)
+  directory.io.reads <> mshrAlloc.io.dirReads
+
   // Send tasks
+  val tagWriteArb = Module(new Arbiter(new TagWrite, mshrs))
+  tagWriteArb.io.in <> VecInit(ms.map(_.io.tasks.tag_write))
+  directory.io.tagWReq <> tagWriteArb.io.out
+
+  val mshrGroups = ms.grouped((ms.size + dirWritePorts - 1) / dirWritePorts)
+  for ((grp, i) <- mshrGroups.zipWithIndex) {
+    val dirWriteArb = Module(new Arbiter(new DirWrite, grp.size))
+    dirWriteArb.io.in <> VecInit(grp.map(_.io.tasks.dir_write))
+    directory.io.dirWReqs(i) <> dirWriteArb.io.out
+  }
+
   val sourceATaskArb = Module(new Arbiter(new SourceAReq, mshrsAll))
   val sourceCTaskArb = Module(new Arbiter(new SourceCReq, mshrsAll))
   val sourceETaskArb = Module(new Arbiter(new SourceEReq, mshrsAll))
@@ -125,6 +140,13 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   }
   for ((sinkC, idRange) <- sinkCs.zip(cohIds)) {
     arbInnerTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), idRange, Some("sinkC"))
+  }
+
+  ms.zipWithIndex.foreach {
+    case (mshr, i) =>
+      val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.id === i.U)
+      mshr.io.dirResult.valid := Cat(dirResultMatch).orR()
+      mshr.io.dirResult.bits := ParallelMux(dirResultMatch.zip(directory.io.results.map(_.bits)))
   }
 
 }
