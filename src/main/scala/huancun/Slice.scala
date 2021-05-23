@@ -62,16 +62,14 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
       mshr.io.id := i.U
+      mshr.io.alloc := mshrAlloc.io.alloc(i)
+      mshrAlloc.io.status(i) := mshr.io.status
   }
 
   val directory = Module(new Directory)
   directory.io.reads <> mshrAlloc.io.dirReads
 
   // Send tasks
-  val tagWriteArb = Module(new Arbiter(new TagWrite, mshrs))
-  tagWriteArb.io.in <> VecInit(ms.map(_.io.tasks.tag_write))
-  directory.io.tagWReq <> tagWriteArb.io.out
-
   val mshrGroups = ms.grouped((ms.size + dirWritePorts - 1) / dirWritePorts)
   for ((grp, i) <- mshrGroups.zipWithIndex) {
     val dirWriteArb = Module(new Arbiter(new DirWrite, grp.size))
@@ -79,19 +77,10 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
     directory.io.dirWReqs(i) <> dirWriteArb.io.out
   }
 
-  val sourceATaskArb = Module(new Arbiter(new SourceAReq, mshrsAll))
-  val sourceCTaskArb = Module(new Arbiter(new SourceCReq, mshrsAll))
-  val sourceETaskArb = Module(new Arbiter(new SourceEReq, mshrsAll))
-
-  for (i <- 0 until mshrsAll) {
-    sourceATaskArb.io.in(i) <> ms(i).io.tasks.source_a
-    sourceCTaskArb.io.in(i) <> ms(i).io.tasks.source_c
-    sourceETaskArb.io.in(i) <> ms(i).io.tasks.source_e
-  }
-
-  sourceA.io.task <> sourceATaskArb.io.out
-  sourceC.io.task <> sourceCTaskArb.io.out
-  sourceE.io.task <> sourceETaskArb.io.out
+  arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
+  arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
+  arbTasks(sourceE.io.task, ms.map(_.io.tasks.source_e), Some("sourceE"))
+  arbTasks(directory.io.tagWReq, ms.map(_.io.tasks.tag_write), Some("tagWrite"))
 
   def validSourceId(x: UInt, range: IdRange): Bool = {
     require(isPow2(range.start) || range.start == 0)
@@ -120,13 +109,19 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
     idRange: IdRange,
     name:    Option[String] = None
   ) = {
+    for ((arb, req) <- arbTasks(out, in, name).io.in.zip(in)) {
+      arb.valid := validInnerTask(req, idRange)
+    }
+  }
+
+  def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
     val arbiter = Module(new Arbiter[T](chiselTypeOf(out.bits), in.size))
     if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
     for ((arb, req) <- arbiter.io.in.zip(in)) {
       arb <> req
-      arb.valid := validInnerTask(req, idRange)
     }
     out <> arbiter.io.out
+    arbiter
   }
 
   for ((sinkA, idRange) <- sinkAs.zip(inputIds)) {
@@ -144,7 +139,7 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
 
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
-      val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.id === i.U)
+      val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.id(i))
       mshr.io.dirResult.valid := Cat(dirResultMatch).orR()
       mshr.io.dirResult.bits := ParallelMux(dirResultMatch.zip(directory.io.results.map(_.bits)))
   }
