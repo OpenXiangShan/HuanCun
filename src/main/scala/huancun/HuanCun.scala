@@ -30,6 +30,8 @@ trait HasHuanCunParameters {
 
   lazy val clientBits = edgeInSeq.map(e => e.client.clients.count(_.supports.probe)).sum
 
+  lazy val sourceIdBits = edgeInSeq.map(e => e.client.endSourceId).max
+
   lazy val addressBits = edgeOut.bundle.addressBits
   lazy val tagBits = addressBits - setBits - offsetBits
 }

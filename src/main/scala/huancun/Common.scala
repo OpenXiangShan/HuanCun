@@ -3,18 +3,15 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 
-class SinkAReq(implicit p: Parameters) extends HuanCunBundle {
-  val id = UInt()
+abstract class InnerTask(implicit p: Parameters) extends HuanCunBundle {
+  val sourceId = UInt(sourceIdBits.W)
 }
-class SourceBReq(implicit p: Parameters) extends HuanCunBundle {
-  val id = UInt()
-}
-class SinkCReq(implicit p: Parameters) extends HuanCunBundle {
-  val id = UInt()
-}
-class SourceDReq(implicit p: Parameters) extends HuanCunBundle {
-  val id = UInt()
-}
+
+class SinkAReq(implicit p: Parameters) extends InnerTask
+class SourceBReq(implicit p: Parameters) extends InnerTask
+class SinkCReq(implicit p: Parameters) extends InnerTask
+class SourceDReq(implicit p: Parameters) extends InnerTask
+
 class SourceAReq(implicit p: Parameters) extends HuanCunBundle
 class SourceCReq(implicit p: Parameters) extends HuanCunBundle
 class SourceEReq(implicit p: Parameters) extends HuanCunBundle

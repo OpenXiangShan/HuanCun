@@ -2,7 +2,7 @@ package huancun
 
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
-import chisel3.util.{DecoupledIO, MixedVec, ValidIO, Arbiter}
+import chisel3.util._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.diplomacy.{IdRange}
 
@@ -13,7 +13,7 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   })
 
   val (cohEdges, cohIns) = edgeInSeq.zip(io.inSeq).filter(_._1.client.anySupportProbe).unzip
-  val cohIds = edgeInSeq.zip(inputIds).filter(_._1.client.anySupportProbe).unzip._2
+  val cohIds = edgeInSeq.zip(inputIds).filter(_._1.client.anySupportProbe).map(_._2)
 
   // Inner channels
   val sinkAs = edgeInSeq.map(e => Module(new SinkA(e)))
@@ -69,41 +69,53 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   sourceC.io.task <> sourceCTaskArb.io.out
   sourceE.io.task <> sourceETaskArb.io.out
 
+  def validSourceId(x: UInt, range: IdRange): Bool = {
+    require(isPow2(range.start) || range.start == 0)
+    require(isPow2(range.size))
+    /*  eg:
+        10xxxx (32, 48) bit5 == 0
+        01xxxx (16, 32) bit4 =0 0
+        00xxxx (0, 16)  (bit5, bit4) == 00
+     */
+    range.start match {
+      case 0 =>
+        val highBits = x.getWidth - log2Up(range.size)
+        if (highBits > 0) !x.head(highBits).orR() else true.B
+      case n =>
+        x(log2Up(n))
+    }
+  }
+
+  def validInnerTask[T <: InnerTask](t: DecoupledIO[T], idRange: IdRange): Bool = {
+    t.valid && validSourceId(t.bits.sourceId, idRange)
+  }
+
+  def arbInnerTasks[T <: InnerTask](
+    out:     DecoupledIO[T],
+    in:      Seq[DecoupledIO[T]],
+    idRange: IdRange,
+    name:    Option[String] = None
+  ) = {
+    val arbiter = Module(new Arbiter[T](chiselTypeOf(out.bits), in.size))
+    if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
+    for ((arb, req) <- arbiter.io.in.zip(in)) {
+      arb <> req
+      arb.valid := validInnerTask(req, idRange)
+    }
+    out <> arbiter.io.out
+  }
 
   for ((sinkA, idRange) <- sinkAs.zip(inputIds)) {
-    val sinkATaskArb = Module(new Arbiter(new SinkAReq, mshrs))
-    for (i <- 0 until mshrs) {
-      sinkATaskArb.io.in(i) <> ms(i).io.tasks.sink_a
-      sinkATaskArb.io.in(i).valid := ms(i).io.tasks.sink_a.valid && idRange.contains(ms(i).io.tasks.sink_a.bits.id)
-    }
-    sinkA.io.task <> sinkATaskArb.io.out
+    arbInnerTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), idRange, Some("sinkA"))
   }
-
   for ((sourceD, idRange) <- sourceDs.zip(inputIds)) {
-    val sourceDTaskArb = Module(new Arbiter(new SourceDReq, mshrs))
-    for (i <- 0 until mshrs) {
-      sourceDTaskArb.io.in(i) <> ms(i).io.tasks.source_d
-      sourceDTaskArb.io.in(i).valid := ms(i).io.tasks.source_d.valid && idRange.contains(ms(i).io.tasks.source_d.bits.id)
-    }
-    sourceD.io.task <> sourceDTaskArb.io.out
+    arbInnerTasks(sourceD.io.task, ms.map(_.io.tasks.source_d), idRange, Some("sourceD"))
   }
-
-  for ((sourceB, cohIdRange) <- sourceBs.zip(cohIds)) {
-    val sourceBTaskArb = Module(new Arbiter(new SourceBReq, mshrs))
-    for (i <- 0 until mshrs) {
-      sourceBTaskArb.io.in(i) <> ms(i).io.tasks.source_b
-      sourceBTaskArb.io.in(i).valid := ms(i).io.tasks.source_b.valid && cohIdRange.contains(ms(i).io.tasks.source_b.bits.id)
-    }
-    sourceB.io.task <> sourceBTaskArb.io.out
+  for ((sourceB, idRange) <- sourceBs.zip(cohIds)) {
+    arbInnerTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), idRange, Some("sourceB"))
   }
-
-  for ((sinkC, cohIdRange) <- sinkCs.zip(cohIds)) {
-    val sinkCTaskArb = Module(new Arbiter(new SinkCReq, mshrs))
-    for (i <- 0 until mshrs) {
-      sinkCTaskArb.io.in(i) <> ms(i).io.tasks.sink_c
-      sinkCTaskArb.io.in(i).valid := ms(i).io.tasks.sink_c.valid && cohIdRange.contains(ms(i).io.tasks.sink_c.bits.id)
-    }
-    sinkC.io.task <> sinkCTaskArb.io.out
+  for ((sinkC, idRange) <- sinkCs.zip(cohIds)) {
+    arbInnerTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), idRange, Some("sinkC"))
   }
 
 }
