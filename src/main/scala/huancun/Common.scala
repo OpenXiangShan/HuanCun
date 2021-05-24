@@ -30,8 +30,17 @@ class SinkEResp(implicit p: Parameters) extends HuanCunBundle {
 }
 
 class MSHRRequest(implicit p: Parameters) extends HuanCunBundle {
+  val channel = UInt(3.W)
+  val opcode = UInt(3.W)
+  val param = UInt(3.W)
+  val size = UInt(msgSizeBits.W)
+  val source = UInt(sourceIdBits.W)
   val set = UInt(setBits.W)
   val tag = UInt(tagBits.W)
+
+  def fromA = channel(0).asBool
+  def fromB = channel(1).asBool
+  def fromC = channel(2).asBool
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {

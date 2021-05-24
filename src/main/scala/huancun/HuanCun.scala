@@ -30,11 +30,19 @@ trait HasHuanCunParameters {
   lazy val edgeOut = p(EdgeOutKey)
 
   lazy val clientBits = edgeInSeq.map(e => e.client.clients.count(_.supports.probe)).sum
-
-  lazy val sourceIdBits = edgeInSeq.map(e => e.client.endSourceId).max
+  lazy val sourceIdBits = edgeInSeq.map(e => e.bundle.sourceBits).max // source field
+  lazy val msgSizeBits = edgeInSeq.map(e => e.bundle.sizeBits).max // size field
 
   lazy val addressBits = edgeOut.bundle.addressBits
   lazy val tagBits = addressBits - setBits - offsetBits
+
+  def getClientBitOH(sourceId: UInt): UInt = {
+    if (clientBits == 0) {
+      0.U
+    } else {
+      Cat((edgeInSeq.map(e => e.client.clients.filter(_.supports.probe).map(_.sourceId.contains(sourceId)))).flatten.reverse)
+    }
+  }
 }
 
 trait DontCareInnerLogic { this: Module =>
