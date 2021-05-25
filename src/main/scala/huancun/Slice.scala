@@ -130,8 +130,14 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   for ((sourceD, idRange) <- sourceDs.zip(inputIds)) {
     arbInnerTasks(sourceD.io.task, ms.map(_.io.tasks.source_d), idRange, Some("sourceD"))
   }
-  for ((sourceB, idRange) <- sourceBs.zip(cohIds)) {
-    arbInnerTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), idRange, Some("sourceB"))
+  // for ((sourceB, idRange) <- sourceBs.zip(cohIds)) {
+  //   arbInnerTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), idRange, Some("sourceB"))
+  // }
+  sourceBs.zipWithIndex.foreach { case (sourceB, i) =>
+    val arbiter = arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
+    for ((in, req) <- arbiter.io.in.zip(ms.map(_.io.tasks.source_b))) {
+      in.valid := req.valid && req.bits.clients(i).asBool
+    }
   }
   for ((sinkC, idRange) <- sinkCs.zip(cohIds)) {
     arbInnerTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), idRange, Some("sinkC"))

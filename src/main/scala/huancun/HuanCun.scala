@@ -36,6 +36,8 @@ trait HasHuanCunParameters {
   lazy val addressBits = edgeOut.bundle.addressBits
   lazy val tagBits = addressBits - setBits - offsetBits
 
+  lazy val outerSinkBits = edgeOut.bundle.sinkBits
+
   def getClientBitOH(sourceId: UInt): UInt = {
     if (clientBits == 0) {
       0.U
