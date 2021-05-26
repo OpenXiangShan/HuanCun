@@ -20,7 +20,7 @@ class ConnectionTester extends L2Tester with WithFixSubModuleInputs {
       *  ram <=
       *         xbar <= l2 bank1 <= { l1d_bank1, l1i_bank1 }
       */
-    val ram = LazyModule(new TLRAM(AddressSet(0, 0xffff)))
+    val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffffffL)))
     ram.node :=
       TLXbar() :=*
       BankBinder(nBanks, l2.cacheParams.blockBytes) :=*
