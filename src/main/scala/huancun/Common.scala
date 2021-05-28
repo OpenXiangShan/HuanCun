@@ -36,6 +36,7 @@ class SourceDReq(implicit p: Parameters) extends InnerTask {
 class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
+  val opcode = UInt(3.W)
   val param = UInt(3.W)
   val source = UInt(mshrBits.W)
   val needData = Bool()

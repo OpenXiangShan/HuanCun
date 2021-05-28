@@ -5,7 +5,7 @@ import chiseltest.experimental.TestOptionBuilder.ChiselScalatestOptionBuilder
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 import freechips.rocketchip.tilelink.{BankBinder, TLRAM, TLXbar}
 
-class ConnectionTester extends L2Tester with WithFixSubModuleInputs {
+class ConnectionTester extends L2Tester {
 
   val nBanks = 2
 
