@@ -98,7 +98,7 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
    * Find idle MSHR entries
    */
 
-  val mshrIdle = Wire(Vec(dirReadPorts, ValidIO(UInt(log2Up(mshrsAll).W)))) // TODO: refill logic here
+  val mshrIdle = Wire(Vec(dirReadPorts, ValidIO(UInt(log2Up(mshrsAll).W))))
   val selector = Module(new MSHRSelector(nrRelaxClints, nrCohClints))
   selector.io.idle := io.status.map(_.valid)
   mshrIdle := selector.io.result
@@ -132,6 +132,7 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
   cohClient.a.ready := !cohMask(2) && cohReq.ready && !cohClient.c.valid && !cohClient.b.valid
 
   val allReqs = (relaxReqs ++ cohReqs)
+  io.dirReads.foreach(_.valid := false.B)
   io.dirReads.zip(allReqs).zip(mshrIdle).foreach {
     case ((dir, req), alloc) =>
       dir.valid := req.valid && alloc.valid
