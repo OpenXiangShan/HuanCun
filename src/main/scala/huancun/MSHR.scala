@@ -62,9 +62,11 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   val new_meta = WireInit(meta)
   val req_acquire = req.opcode === AcquireBlock || req.opcode === AcquirePerm
   val req_needT = needT(req.opcode, req.param)
-  val gotT = RegInit(false.B) // L3 might return T even though L2 wants B // TODO
+  val gotT = RegInit(false.B) // L3 might return T even though L2 wants B
   val meta_no_client = !meta.clients.orR
-  val probes_toN = RegInit(0.U(clientBits.W)) // TODO
+  val probes_toN = RegInit(0.U(clientBits.W))
+  val probes_done = RegInit(0.U(clientBits.W))
+  val probe_exclude = Mux(req.fromA && meta.hit && skipProbeN(req.opcode), getClientBitOH(req.source), 0.U) // Client acquiring the block does not need to be probed
   val probe_next_state = Mux(isT(meta.state) && req.param === toT, meta.state,
       Mux(meta.state =/= INVALID && req.param =/= toN, BRANCH, INVALID))
   when (req.fromC) {
@@ -130,7 +132,6 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
 
   val w_rprobeackfirst = RegInit(true.B)
   val w_rprobeacklast  = RegInit(true.B)
-  val w_rprobeack      = RegInit(true.B)
   val w_pprobeackfirst = RegInit(true.B)
   val w_pprobeacklast  = RegInit(true.B)
   val w_pprobeack      = RegInit(true.B)
@@ -156,7 +157,6 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
 
     w_rprobeackfirst := true.B
     w_rprobeacklast  := true.B
-    w_rprobeack      := true.B
     w_pprobeackfirst := true.B
     w_pprobeacklast  := true.B
     w_pprobeack      := true.B
@@ -166,6 +166,9 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     w_releaseack     := true.B
     w_grantack       := true.B
 
+    gotT := false.B
+    probes_toN := 0.U
+    probes_done := 0.U
     bad_grant := false.B
 
     when (req.fromC) {
@@ -208,7 +211,6 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
           s_rprobe := false.B
           w_rprobeackfirst := false.B
           w_rprobeacklast := false.B
-          w_rprobeack := false.B
         }
       }
       // need Acquire downwards
@@ -386,9 +388,22 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // 6. Monitor resps and mark the w_* state regs
+  val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
+  val probeack_last = (probes_done | probeack_bit) === (meta.clients & ~probe_exclude)
   when (io.resps.sink_c.valid) {
     // ProbeAck in resp to rprobe/pprobe
-    // TODO
+    val resp = io.resps.sink_c.bits
+    probes_done := probes_done | probeack_bit
+    probes_toN := probes_toN | Mux(isToN(resp.param), probeack_bit, 0.U)
+    w_rprobeackfirst := w_rprobeackfirst || probeack_last // ProbeAck from the last client
+    w_rprobeacklast := w_rprobeacklast || probeack_last && resp.last // the last beat of the last ProbeAck
+    w_pprobeackfirst := w_pprobeackfirst || probeack_last
+    w_pprobeacklast := w_pprobeacklast || probeack_last && resp.last
+    w_pprobeack := w_pprobeack || (resp.last || req.off === 0.U) && probeack_last
+    when ((req.fromB && req.param === toT || req.fromA && meta.hit) && resp.hasData) {
+      // When ProbeAck for pprobe writes back dirty data, set dirty bit
+      new_meta.dirty := true.B
+    }
   }
   when (io.resps.sink_d.valid) {
     when (io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData) {
@@ -410,7 +425,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   // 7. Release MSHR
   when (no_wait && s_execute && s_probeack) {
     req_valid := false.B
-    meta.valid := false.B
+    meta_valid := false.B
   }
 
   // Status
