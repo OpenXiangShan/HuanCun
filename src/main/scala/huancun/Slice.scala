@@ -66,6 +66,8 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
       mshrAlloc.io.status(i) := mshr.io.status
   }
 
+  mshrAlloc.io.alloc <> VecInit(ms.map(_.io.alloc))
+
   val directory = Module(new Directory)
   directory.io.reads <> mshrAlloc.io.dirReads
 
