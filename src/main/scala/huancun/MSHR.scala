@@ -31,7 +31,7 @@ class MSHRResps(implicit p: Parameters) extends HuanCunBundle {
 
 class MSHR()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
-    val id = Input(UInt())
+    val id = Input(UInt(mshrBits.W))
     val alloc = Flipped(ValidIO(new MSHRRequest))
     val status = ValidIO(new MSHRStatus)
     val tasks = new MSHRTasks
@@ -354,6 +354,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.tag_write.bits.way := meta.way
   io.tasks.tag_write.bits.tag := req.tag
 
+  dontTouch(io.tasks)
   when (io.tasks.source_a.fire()) {
     s_acquire := true.B
   }
@@ -393,7 +394,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     when (io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData) {
       w_grantfirst := true.B
       w_grantlast := io.resps.sink_d.bits.last
-      w_grant := req.off == 0.U || io.resps.sink_d.bits.last
+      w_grant := req.off === 0.U || io.resps.sink_d.bits.last
       bad_grant := io.resps.sink_d.bits.denied
       gotT := io.resps.sink_d.bits.param === toT
     }

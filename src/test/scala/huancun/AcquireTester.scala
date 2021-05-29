@@ -4,7 +4,7 @@ import chisel3._
 import chiseltest._
 import chiseltest.experimental.TestOptionBuilder.ChiselScalatestOptionBuilder
 import freechips.rocketchip.diplomacy.{AddressSet, InModuleBody, LazyModule, LazyModuleImp}
-import freechips.rocketchip.tilelink.{BankBinder, TLCacheCork, TLEphemeralNode, TLFuzzer, TLRAM, TLXbar}
+import freechips.rocketchip.tilelink.{BankBinder, TLCacheCork, TLEphemeralNode, TLFragmenter, TLFuzzer, TLRAM, TLWidthWidget, TLXbar}
 
 class AcquireListener(outer: TLDebugModuleBase) extends LazyModuleImp(outer) {
   val success = IO(Output(Bool()))
@@ -32,10 +32,10 @@ class AcquireTester extends L2Tester with DumpVCD with UseVerilatorBackend {
       *  ram <=
       *         xbar <= l2 bank1 <= { l1d_bank1, l1i_bank1 }
       */
-    val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffffffL)))
+    val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffffffL), beatBytes = 64))
     ram.node :=
-      TLCacheCork(unsafe = true) :=
       TLXbar() :=*
+        TLCacheCork() :=*
         l2.node
 
     l2.node :=*

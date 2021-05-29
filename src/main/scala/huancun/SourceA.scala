@@ -12,6 +12,8 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
 
   val a = io.a
 
+  dontTouch(a)
+  dontTouch(io.task)
   io.task.ready := a.ready
   a.valid := io.task.valid
 
