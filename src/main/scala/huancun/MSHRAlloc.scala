@@ -147,6 +147,7 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
    */
 
   io.alloc.foreach(_.valid := false.B)
+  io.alloc.foreach(_.bits := DontCare)
   for (i <- 0 until dirReadPorts) {
     io.alloc(UIntToOH(mshrIdle(i).bits)).valid := mshrIdle(i).valid
     io.alloc(UIntToOH(mshrIdle(i).bits)).bits := allReqs(i).bits
