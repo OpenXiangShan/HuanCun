@@ -10,7 +10,7 @@ case class CacheParameters(
   name:          String = "L2",
   level:         Int = 2,
   ways:          Int = 4,
-  sets:          Int = 1024,
+  sets:          Int = 128,
   blockBytes:    Int = 64,
   replacement:   String = "plru",
   mshrs:         Int = 16,
