@@ -56,12 +56,17 @@ class SourceEReq(implicit p: Parameters) extends HuanCunBundle {
 
 class SinkCResp(implicit p: Parameters) extends HuanCunBundle {
   // ProbeAck
+  val source = UInt(sourceIdBits.W)
   val set = UInt(setBits.W) // The target address of the transfer, but only set is enough
 }
 class SinkDResp(implicit p: Parameters) extends HuanCunBundle {
   // Grant / AccessAck / ReleaseAck
+  val opcode = UInt(3.W)
+  val param = UInt(3.W)
   val source = UInt(mshrBits.W) // The master source id receiving the resp
   val sink = UInt(outerSinkBits.W)
+  val last = Bool() // last beat
+  val denied = Bool()
 }
 class SinkEResp(implicit p: Parameters) extends HuanCunBundle {
   // GrantAck

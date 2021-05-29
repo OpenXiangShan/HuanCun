@@ -102,7 +102,15 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   new_dir.dirty := new_meta.dirty
   new_dir.state := new_meta.state
   new_dir.clients := new_meta.clients
-  // TODO: new_meta when Grant denied
+
+  val bad_grant = Reg(Bool())
+  when (bad_grant) {
+    new_meta.dirty := false.B
+    new_meta.state := Mux(meta.hit, BRANCH, INVALID)
+    new_meta.clients := Mux(meta.hit, meta.clients & ~probes_toN, 0.U)
+    new_meta.hit := meta.hit
+  }
+
   // TODO: update meta after a nested mshr completes
   assert(RegNext(!meta_valid || !req.fromC || meta.hit)) // Release should always hit
 
@@ -157,6 +165,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     w_grant          := true.B
     w_releaseack     := true.B
     w_grantack       := true.B
+
+    bad_grant := false.B
 
     when (req.fromC) {
       // Release
@@ -238,7 +248,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
-  // 5. Send out tasks
+  // 5. Send out tasks and mark the s_* state regs
   /* Consider a partial order as follows:
    *
    *        s_rprobe(B)
@@ -258,7 +268,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
    * in this diagram need the prerequisite task to be issued while the others need
    * the prerequisite to be issued and also acknowledged (e.g. s_acquire > s_execute).
    *
-   * Assume that  in data array, sinkA > sinkC > sourceC > sinkD > sourceDw > sourceDr
+   * Assume that in data array, sinkA > sinkC > sourceC > sinkD > sourceDw > sourceDr
    */
   val no_wait = w_rprobeacklast && w_pprobeacklast && w_grantlast && w_releaseack && w_grantack
   io.tasks.source_a.valid := !s_acquire && s_release && s_pprobe
@@ -270,8 +280,6 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.tag_write.valid := !s_writebacktag && no_wait
   io.tasks.sink_a.valid := !s_writeput && w_grant && w_pprobeack
   io.tasks.sink_c.valid := !s_writerelease// && w_grant && w_pprobeack
-
-  io.status.bits.reload := false.B // TODO
 
   val oa = io.tasks.source_a.bits
   val ob = io.tasks.source_b.bits
@@ -291,7 +299,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   ob.tag := Mux(!s_rprobe, meta.tag, req.tag)
   ob.set := req.set
   ob.param := Mux(!s_rprobe, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
-  ob.clients := Mux(meta.hit, probes_toN, 0.U)
+  ob.clients := Mux(meta.hit, probes_toN, 0.U) // TODO
 
   oc.opcode := Cat(Mux(req.fromB, ProbeAck, Release)(2, 1), meta.dirty.asUInt)
   oc.tag := meta.tag
@@ -322,7 +330,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   od.size := req.size
   od.way := meta.way
   od.off := req.off
-  od.denied := false.B
+  od.denied := bad_grant
 
   oe.sink := DontCare // TODO
 
@@ -346,11 +354,69 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.tag_write.bits.way := meta.way
   io.tasks.tag_write.bits.tag := req.tag
 
+  when (io.tasks.source_a.fire()) {
+    s_acquire := true.B
+  }
+  when (io.tasks.source_b.fire()) {
+    s_rprobe := true.B
+    s_pprobe := true.B
+  }
+  when (io.tasks.source_c.fire()) {
+    s_release := true.B
+    s_probeack := true.B
+  }
+  when (io.tasks.source_d.fire()) {
+    s_execute := true.B
+  }
+  when (io.tasks.source_e.fire()) {
+    s_grantack := true.B
+  }
+  when (io.tasks.dir_write.fire()) {
+    s_writebackdir := true.B
+  }
+  when (io.tasks.tag_write.fire()) {
+    s_writebacktag := true.B
+  }
+  when (io.tasks.sink_a.fire()) {
+    s_writeput := true.B
+  }
+  when (io.tasks.sink_c.fire()) {
+    s_writerelease := true.B
+  }
+
+  // 6. Monitor resps and mark the w_* state regs
+  when (io.resps.sink_c.valid) {
+    // ProbeAck in resp to rprobe/pprobe
+    // TODO
+  }
+  when (io.resps.sink_d.valid) {
+    when (io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData) {
+      w_grantfirst := true.B
+      w_grantlast := io.resps.sink_d.bits.last
+      w_grant := req.off == 0.U || io.resps.sink_d.bits.last
+      bad_grant := io.resps.sink_d.bits.denied
+      gotT := io.resps.sink_d.bits.param === toT
+    }
+    when (io.resps.sink_d.bits.opcode === ReleaseAck) {
+      w_releaseack := true.B
+    }
+  }
+  when (io.resps.sink_e.valid) {
+    w_grantack := true.B
+  }
+
+
+  // 7. Release MSHR
+  when (no_wait && s_execute && s_probeack) {
+    req_valid := false.B
+    meta.valid := false.B
+  }
 
   // Status
   io.status.valid := req_valid
   io.status.bits.set := req.set
   io.status.bits.tag := req.tag
+  io.status.bits.reload := false.B // TODO
 
 
 }
