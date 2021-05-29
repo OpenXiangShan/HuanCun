@@ -12,4 +12,5 @@ class SinkC(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule with D
     val resp = ValidIO(new SinkCResp)
     val task = Flipped(DecoupledIO(new SinkCReq))
   })
+  io.c.ready := true.B
 }

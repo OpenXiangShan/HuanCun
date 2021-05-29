@@ -22,10 +22,9 @@ class AcquireTester extends L2Tester with DumpVCD {
 
   class TestTop extends LazyModule {
 
-    val l1d = LazyModule(new FakeL1D(nBanks, 1))
-    val l1i = LazyModule(new FakeL1I(nBanks))
-    //val ptw = LazyModule(new FakePTW(nBanks))
-    val ptw = LazyModule(new TLFuzzer(nOperations = 10, inFlight = 16))
+    val l1d = LazyModule(new FakeL1D(nBanks, 0))
+    val l1i = LazyModule(new FakeL1I(nBanks, 10))
+    val ptw = LazyModule(new FakePTW(nBanks, 0))
     val l2 = LazyModule(new HuanCun())
 
 //    val debugNode = LazyModule(new TLDebugNode(x => new AcquireListener(x)))
@@ -53,7 +52,7 @@ class AcquireTester extends L2Tester with DumpVCD {
 
     lazy val module = new LazyModuleImp(this) {
       val success = IO(Output(Bool()))
-      success := false.B//debugNode.module.success
+      success := Seq(l1d, l1i, ptw).map(_.module.finish).reduce(_&&_)
     }
   }
 

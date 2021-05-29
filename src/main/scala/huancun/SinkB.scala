@@ -9,4 +9,5 @@ class SinkB(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule with 
     val b = Flipped(DecoupledIO(new TLBundleB(edge.bundle)))
     val alloc = DecoupledIO(new MSHRRequest)
   })
+  io.b.ready := true.B
 }

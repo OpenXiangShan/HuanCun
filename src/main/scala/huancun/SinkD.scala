@@ -9,4 +9,5 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule with 
     val d = Flipped(DecoupledIO(new TLBundleD(edge.bundle)))
     val resp = ValidIO(new SinkDResp)
   })
+  io.d.ready := true.B
 }

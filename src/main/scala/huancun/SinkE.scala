@@ -10,4 +10,5 @@ class SinkE(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule with D
     val e = Flipped(DecoupledIO(new TLBundleE(edge.bundle)))
     val resp = ValidIO(new SinkEResp)
   })
+  io.e.ready := true.B
 }

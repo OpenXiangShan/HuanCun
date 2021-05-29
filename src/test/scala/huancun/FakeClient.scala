@@ -30,28 +30,54 @@ class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0
   })
 
   lazy val module = new LazyModuleImp(this) {
-    for((out, edge) <- node.out) {
+
+    val finish = IO(Output(Bool()))
+
+    val flags = Seq.fill(node.out.size){ RegInit(false.B) }
+
+    finish := flags.reduce(_ && _)
+
+    for(((out, edge), f) <- node.out.zip(flags)) {
+      out.b.ready := true.B
+      out.c.valid := false.B
+      out.d.ready := true.B
+      out.e.valid := false.B
+
       val cnt = RegInit(reqs.U)
+      val addr = RegInit(0.U(edge.bundle.addressBits.W))
+      when(out.a.fire()){
+        cnt := cnt - 1.U
+        addr := addr + blockBytes.U
+      }
+      val source = cnt - 1.U
       if(probe){
         val (_, acquire) = edge.AcquireBlock(
-          0.U,
-          edge.manager.managers.head.address.head.base.U,
+          source,
+          addr,
           offsetBits.U,
           TLPermissions.toT
         )
         out.a.bits := acquire
         out.a.valid := cnt =/= 0.U
-        when(out.a.fire()){ cnt := cnt - 1.U }
       } else {
         val (_, get) = edge.Get(
-          0.U,
-          edge.manager.managers.head.address.head.base.U,
+          source,
+          addr,
           offsetBits.U
         )
         out.a.bits := get
         out.a.valid := cnt =/= 0.U
-        when(out.a.fire()){ cnt := cnt - 1.U }
       }
+      val grantCnt = RegInit(reqs.U)
+      val grantAck = RegNext(edge.GrantAck(out.d.bits))
+      when(RegNext(out.d.fire())){
+        out.e.valid := probe.B
+        out.e.bits := grantAck
+      }
+      when(out.e.fire()){
+       grantCnt := grantCnt - 1.U
+      }
+      f := grantCnt === 0.U
     }
   }
 }
