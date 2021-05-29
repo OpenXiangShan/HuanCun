@@ -60,7 +60,7 @@ abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with Has
 abstract class HuanCunModule(implicit val p: Parameters)
     extends Module
     with HasHuanCunParameters
-    with DontCareInnerLogic
+//    with DontCareInnerLogic
 
 /**
   * We want to create hierarchy like this:

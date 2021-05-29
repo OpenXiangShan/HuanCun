@@ -1,10 +1,12 @@
 package huancun
 
+import chisel3._
+import chisel3.util._
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp, TransferSizes}
-import freechips.rocketchip.tilelink.{TLChannelBeatBytes, TLClientNode, TLMasterParameters, TLMasterPortParameters}
+import freechips.rocketchip.tilelink.{TLChannelBeatBytes, TLClientNode, TLMasterParameters, TLMasterPortParameters, TLPermissions}
 
-class FakeClient(name: String, nBanks: Int, probe: Boolean = true)(implicit p: Parameters)
+class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0)(implicit p: Parameters)
     extends LazyModule
     with HasHuanCunParameters {
 
@@ -27,9 +29,36 @@ class FakeClient(name: String, nBanks: Int, probe: Boolean = true)(implicit p: P
     )
   })
 
-  lazy val module = new LazyModuleImp(this) {}
+  lazy val module = new LazyModuleImp(this) {
+    for((out, edge) <- node.out) {
+      val cnt = RegInit(reqs.U)
+      if(probe){
+        val (_, acquire) = edge.AcquireBlock(
+          0.U,
+          edge.manager.managers.head.address.head.base.U,
+          offsetBits.U,
+          TLPermissions.toT
+        )
+        out.a.bits := acquire
+        out.a.valid := cnt =/= 0.U
+        when(out.a.fire()){ cnt := cnt - 1.U }
+      } else {
+        val (_, get) = edge.Get(
+          0.U,
+          edge.manager.managers.head.address.head.base.U,
+          offsetBits.U
+        )
+        out.a.bits := get
+        out.a.valid := cnt =/= 0.U
+        when(out.a.fire()){ cnt := cnt - 1.U }
+      }
+    }
+  }
 }
 
-class FakeL1D(nBanks: Int)(implicit p: Parameters) extends FakeClient("L1D", nBanks)
-class FakeL1I(nBanks: Int)(implicit p: Parameters) extends FakeClient("L1I", nBanks, probe = false)
-class FakePTW(nBanks: Int)(implicit p: Parameters) extends FakeClient("PTW", nBanks, probe = false)
+class FakeL1D(nBanks: Int, reqs: Int = 0)(implicit p: Parameters)
+  extends FakeClient("L1D", nBanks, reqs = reqs)
+class FakeL1I(nBanks: Int, reqs: Int = 0)(implicit p: Parameters)
+  extends FakeClient("L1I", nBanks, probe = false, reqs = reqs)
+class FakePTW(nBanks: Int, reqs: Int = 0)(implicit p: Parameters)
+  extends FakeClient("PTW", nBanks, probe = false, reqs = reqs)
