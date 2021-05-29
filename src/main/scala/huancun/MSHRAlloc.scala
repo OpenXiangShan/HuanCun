@@ -81,7 +81,7 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
    * Judge collision with MSHRs
    */
 
-  val relaxMaskVec2 = io.relaxClints.map(_.a).map(c => ParallelOR(io.status.map(s => s.bits.set === c.bits.set)))
+  val relaxMaskVec2 = io.relaxClints.map(_.a).map(c => ParallelOR(io.status.map(s => s.bits.set === c.bits.set && s.valid)))
 
   // TODO: implement nest & block logic
   val nestB = false.B
@@ -100,7 +100,7 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
 
   val mshrIdle = Wire(Vec(dirReadPorts, ValidIO(UInt(log2Up(mshrsAll).W))))
   val selector = Module(new MSHRSelector(nrRelaxClints, nrCohClints))
-  selector.io.idle := io.status.map(_.valid)
+  selector.io.idle := io.status.map(!_.valid)
   mshrIdle := selector.io.result
 
   /*
@@ -149,7 +149,7 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
   io.alloc.foreach(_.valid := false.B)
   io.alloc.foreach(_.bits := DontCare)
   for (i <- 0 until dirReadPorts) {
-    io.alloc(UIntToOH(mshrIdle(i).bits)).valid := mshrIdle(i).valid
+    io.alloc(UIntToOH(mshrIdle(i).bits)).valid := mshrIdle(i).valid && allReqs(i).valid
     io.alloc(UIntToOH(mshrIdle(i).bits)).bits := allReqs(i).bits
   }
 }
