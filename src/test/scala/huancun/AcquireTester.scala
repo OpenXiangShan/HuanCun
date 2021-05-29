@@ -4,7 +4,7 @@ import chisel3._
 import chiseltest._
 import chiseltest.experimental.TestOptionBuilder.ChiselScalatestOptionBuilder
 import freechips.rocketchip.diplomacy.{AddressSet, InModuleBody, LazyModule, LazyModuleImp}
-import freechips.rocketchip.tilelink.{BankBinder, TLEphemeralNode, TLRAM, TLXbar}
+import freechips.rocketchip.tilelink.{BankBinder, TLEphemeralNode, TLFuzzer, TLRAM, TLXbar}
 
 class AcquireListener(outer: TLDebugModuleBase) extends LazyModuleImp(outer) {
   val success = IO(Output(Bool()))
@@ -16,7 +16,7 @@ class AcquireListener(outer: TLDebugModuleBase) extends LazyModuleImp(outer) {
   success := flags.reduce(_ && _)
 }
 
-class AcquireTester extends L2Tester with DumpVCD with UseVerilatorBackend {
+class AcquireTester extends L2Tester with DumpVCD {
 
   val nBanks = 1
 
@@ -24,10 +24,11 @@ class AcquireTester extends L2Tester with DumpVCD with UseVerilatorBackend {
 
     val l1d = LazyModule(new FakeL1D(nBanks, 1))
     val l1i = LazyModule(new FakeL1I(nBanks))
-    val ptw = LazyModule(new FakePTW(nBanks))
+    //val ptw = LazyModule(new FakePTW(nBanks))
+    val ptw = LazyModule(new TLFuzzer(nOperations = 10, inFlight = 16))
     val l2 = LazyModule(new HuanCun())
 
-    val debugNode = LazyModule(new TLDebugNode(x => new AcquireListener(x)))
+//    val debugNode = LazyModule(new TLDebugNode(x => new AcquireListener(x)))
 
     /**
       *         xbar <= l2 bank0 <= { l1d_bank0, l1i_bank0 }
@@ -38,7 +39,7 @@ class AcquireTester extends L2Tester with DumpVCD with UseVerilatorBackend {
     ram.node :=
       TLXbar() :=*
         BankBinder(nBanks, l2.cacheParams.blockBytes) :=*
-        debugNode.node :=*
+        //debugNode.node :=*
         l2.node
 
     l2.node :=*
@@ -52,7 +53,7 @@ class AcquireTester extends L2Tester with DumpVCD with UseVerilatorBackend {
 
     lazy val module = new LazyModuleImp(this) {
       val success = IO(Output(Bool()))
-      success := debugNode.module.success
+      success := false.B//debugNode.module.success
     }
   }
 

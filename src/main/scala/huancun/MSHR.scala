@@ -271,6 +271,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.sink_a.valid := !s_writeput && w_grant && w_pprobeack
   io.tasks.sink_c.valid := !s_writerelease// && w_grant && w_pprobeack
 
+  io.status.bits.reload := false.B // TODO
+
   val oa = io.tasks.source_a.bits
   val ob = io.tasks.source_b.bits
   val oc = io.tasks.source_c.bits
@@ -281,6 +283,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
 
   oa.tag := req.tag
   oa.set := req.set
+  oa.opcode := TLMessages.AcquireBlock // TODO: change this
   oa.param := Mux(req_needT, Mux(meta.state === BRANCH, BtoT, NtoT), NtoB)
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U
@@ -320,6 +323,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   od.way := meta.way
   od.off := req.off
   od.denied := false.B
+
+  oe.sink := DontCare // TODO
 
   ia.sourceId := req.source
   ia.set := req.set
