@@ -29,6 +29,7 @@ class SinkA(val edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   val (tag, set, offset) = parseAddress(a.bits.address)
 
   io.alloc.valid := a.valid && first
+  a.ready := io.alloc.ready
 
   val allocInfo = io.alloc.bits
   allocInfo.channel := 1.U(3.W)

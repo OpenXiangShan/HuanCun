@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 
-class SinkC(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
+class SinkC(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule with DontCareInnerLogic {
   val io = IO(new Bundle() {
     val c = Flipped(DecoupledIO(new TLBundleC(edge.bundle)))
     val alloc = DecoupledIO(new MSHRRequest)

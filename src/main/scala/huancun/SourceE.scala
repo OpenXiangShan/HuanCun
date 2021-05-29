@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 
-class SourceE(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
+class SourceE(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule with DontCareInnerLogic {
   val io = IO(new Bundle() {
     val e = DecoupledIO(new TLBundleE(edge.bundle))
     val task = Flipped(DecoupledIO(new SourceEReq))
