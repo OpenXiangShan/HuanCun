@@ -54,14 +54,14 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
         assert(wen || (!wen && sram.io.r.req.ready))
     })
 
-  val rreqIds = io.reads.map(r => RegEnable(r.bits.id, enable = r.fire()))
+  val rreqIds = io.reads.map(r => RegEnable(r.bits.idOH, enable = r.fire()))
   val rreqTags = io.reads.map(r => RegEnable(r.bits.tag, enable = r.fire()))
   val rreqSets = io.reads.map(r => RegEnable(r.bits.set, enable = r.fire()))
   val rreqValids = io.reads.map(r => RegNext(r.fire(), false.B))
 
   for ((result, i) <- io.results.zipWithIndex) {
     result.valid := rreqValids(i)
-    result.bits.id := rreqIds(i)
+    result.bits.idOH := rreqIds(i)
     val tags = tagRead(i)
     val hitVec = tags.map(t => t === rreqTags(i))
     val hitWay = OHToUInt(hitVec)

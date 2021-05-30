@@ -3,7 +3,7 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.utils.{ParallelOR, ParallelPriorityMux}
+import huancun.utils.{ParallelMux, ParallelOR, ParallelPriorityMux}
 
 class CohClint(implicit p: Parameters) extends HuanCunBundle() {
   val a = Flipped(DecoupledIO(new MSHRRequest))
@@ -18,7 +18,8 @@ class RelaxClint(implicit p: Parameters) extends HuanCunBundle() {
 class MSHRSelector(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val idle = Input(Vec(mshrsAll, Bool()))
-    val result = Vec(dirReadPorts, ValidIO(UInt(log2Up(mshrsAll).W)))
+    // mshrIdOH
+    val result = Vec(dirReadPorts, ValidIO(UInt(mshrsAll.W)))
   })
   val relaxBatch: Int = mshrs / (nrRelaxClints + nrCohClints)
   val cohBatch: Int = mshrs - relaxBatch * nrRelaxClints
@@ -27,14 +28,14 @@ class MSHRSelector(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters)
     val batch = io.idle.zipWithIndex.filter(s => (s._2 >= i*relaxBatch) && (s._2 < (i+1)*relaxBatch)).map(s => s._1)
     io.result(i).valid := ParallelOR(batch)
     io.result(i).bits := ParallelPriorityMux(batch.zipWithIndex.map{
-      case (b, index) => (b, (index + i * relaxBatch).U)
+      case (b, index) => (b, (1 << (index + i * relaxBatch)).U)
     })
   }
   // Select idle position for coh client
   val batch = io.idle.takeRight(cohBatch)
   io.result(dirReadPorts-1).valid := ParallelOR(batch)
   io.result(dirReadPorts-1).bits := ParallelPriorityMux(batch.zipWithIndex.map{
-    case (b, index) => (b, (index + nrRelaxClints * relaxBatch).U)
+    case (b, index) => (b, (1 << (index + nrRelaxClints * relaxBatch)).U)
   })
 
   // TODO: append nestB & nestC select logic
@@ -98,7 +99,7 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
    * Find idle MSHR entries
    */
 
-  val mshrIdle = Wire(Vec(dirReadPorts, ValidIO(UInt(log2Up(mshrsAll).W))))
+  val mshrIdle = Wire(Vec(dirReadPorts, ValidIO(UInt(mshrsAll.W))))
   val selector = Module(new MSHRSelector(nrRelaxClints, nrCohClints))
   selector.io.idle := io.status.map(!_.valid)
   mshrIdle := selector.io.result
@@ -138,7 +139,7 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
       dir.valid := req.valid && alloc.valid
       dir.bits.tag := req.bits.tag
       dir.bits.set := req.bits.set
-      dir.bits.id := alloc.bits
+      dir.bits.idOH := alloc.bits
       req.ready := dir.ready && alloc.valid
   }
 
@@ -148,8 +149,13 @@ class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) ex
 
   io.alloc.foreach(_.valid := false.B)
   io.alloc.foreach(_.bits := DontCare)
-  for (i <- 0 until dirReadPorts) {
-    io.alloc(mshrIdle(i).bits).valid := mshrIdle(i).valid && allReqs(i).valid && io.dirReads(i).ready
-    io.alloc(mshrIdle(i).bits).bits := allReqs(i).bits
+
+  for((mshr, i) <- io.alloc.zipWithIndex){
+    val validVec = mshrIdle.zip(allReqs).zip(io.dirReads).map{
+      case ((sel, req), dir) => sel.valid && sel.bits(i) && req.valid && dir.ready
+    }
+    mshr.valid := Cat(validVec).orR()
+    mshr.bits := ParallelMux(validVec.zip(allReqs.map(_.bits)))
   }
+
 }

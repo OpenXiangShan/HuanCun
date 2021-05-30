@@ -44,21 +44,18 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   val meta = Reg(new DirResult)
   val meta_valid = RegInit(false.B)
 
-  // 1. Alloc MSHR
-  assert(RegNext(!req_valid || !io.alloc.valid)) // TODO: support fully-pipelined
-  when (io.alloc.valid) {
-    req_valid := true.B
-    req := io.alloc.bits
-  }
-
-  // 2. Get directory result
-  assert(RegNext(!io.dirResult.valid || req_valid && !meta_valid))
+  // Get directory result
+  assert(
+    RegNext(!io.dirResult.valid || req_valid && !meta_valid),
+    "Directory result was sent to mismatch MSHR(mshrId:%d, resultId:%d)",
+    io.id, OHToUInt(io.dirResult.bits.idOH)
+  )
   when (io.dirResult.valid) {
     meta_valid := true.B
     meta := io.dirResult.bits
   }
 
-  // 3. Final meta to be written
+  // Final meta to be written
   val new_meta = WireInit(meta)
   val req_acquire = req.opcode === AcquireBlock || req.opcode === AcquirePerm
   val req_needT = needT(req.opcode, req.param)
@@ -117,7 +114,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   assert(RegNext(!meta_valid || !req.fromC || meta.hit)) // Release should always hit
 
 
-  // 4. Set tasks to be scheduled and resps to wait for
+  // Set tasks to be scheduled and resps to wait for
   val s_acquire        = RegInit(true.B) // source_a
   val s_rprobe         = RegInit(true.B) // source_b
   val s_pprobe         = RegInit(true.B)
@@ -387,7 +384,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     s_writerelease := true.B
   }
 
-  // 6. Monitor resps and mark the w_* state regs
+  // Monitor resps and mark the w_* state regs
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
   val probeack_last = (probes_done | probeack_bit) === (meta.clients & ~probe_exclude)
   when (io.resps.sink_c.valid) {
@@ -422,12 +419,18 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
 
 
-  // 7. Release MSHR
-  when (no_wait && s_execute && s_probeack) {
+  // Release MSHR
+  when (no_wait && s_execute && s_probeack && meta_valid) {
     req_valid := false.B
     meta_valid := false.B
   }
 
+  // Alloc MSHR (alloc has higher priority than release)
+  assert(RegNext(!req_valid || !io.alloc.valid)) // TODO: support fully-pipelined
+  when (io.alloc.valid) {
+    req_valid := true.B
+    req := io.alloc.bits
+  }
   // Status
   io.status.valid := req_valid
   io.status.bits.set := req.set

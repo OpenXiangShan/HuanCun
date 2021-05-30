@@ -161,7 +161,7 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   // Directory read results to MSHRs
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
-      val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.id(i))
+      val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.idOH(i))
       mshr.io.dirResult.valid := Cat(dirResultMatch).orR()
       mshr.io.dirResult.bits := ParallelMux(dirResultMatch.zip(directory.io.results.map(_.bits)))
   }
