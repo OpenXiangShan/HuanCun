@@ -41,7 +41,7 @@ class MSHRSelector(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters)
   // TODO: append nestB & nestC select logic
 }
 
-class MSHRAlloc(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) extends HuanCunModule {
+class MSHRAlloc(val nrRelaxClints: Int, val nrCohClints: Int)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     // From clients
     val relaxClints = Vec(nrRelaxClints, new RelaxClint)
