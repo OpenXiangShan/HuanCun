@@ -2,6 +2,7 @@ package huancun
 
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
+import chisel3.util._
 
 abstract class InnerTask(implicit p: Parameters) extends HuanCunBundle {
   val sourceId = UInt(sourceIdBits.W)
@@ -23,8 +24,7 @@ class SinkCReq(implicit p: Parameters) extends InnerTask {
   val size = UInt(msgSizeBits.W)
   val off = UInt(offsetBits.W)
 }
-class SourceDReq(implicit p: Parameters) extends InnerTask {
-  val channel = UInt(3.W)
+class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val opcode = UInt(3.W)
   val param = UInt(3.W)
   val size = UInt(msgSizeBits.W)
@@ -76,8 +76,14 @@ class SinkEResp(implicit p: Parameters) extends HuanCunBundle {
   val sink = UInt(mshrBits.W) // The slave sink id accepting this resp
 }
 
-class MSHRRequest(implicit p: Parameters) extends HuanCunBundle {
+trait HasChannelBits { this: Bundle =>
   val channel = UInt(3.W)
+  def fromA = channel(0).asBool
+  def fromB = channel(1).asBool
+  def fromC = channel(2).asBool
+}
+
+class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelBits {
   val opcode = UInt(3.W)
   val param = UInt(3.W)
   val size = UInt(msgSizeBits.W)
@@ -85,10 +91,6 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle {
   val set = UInt(setBits.W)
   val tag = UInt(tagBits.W)
   val off = UInt(offsetBits.W)
-
-  def fromA = channel(0).asBool
-  def fromB = channel(1).asBool
-  def fromC = channel(2).asBool
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
@@ -126,4 +128,15 @@ class DirResult(implicit p: Parameters) extends DirectoryEntry {
   val hit = Bool()
   val way = UInt(wayBits.W)
   val tag = UInt(tagBits.W)
+}
+
+class BankStoreAddress(implicit p: Parameters) extends HuanCunBundle {
+  val way  = UInt(width = wayBits.W)
+  val set  = UInt(width = setBits.W)
+  val beat = UInt(width = beatBits.W)
+  val write = Bool()
+}
+
+class BankStoreData(implicit p: Parameters) extends HuanCunBundle {
+  val data = UInt((beatBytes * 8).W)
 }

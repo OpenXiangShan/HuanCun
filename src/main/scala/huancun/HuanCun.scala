@@ -11,6 +11,7 @@ trait HasHuanCunParameters {
   val p: Parameters
   val cacheParams = p(CacheParamsKey)
   val blockBytes = cacheParams.blockBytes
+  val beatBytes = cacheParams.channelBytes.d.get
 
   val mshrs = cacheParams.mshrs
   val mshrsAll = cacheParams.mshrs + 2
@@ -23,6 +24,7 @@ trait HasHuanCunParameters {
   val wayBits = log2Ceil(cacheParams.ways)
   val setBits = log2Ceil(cacheParams.sets)
   val offsetBits = log2Ceil(blockBytes)
+  val beatBits = offsetBits - log2Ceil(beatBytes)
 
   val stateBits = MetaData.stateBits
 

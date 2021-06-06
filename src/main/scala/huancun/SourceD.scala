@@ -4,10 +4,94 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
+import freechips.rocketchip.util.UIntToOH1
 
 class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule with DontCareInnerLogic {
+  /*
+      Message         Operation       Channel          Data
+      -------------|---------------|------------|--------------
+      [AccessAck       Put                A           Y/N] put may be done in SinkA?
+      AccessAckData   Get/Atomic         A            Y
+      HintAck         Intent             A            N
+      Grant           Acquire            A            N
+      GrantData       Acquire            A            Y
+      ReleaseAck      Release            C            N
+   */
   val io = IO(new Bundle() {
     val d = DecoupledIO(new TLBundleD(edge.bundle))
     val task = Flipped(DecoupledIO(new SourceDReq))
+    val bs_raddr = DecoupledIO(new BankStoreAddress)
+    val bs_rdata = Input(new BankStoreData)
+    val bs_waddr = DecoupledIO(new BankStoreAddress)
+    val bs_wdata = Output(new BankStoreData)
   })
+
+  val d = io.d
+  val s1_ready = Wire(Bool())
+  val s2_ready = Wire(Bool())
+  val s3_ready = Wire(Bool())
+  val s4_ready = Wire(Bool())
+
+  // stage0
+  val s0_accessAckData = io.task.bits.opcode === TLMessages.AccessAckData
+  val s0_grantData = io.task.bits.opcode === TLMessages.GrantData
+  val s0_needData = s0_accessAckData || s0_grantData
+
+  // stage1
+  val s1_req = RegEnable(io.task.bits, io.task.fire())
+  val s1_valid = RegInit(false.B)
+  val s1_counter = Reg(UInt(beatBits.W)) // how many beats have been sent
+  val s1_beats = Reg(UInt(beatBits.W)) // total beats need to be sent
+  val s1_r_done = Wire(Bool())
+  val s1_needData = Reg(Bool())
+  val s1_can_go = Wire(Bool())
+
+  s1_can_go := s1_valid && s1_r_done && s2_ready
+
+  io.bs_raddr.valid := s1_valid && s1_needData
+  io.bs_raddr.bits.way := s1_req.way
+  io.bs_raddr.bits.set := s1_req.set
+  io.bs_raddr.bits.beat := (s1_req.off >> log2Up(beatBytes)).asUInt() | s1_counter
+  io.bs_raddr.bits.write := false.B
+
+  s1_r_done := s1_counter === s1_beats
+
+  when(io.bs_raddr.fire()){
+    when(s1_r_done){
+      when(s2_ready){ s1_valid := false.B }
+      s1_needData := false.B
+    }.otherwise({
+      s1_counter := s1_counter + 1.U
+    })
+  }
+
+  // S0 -> S1
+  when(io.task.fire()){
+    s1_valid := true.B
+    s1_counter := 0.U
+    s1_beats := Mux(s0_needData,
+      UIntToOH1(io.task.bits.size, log2Up(blockBytes)) >> log2Up(beatBytes),
+      0.U
+    )
+    s1_needData := s0_needData
+  }
+
+  s1_ready := !s1_valid || s1_can_go
+  io.task.ready := s1_ready
+
+  // stage2
+  val s2_req = RegEnable(s1_req, s1_can_go)
+  val s2_valid = RegInit(false.B)
+  val s2_can_go = Wire(Bool())
+
+  s2_ready := !s2_valid || s3_ready
+  s2_can_go := s2_valid && s3_ready
+  when(s1_can_go){
+    s2_valid := true.B
+  }.elsewhen(s2_can_go){
+    s2_valid := false.B
+  }
+
+  // stage3
+
 }
