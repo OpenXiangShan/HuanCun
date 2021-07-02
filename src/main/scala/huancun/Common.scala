@@ -31,6 +31,7 @@ class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val way = UInt(wayBits.W)
   val off = UInt(offsetBits.W)
   val denied = Bool()
+  val sinkId = UInt(mshrBits.W)
 }
 
 class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
