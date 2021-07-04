@@ -131,13 +131,13 @@ class DirResult(implicit p: Parameters) extends DirectoryEntry {
   val tag = UInt(tagBits.W)
 }
 
-class BankStoreAddress(implicit p: Parameters) extends HuanCunBundle {
+class DSAddress(implicit p: Parameters) extends HuanCunBundle {
   val way  = UInt(width = wayBits.W)
   val set  = UInt(width = setBits.W)
   val beat = UInt(width = beatBits.W)
   val write = Bool()
 }
 
-class BankStoreData(implicit p: Parameters) extends HuanCunBundle {
+class DSData(implicit p: Parameters) extends HuanCunBundle {
   val data = UInt((beatBytes * 8).W)
 }

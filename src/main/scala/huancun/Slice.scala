@@ -59,6 +59,9 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   val ms_bc = ms.init.last
   val ms_c = ms.last
 
+  // Connect channels to DataStorage
+  // TODO
+
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
       mshr.io.id := i.U
