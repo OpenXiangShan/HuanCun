@@ -77,7 +77,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     req.bankSel | sum
   }
 
-  val outData = Seq.fill(nrBanks)(UInt((8*bankBytes).W))
+  val outData = Wire(Vec(nrBanks, UInt((8*bankBytes).W)))
 
   for (i <- 0 until nrBanks) {
     val en = reqs.map(_.bankEn(i)).reduce(_||_)
@@ -96,4 +96,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     outData(i) := RegEnable(bankedData(i).io.r.resp.data(0), RegNext(en && !selectedReq.wen))
   }
 
+  /* Pack out-data to channels */
+  val sourceDrdata = Mux1H(RegNext(RegNext(sourceD_rreq.bankEn)), outData)
+
+  io.sourceD_rdata.data := sourceDrdata
 }
