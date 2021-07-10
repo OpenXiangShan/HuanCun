@@ -320,6 +320,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   oc.way := meta.way
   oc.dirty := meta.dirty
 
+  od.sinkId := io.id
   od.sourceId := req.source
   od.set := req.set
   od.tag := req.tag
