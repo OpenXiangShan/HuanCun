@@ -21,10 +21,10 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val d = DecoupledIO(new TLBundleD(edge.bundle))
     val task = Flipped(DecoupledIO(new SourceDReq))
-    val bs_raddr = DecoupledIO(new BankStoreAddress)
-    val bs_rdata = Input(new BankStoreData)
-    val bs_waddr = DecoupledIO(new BankStoreAddress)
-    val bs_wdata = Output(new BankStoreData)
+    val bs_raddr = DecoupledIO(new DSAddress)
+    val bs_rdata = Input(new DSData)
+    val bs_waddr = DecoupledIO(new DSAddress)
+    val bs_wdata = Output(new DSData)
   })
 
   io.bs_waddr.valid := false.B
@@ -122,7 +122,7 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   val s3_valid = RegInit(false.B)
   val s3_valid_d = RegInit(false.B)
 
-  val queue = Module(new Queue(new BankStoreData, 3, flow = true))
+  val queue = Module(new Queue(new DSData, 3, flow = true))
   queue.io.enq.valid := RegNext(RegNext(io.bs_raddr.fire(), false.B), false.B)
   queue.io.enq.bits := io.bs_rdata
   assert(!queue.io.enq.valid || queue.io.enq.ready)

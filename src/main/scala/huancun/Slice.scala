@@ -4,7 +4,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.diplomacy.IdRange
+import freechips.rocketchip.diplomacy.{IdRange, sourceLine}
 import huancun.utils.ParallelMux
 
 class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModule {
@@ -58,6 +58,22 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   val ms_abc = ms.init.init
   val ms_bc = ms.init.last
   val ms_c = ms.last
+
+  // TODO: Connect more channels to DataStorage
+  def addrArb[T <: DSAddress](in: Seq[DecoupledIO[T]]) = {
+    val arbiter = Module(new Arbiter(chiselTypeOf(in.head.bits), in.size))
+    for ((arbIn, req) <- arbiter.io.in.zip(in)) {
+      arbIn <> req
+    }
+    arbiter.io.out
+  }
+
+  val dataStorage = Module(new DataStorage())
+
+  sourceDs.foreach(_.io.bs_rdata := dataStorage.io.sourceD_rdata)
+  sourceDs.foreach(dataStorage.io.sourceD_wdata := _.io.bs_wdata)
+  dataStorage.io.sourceD_raddr <> addrArb(sourceDs.map(_.io.bs_raddr))
+  dataStorage.io.sourceD_waddr <> addrArb(sourceDs.map(_.io.bs_waddr))
 
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
