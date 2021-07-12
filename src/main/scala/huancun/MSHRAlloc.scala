@@ -17,7 +17,7 @@ class RelaxClint(implicit p: Parameters) extends HuanCunBundle() {
 
 class MSHRSelector(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
-    val idle = Input(Vec(mshrsAll, Bool()))
+    val idle = Input(Vec(mshrs, Bool()))
     // mshrIdOH
     val result = Vec(dirReadPorts, ValidIO(UInt(mshrsAll.W)))
   })
@@ -103,7 +103,7 @@ class MSHRAlloc(val nrRelaxClints: Int, val nrCohClints: Int)(implicit p: Parame
 
   val mshrIdle = Wire(Vec(dirReadPorts, ValidIO(UInt(mshrsAll.W))))
   val selector = Module(new MSHRSelector(nrRelaxClints, nrCohClints))
-  selector.io.idle := io.status.map(!_.valid)
+  selector.io.idle := io.status.take(mshrs).map(!_.valid)
   mshrIdle := selector.io.result
 
   /*
