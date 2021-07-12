@@ -44,7 +44,11 @@ trait HasHuanCunParameters {
     if (clientBits == 0) {
       0.U
     } else {
-      Cat((edgeInSeq.map(e => e.client.clients.filter(_.supports.probe).map(_.sourceId.contains(sourceId)))).flatten.reverse)
+      Cat(
+        (
+          edgeInSeq.map(e => e.client.clients.filter(_.supports.probe).map(_.sourceId.contains(sourceId)))
+        ).flatten.reverse
+      )
     }
   }
 }
@@ -59,9 +63,7 @@ trait DontCareInnerLogic { this: Module =>
 
 abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with HasHuanCunParameters
 
-abstract class HuanCunModule(implicit val p: Parameters)
-    extends Module
-    with HasHuanCunParameters
+abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
 //    with DontCareInnerLogic
 
 /**

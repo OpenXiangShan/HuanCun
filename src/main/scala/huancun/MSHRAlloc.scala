@@ -22,19 +22,20 @@ class MSHRSelector(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters)
     val result = Vec(dirReadPorts, ValidIO(UInt(mshrsAll.W)))
   })
   val relaxBatch: Int = mshrs / (nrRelaxClints + nrCohClints)
-  val cohBatch: Int = mshrs - relaxBatch * nrRelaxClints
+  val cohBatch:   Int = mshrs - relaxBatch * nrRelaxClints
   // Select idle position for relax client
-  for (i <- 0 until dirReadPorts-1) {
-    val batch = io.idle.zipWithIndex.filter(s => (s._2 >= i*relaxBatch) && (s._2 < (i+1)*relaxBatch)).map(s => s._1)
+  for (i <- 0 until dirReadPorts - 1) {
+    val batch =
+      io.idle.zipWithIndex.filter(s => (s._2 >= i * relaxBatch) && (s._2 < (i + 1) * relaxBatch)).map(s => s._1)
     io.result(i).valid := ParallelOR(batch)
-    io.result(i).bits := ParallelPriorityMux(batch.zipWithIndex.map{
+    io.result(i).bits := ParallelPriorityMux(batch.zipWithIndex.map {
       case (b, index) => (b, (1 << (index + i * relaxBatch)).U)
     })
   }
   // Select idle position for coh client
   val batch = io.idle.takeRight(cohBatch)
-  io.result(dirReadPorts-1).valid := ParallelOR(batch)
-  io.result(dirReadPorts-1).bits := ParallelPriorityMux(batch.zipWithIndex.map{
+  io.result(dirReadPorts - 1).valid := ParallelOR(batch)
+  io.result(dirReadPorts - 1).bits := ParallelPriorityMux(batch.zipWithIndex.map {
     case (b, index) => (b, (1 << (index + nrRelaxClints * relaxBatch)).U)
   })
 
@@ -82,7 +83,8 @@ class MSHRAlloc(val nrRelaxClints: Int, val nrCohClints: Int)(implicit p: Parame
    * Judge collision with MSHRs
    */
 
-  val relaxMaskVec2 = io.relaxClints.map(_.a).map(c => ParallelOR(io.status.map(s => s.bits.set === c.bits.set && s.valid)))
+  val relaxMaskVec2 =
+    io.relaxClints.map(_.a).map(c => ParallelOR(io.status.map(s => s.bits.set === c.bits.set && s.valid)))
 
   // TODO: implement nest & block logic
   val nestB = false.B
@@ -150,8 +152,8 @@ class MSHRAlloc(val nrRelaxClints: Int, val nrCohClints: Int)(implicit p: Parame
   io.alloc.foreach(_.valid := false.B)
   io.alloc.foreach(_.bits := DontCare)
 
-  for((mshr, i) <- io.alloc.zipWithIndex){
-    val validVec = mshrIdle.zip(allReqs).zip(io.dirReads).map{
+  for ((mshr, i) <- io.alloc.zipWithIndex) {
+    val validVec = mshrIdle.zip(allReqs).zip(io.dirReads).map {
       case ((sel, req), dir) => sel.valid && sel.bits(i) && req.valid && dir.ready
     }
     mshr.valid := Cat(validVec).orR()

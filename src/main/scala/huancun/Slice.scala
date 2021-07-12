@@ -4,7 +4,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.diplomacy.{IdRange, sourceLine}
+import freechips.rocketchip.diplomacy.{sourceLine, IdRange}
 import huancun.utils.ParallelMux
 
 class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModule {
@@ -151,11 +151,12 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   // for ((sourceB, idRange) <- sourceBs.zip(cohIds)) {
   //   arbInnerTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), idRange, Some("sourceB"))
   // }
-  sourceBs.zipWithIndex.foreach { case (sourceB, i) =>
-    val arbiter = arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
-    for ((in, req) <- arbiter.io.in.zip(ms.map(_.io.tasks.source_b))) {
-      in.valid := req.valid && req.bits.clients(i).asBool
-    }
+  sourceBs.zipWithIndex.foreach {
+    case (sourceB, i) =>
+      val arbiter = arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
+      for ((in, req) <- arbiter.io.in.zip(ms.map(_.io.tasks.source_b))) {
+        in.valid := req.valid && req.bits.clients(i).asBool
+      }
   }
   for ((sinkC, idRange) <- sinkCs.zip(cohIds)) {
     arbInnerTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), idRange, Some("sinkC"))

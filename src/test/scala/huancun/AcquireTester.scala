@@ -18,44 +18,9 @@ class AcquireListener(outer: TLDebugModuleBase) extends LazyModuleImp(outer) {
 
 class AcquireTester extends L2Tester with DumpVCD with UseVerilatorBackend {
 
-  val nBanks = 1
-
-  class TestTop extends LazyModule {
-
-    val l1d = LazyModule(new FakeL1D(nBanks, 0))
-    val l1i = LazyModule(new FakeL1I(nBanks, 10))
-    val ptw = LazyModule(new FakePTW(nBanks, 0))
-    val l2 = LazyModule(new HuanCun())
-
-    /**
-      *         xbar <= l2 bank0 <= { l1d_bank0, l1i_bank0 }
-      *  ram <=
-      *         xbar <= l2 bank1 <= { l1d_bank1, l1i_bank1 }
-      */
-    val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffffffL), beatBytes = 64))
-    ram.node :=
-      TLXbar() :=*
-        TLCacheCork() :=*
-        l2.node
-
-    l2.node :=*
-      l1d.node
-
-    l2.node :=*
-      l1i.node
-
-    l2.node :=*
-      ptw.node
-
-    lazy val module = new LazyModuleImp(this) {
-      val success = IO(Output(Bool()))
-      success := Seq(l1d, l1i, ptw).map(_.module.finish).reduce(_&&_)
-    }
-  }
-
   it should "send outer acquire" in {
 
-    val top = LazyModule(new TestTop)
+    val top = LazyModule(new ExampleSystem(l1dReq = 1))
 
     test(top.module).withAnnotations(testAnnos) { dut =>
       while (!dut.success.peek().litToBoolean){

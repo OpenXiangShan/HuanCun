@@ -30,18 +30,26 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   // If there's no conflict, one row can be accessed in parallel by nrStacks
 
   val bankedData = Seq.fill(nrBanks)(
-    Module(new SRAMTemplate(UInt((8*bankBytes).W), set=nrRows, way=1,
-      shouldReset=false, holdRead=false, singlePort=sramSinglePort))
+    Module(
+      new SRAMTemplate(
+        UInt((8 * bankBytes).W),
+        set = nrRows,
+        way = 1,
+        shouldReset = false,
+        holdRead = false,
+        singlePort = sramSinglePort
+      )
+    )
   )
 
   /* Convert to internal request signals */
   class DSRequest extends HuanCunBundle {
-    val wen      = Bool()
-    val index    = UInt((rowBytes*8).W)
-    val bankSel  = UInt(nrBanks.W)
-    val bankSum  = UInt(nrBanks.W)
-    val bankEn   = UInt(nrBanks.W)
-    val data     = Vec(nrBanks, UInt((8*bankBytes).W))
+    val wen = Bool()
+    val index = UInt((rowBytes * 8).W)
+    val bankSel = UInt(nrBanks.W)
+    val bankSum = UInt(nrBanks.W)
+    val bankEn = UInt(nrBanks.W)
+    val data = Vec(nrBanks, UInt((8 * bankBytes).W))
   }
 
   def req(wen: Boolean, addr: DecoupledIO[DSAddress], data: DSData) = {
@@ -50,18 +58,22 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     //                          aka [index, stack, block]
     val innerAddr = Cat(addr.bits.way, addr.bits.set, addr.bits.beat)
     val innerIndex = innerAddr >> stackBits
-    val stackSel = UIntToOH(innerAddr(stackBits-1, 0), stackBits)  // Select which stack to access
+    val stackSel = UIntToOH(innerAddr(stackBits - 1, 0), stackBits) // Select which stack to access
 
     val out = Wire(new DSRequest)
-    val accessVec = Cat(Seq.tabulate(nrStacks) {
-      i => !out.bankSum((i+1)*stackSize-1, i*stackSize).orR
-    }.reverse)
-    addr.ready := accessVec(innerAddr(stackBits-1, 0))
+    val accessVec = Cat(
+      Seq
+        .tabulate(nrStacks) { i =>
+          !out.bankSum((i + 1) * stackSize - 1, i * stackSize).orR
+        }
+        .reverse
+    )
+    addr.ready := accessVec(innerAddr(stackBits - 1, 0))
 
     out.wen := wen.B
     out.index := innerIndex
     // FillInterleaved: 0010 => 00000000 00000000 11111111 00000000
-    out.bankSel := Mux(addr.valid, FillInterleaved(stackSize, stackSel), 0.U)  // TODO: consider mask
+    out.bankSel := Mux(addr.valid, FillInterleaved(stackSize, stackSel), 0.U) // TODO: consider mask
     out.bankEn := out.bankSel & FillInterleaved(stackSize, accessVec) // TODO: consider noop req
     out.data := Cat(Seq.fill(nrStacks)(data.data)).asTypeOf(out.data.cloneType)
     out
@@ -69,18 +81,19 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   /* Arbitrates r&w by bank according to priority */
   val sourceD_rreq = req(wen = false, io.sourceD_raddr, io.sourceD_rdata)
-  val sourceD_wreq = req(wen = true,  io.sourceD_waddr, io.sourceD_wdata)
+  val sourceD_wreq = req(wen = true, io.sourceD_waddr, io.sourceD_wdata)
 
   val reqs = Seq(sourceD_wreq, sourceD_rreq) // TODO: add more requests with priority carefully
-  reqs.foldLeft(0.U(nrBanks.W)) { case (sum, req) =>
-    req.bankSum := sum
-    req.bankSel | sum
+  reqs.foldLeft(0.U(nrBanks.W)) {
+    case (sum, req) =>
+      req.bankSum := sum
+      req.bankSel | sum
   }
 
-  val outData = Wire(Vec(nrBanks, UInt((8*bankBytes).W)))
+  val outData = Wire(Vec(nrBanks, UInt((8 * bankBytes).W)))
 
   for (i <- 0 until nrBanks) {
-    val en = reqs.map(_.bankEn(i)).reduce(_||_)
+    val en = reqs.map(_.bankEn(i)).reduce(_ || _)
     val selectedReq = PriorityMux(reqs.map(_.bankSel(i)), reqs)
 
     // Write

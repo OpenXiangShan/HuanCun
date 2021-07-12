@@ -132,8 +132,8 @@ class DirResult(implicit p: Parameters) extends DirectoryEntry {
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
-  val way  = UInt(width = wayBits.W)
-  val set  = UInt(width = setBits.W)
+  val way = UInt(width = wayBits.W)
+  val set = UInt(width = setBits.W)
   val beat = UInt(width = beatBits.W)
   val write = Bool()
 }

@@ -48,9 +48,10 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   assert(
     RegNext(!io.dirResult.valid || req_valid && !meta_valid),
     "Directory result was sent to mismatch MSHR(mshrId:%d, resultId:%d)",
-    io.id, OHToUInt(io.dirResult.bits.idOH)
+    io.id,
+    OHToUInt(io.dirResult.bits.idOH)
   )
-  when (io.dirResult.valid) {
+  when(io.dirResult.valid) {
     meta_valid := true.B
     meta := io.dirResult.bits
   }
@@ -63,16 +64,24 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   val meta_no_client = !meta.clients.orR
   val probes_toN = RegInit(0.U(clientBits.W))
   val probes_done = RegInit(0.U(clientBits.W))
-  val probe_exclude = Mux(req.fromA && meta.hit && skipProbeN(req.opcode), getClientBitOH(req.source), 0.U) // Client acquiring the block does not need to be probed
-  val probe_next_state = Mux(isT(meta.state) && req.param === toT, meta.state,
-      Mux(meta.state =/= INVALID && req.param =/= toN, BRANCH, INVALID))
-  when (req.fromC) {
+  val probe_exclude =
+    Mux(
+      req.fromA && meta.hit && skipProbeN(req.opcode),
+      getClientBitOH(req.source),
+      0.U
+    ) // Client acquiring the block does not need to be probed
+  val probe_next_state = Mux(
+    isT(meta.state) && req.param === toT,
+    meta.state,
+    Mux(meta.state =/= INVALID && req.param =/= toN, BRANCH, INVALID)
+  )
+  when(req.fromC) {
     // Release / ReleaseData
     new_meta.dirty := meta.dirty || req.opcode(0)
     new_meta.state := Mux(req.param === TtoB || req.param === TtoN, TIP, meta.state)
     new_meta.clients := meta.clients & ~Mux(isToN(req.param), getClientBitOH(req.source), 0.U)
     new_meta.hit := true.B
-  }.elsewhen (req.fromB) {
+  }.elsewhen(req.fromB) {
     new_meta.dirty := req.param === toT && meta.dirty
     new_meta.state := probe_next_state
     new_meta.clients := Mux(req.param === toN, 0.U, meta.clients)
@@ -81,20 +90,34 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }.otherwise {
     // Acquire / Intent / Put / Get / Atomics
     new_meta.dirty := meta.hit && meta.dirty || !req.opcode(2) // Put / Atomics
-    new_meta.state := Mux(req_needT,
-                        Mux(req_acquire,
-                          TRUNK, // Acquire (NtoT/BtoT)
-                          TIP), // Intent (PrefetchWrite) / Put / Atomics
-                        Mux(!meta.hit, // The rest are Acquire (NtoB) / Intent (PrefetchRead) / Get
-                          // If tag miss, new state depends on what L3 grants
-                          Mux(gotT, Mux(req_acquire, TRUNK, TIP), BRANCH),
-                          MuxLookup(meta.state, BRANCH, Seq(
-                            INVALID -> BRANCH,
-                            BRANCH  -> BRANCH,
-                            TRUNK   -> TIP,
-                            TIP     -> Mux(meta_no_client && req_acquire, TRUNK, TIP)
-                          ))))
-    new_meta.clients := Mux(meta.hit, meta.clients & ~probes_toN, 0.U) | Mux(req_acquire, getClientBitOH(req.source), 0.U)
+    new_meta.state := Mux(
+      req_needT,
+      Mux(
+        req_acquire,
+        TRUNK, // Acquire (NtoT/BtoT)
+        TIP
+      ), // Intent (PrefetchWrite) / Put / Atomics
+      Mux(
+        !meta.hit, // The rest are Acquire (NtoB) / Intent (PrefetchRead) / Get
+        // If tag miss, new state depends on what L3 grants
+        Mux(gotT, Mux(req_acquire, TRUNK, TIP), BRANCH),
+        MuxLookup(
+          meta.state,
+          BRANCH,
+          Seq(
+            INVALID -> BRANCH,
+            BRANCH -> BRANCH,
+            TRUNK -> TIP,
+            TIP -> Mux(meta_no_client && req_acquire, TRUNK, TIP)
+          )
+        )
+      )
+    )
+    new_meta.clients := Mux(meta.hit, meta.clients & ~probes_toN, 0.U) | Mux(
+      req_acquire,
+      getClientBitOH(req.source),
+      0.U
+    )
     new_meta.hit := true.B
   }
   val new_dir = Wire(new DirectoryEntry)
@@ -103,7 +126,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   new_dir.clients := new_meta.clients
 
   val bad_grant = Reg(Bool())
-  when (bad_grant) {
+  when(bad_grant) {
     new_meta.dirty := false.B
     new_meta.state := Mux(meta.hit, BRANCH, INVALID)
     new_meta.clients := Mux(meta.hit, meta.clients & ~probes_toN, 0.U)
@@ -113,81 +136,82 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   // TODO: update meta after a nested mshr completes
   assert(RegNext(!meta_valid || !req.fromC || meta.hit)) // Release should always hit
 
-
   // Set tasks to be scheduled and resps to wait for
-  val s_acquire        = RegInit(true.B) // source_a
-  val s_rprobe         = RegInit(true.B) // source_b
-  val s_pprobe         = RegInit(true.B)
-  val s_release        = RegInit(true.B) // source_c
-  val s_probeack       = RegInit(true.B)
-  val s_execute        = RegInit(true.B) // source_d
-  val s_grantack       = RegInit(true.B) // source_e
-  val s_writebacktag   = RegInit(true.B) // tag_write
-  val s_writebackdir   = RegInit(true.B) // dir_write
-  val s_writeput       = RegInit(true.B) // sink_a
-  val s_writerelease   = RegInit(true.B) // sink_c
+  val s_acquire = RegInit(true.B) // source_a
+  val s_rprobe = RegInit(true.B) // source_b
+  val s_pprobe = RegInit(true.B)
+  val s_release = RegInit(true.B) // source_c
+  val s_probeack = RegInit(true.B)
+  val s_execute = RegInit(true.B) // source_d
+  val s_grantack = RegInit(true.B) // source_e
+  val s_writebacktag = RegInit(true.B) // tag_write
+  val s_writebackdir = RegInit(true.B) // dir_write
+  val s_writeput = RegInit(true.B) // sink_a
+  val s_writerelease = RegInit(true.B) // sink_c
 
   val w_rprobeackfirst = RegInit(true.B)
-  val w_rprobeacklast  = RegInit(true.B)
+  val w_rprobeacklast = RegInit(true.B)
   val w_pprobeackfirst = RegInit(true.B)
-  val w_pprobeacklast  = RegInit(true.B)
-  val w_pprobeack      = RegInit(true.B)
-  val w_grantfirst     = RegInit(true.B)
-  val w_grantlast      = RegInit(true.B)
-  val w_grant          = RegInit(true.B)
-  val w_releaseack     = RegInit(true.B)
-  val w_grantack       = RegInit(true.B)
+  val w_pprobeacklast = RegInit(true.B)
+  val w_pprobeack = RegInit(true.B)
+  val w_grantfirst = RegInit(true.B)
+  val w_grantlast = RegInit(true.B)
+  val w_grant = RegInit(true.B)
+  val w_releaseack = RegInit(true.B)
+  val w_grantack = RegInit(true.B)
 
-  when (io.dirResult.valid) {
+  when(io.dirResult.valid) {
     // Default value
-    s_acquire        := true.B
-    s_rprobe         := true.B
-    s_pprobe         := true.B
-    s_release        := true.B
-    s_probeack       := true.B
-    s_execute        := true.B
-    s_grantack       := true.B
-    s_writebacktag   := true.B
-    s_writebackdir   := true.B
-    s_writeput       := true.B
-    s_writerelease   := true.B
+    s_acquire := true.B
+    s_rprobe := true.B
+    s_pprobe := true.B
+    s_release := true.B
+    s_probeack := true.B
+    s_execute := true.B
+    s_grantack := true.B
+    s_writebacktag := true.B
+    s_writebackdir := true.B
+    s_writeput := true.B
+    s_writerelease := true.B
 
     w_rprobeackfirst := true.B
-    w_rprobeacklast  := true.B
+    w_rprobeacklast := true.B
     w_pprobeackfirst := true.B
-    w_pprobeacklast  := true.B
-    w_pprobeack      := true.B
-    w_grantfirst     := true.B
-    w_grantlast      := true.B
-    w_grant          := true.B
-    w_releaseack     := true.B
-    w_grantack       := true.B
+    w_pprobeacklast := true.B
+    w_pprobeack := true.B
+    w_grantfirst := true.B
+    w_grantlast := true.B
+    w_grant := true.B
+    w_releaseack := true.B
+    w_grantack := true.B
 
     gotT := false.B
     probes_toN := 0.U
     probes_done := 0.U
     bad_grant := false.B
 
-    when (req.fromC) {
+    when(req.fromC) {
       // Release
       s_execute := false.B
-      when (!meta.dirty && req.opcode(0) || // from clean to dirty
-        (req.param === TtoB || req.param === TtoN) && meta.state === TRUNK || // from TRUNK to TIP
-        isToN(req.param)) { // change clients
-          s_writebackdir := false.B
+      when(
+        !meta.dirty && req.opcode(0) || // from clean to dirty
+          (req.param === TtoB || req.param === TtoN) && meta.state === TRUNK || // from TRUNK to TIP
+          isToN(req.param)
+      ) { // change clients
+        s_writebackdir := false.B
       }
 
-      when (req.opcode(0)) { // has data
+      when(req.opcode(0)) { // has data
         s_writerelease := false.B
       }
 
-    }.elsewhen (req.fromB) {
+    }.elsewhen(req.fromB) {
       // Probe
       s_probeack := false.B
-      when (meta.hit) {
-        when (isT(meta.state) && req.param =/= toT || meta.state === BRANCH && req.param === toN) { // state demotion
+      when(meta.hit) {
+        when(isT(meta.state) && req.param =/= toT || meta.state === BRANCH && req.param === toN) { // state demotion
           s_writebackdir := false.B
-          when (!meta_no_client) {
+          when(!meta_no_client) {
             s_pprobe := false.B
             w_pprobeackfirst := false.B
             w_pprobeacklast := false.B
@@ -200,18 +224,18 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       // TODO: consider parameterized write-through policy for put/atomics
       s_execute := false.B
       // need replacement
-      when (!meta.hit && meta.state =/= INVALID) {
+      when(!meta.hit && meta.state =/= INVALID) {
         s_release := false.B
         w_releaseack := false.B
         // need rprobe for release
-        when (!meta_no_client) {
+        when(!meta_no_client) {
           s_rprobe := false.B
           w_rprobeackfirst := false.B
           w_rprobeacklast := false.B
         }
       }
       // need Acquire downwards
-      when (!meta.hit || meta.state === BRANCH && req_needT) {
+      when(!meta.hit || meta.state === BRANCH && req_needT) {
         s_acquire := false.B
         w_grantfirst := false.B
         w_grantlast := false.B
@@ -220,7 +244,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
         s_writebackdir := false.B
       }
       // need pprobe
-      when (meta.hit && (req_needT || meta.state === TRUNK) && (meta.clients & ~getClientBitOH(req.source)) =/= 0.U) {
+      when(meta.hit && (req_needT || meta.state === TRUNK) && (meta.clients & ~getClientBitOH(req.source)) =/= 0.U) {
         s_pprobe := false.B
         w_pprobeackfirst := false.B
         w_pprobeacklast := false.B
@@ -228,20 +252,20 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
         s_writebackdir := false.B
       }
       // need grantack
-      when (req_acquire) {
+      when(req_acquire) {
         w_grantack := false.B
         s_writebackdir := false.B
       }
       // Put and Atomics need to write
-      when (!req.opcode(2) && !meta.dirty) {
+      when(!req.opcode(2) && !meta.dirty) {
         s_writebackdir := false.B
       }
       // need write tag
-      when (!meta.hit) {
+      when(!meta.hit) {
         s_writebacktag := false.B
       }
       // need wirte putbuffer in Sink A into data array
-      when (req.opcode(2, 1) === 0.U) { // Put[Full/Partial]Data
+      when(req.opcode(2, 1) === 0.U) { // Put[Full/Partial]Data
         s_writeput := false.B
       }
     }
@@ -262,7 +286,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
    *      s_grantack(E) s_execute(D) s_writeput
    *
    * The edges between s_* state regs from top to bottom indicate the scheduling priority.
-   * For example, s_release > s_acquire and s_pprobe > s_acquire mean that before 
+   * For example, s_release > s_acquire and s_pprobe > s_acquire mean that before
    * sending an Acquire, make sure Release and PProbe have been sent out. Some edges
    * in this diagram need the prerequisite task to be issued while the others need
    * the prerequisite to be issued and also acknowledged (e.g. s_acquire > s_execute).
@@ -278,7 +302,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.dir_write.valid := !s_writebackdir && no_wait || !s_release && w_rprobeackfirst // TODO: Is the latter clause necessary?
   io.tasks.tag_write.valid := !s_writebacktag && no_wait
   io.tasks.sink_a.valid := !s_writeput && w_grant && w_pprobeack
-  io.tasks.sink_c.valid := !s_writerelease// && w_grant && w_pprobeack
+  io.tasks.sink_c.valid := !s_writerelease // && w_grant && w_pprobeack
 
   val oa = io.tasks.source_a.bits
   val ob = io.tasks.source_b.bits
@@ -303,19 +327,25 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   oc.opcode := Cat(Mux(req.fromB, ProbeAck, Release)(2, 1), meta.dirty.asUInt)
   oc.tag := meta.tag
   oc.set := req.set
-  oc.param := Mux(req.fromB,
-                MuxLookup(Cat(meta.state, probe_next_state), NtoN, Seq( // TODO: optimize this
-                  Cat(TRUNK  , TRUNK  ) -> TtoT,
-                  Cat(TIP    , TIP    ) -> TtoT,
-                  Cat(TRUNK  , BRANCH ) -> TtoB,
-                  Cat(TIP    , BRANCH ) -> TtoB,
-                  Cat(TRUNK  , INVALID) -> TtoN,
-                  Cat(TIP    , INVALID) -> TtoN,
-                  Cat(BRANCH , BRANCH ) -> BtoB,
-                  Cat(BRANCH , INVALID) -> BtoN,
-                  Cat(INVALID, INVALID) -> NtoN
-                )),
-                Mux(meta.state === BRANCH, BtoN, TtoN))
+  oc.param := Mux(
+    req.fromB,
+    MuxLookup(
+      Cat(meta.state, probe_next_state),
+      NtoN,
+      Seq( // TODO: optimize this
+        Cat(TRUNK, TRUNK) -> TtoT,
+        Cat(TIP, TIP) -> TtoT,
+        Cat(TRUNK, BRANCH) -> TtoB,
+        Cat(TIP, BRANCH) -> TtoB,
+        Cat(TRUNK, INVALID) -> TtoN,
+        Cat(TIP, INVALID) -> TtoN,
+        Cat(BRANCH, BRANCH) -> BtoB,
+        Cat(BRANCH, INVALID) -> BtoN,
+        Cat(INVALID, INVALID) -> NtoN
+      )
+    ),
+    Mux(meta.state === BRANCH, BtoN, TtoN)
+  )
   oc.source := io.id
   oc.way := meta.way
   oc.dirty := meta.dirty
@@ -355,40 +385,40 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.tag_write.bits.tag := req.tag
 
   dontTouch(io.tasks)
-  when (io.tasks.source_a.fire()) {
+  when(io.tasks.source_a.fire()) {
     s_acquire := true.B
   }
-  when (io.tasks.source_b.fire()) {
+  when(io.tasks.source_b.fire()) {
     s_rprobe := true.B
     s_pprobe := true.B
   }
-  when (io.tasks.source_c.fire()) {
+  when(io.tasks.source_c.fire()) {
     s_release := true.B
     s_probeack := true.B
   }
-  when (io.tasks.source_d.fire()) {
+  when(io.tasks.source_d.fire()) {
     s_execute := true.B
   }
-  when (io.tasks.source_e.fire()) {
+  when(io.tasks.source_e.fire()) {
     s_grantack := true.B
   }
-  when (io.tasks.dir_write.fire()) {
+  when(io.tasks.dir_write.fire()) {
     s_writebackdir := true.B
   }
-  when (io.tasks.tag_write.fire()) {
+  when(io.tasks.tag_write.fire()) {
     s_writebacktag := true.B
   }
-  when (io.tasks.sink_a.fire()) {
+  when(io.tasks.sink_a.fire()) {
     s_writeput := true.B
   }
-  when (io.tasks.sink_c.fire()) {
+  when(io.tasks.sink_c.fire()) {
     s_writerelease := true.B
   }
 
   // Monitor resps and mark the w_* state regs
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
   val probeack_last = (probes_done | probeack_bit) === (meta.clients & ~probe_exclude)
-  when (io.resps.sink_c.valid) {
+  when(io.resps.sink_c.valid) {
     // ProbeAck in resp to rprobe/pprobe
     val resp = io.resps.sink_c.bits
     probes_done := probes_done | probeack_bit
@@ -398,37 +428,36 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     w_pprobeackfirst := w_pprobeackfirst || probeack_last
     w_pprobeacklast := w_pprobeacklast || probeack_last && resp.last
     w_pprobeack := w_pprobeack || (resp.last || req.off === 0.U) && probeack_last
-    when ((req.fromB && req.param === toT || req.fromA && meta.hit) && resp.hasData) {
+    when((req.fromB && req.param === toT || req.fromA && meta.hit) && resp.hasData) {
       // When ProbeAck for pprobe writes back dirty data, set dirty bit
       new_meta.dirty := true.B
     }
   }
-  when (io.resps.sink_d.valid) {
-    when (io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData) {
+  when(io.resps.sink_d.valid) {
+    when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData) {
       w_grantfirst := true.B
       w_grantlast := io.resps.sink_d.bits.last
       w_grant := req.off === 0.U || io.resps.sink_d.bits.last
       bad_grant := io.resps.sink_d.bits.denied
       gotT := io.resps.sink_d.bits.param === toT
     }
-    when (io.resps.sink_d.bits.opcode === ReleaseAck) {
+    when(io.resps.sink_d.bits.opcode === ReleaseAck) {
       w_releaseack := true.B
     }
   }
-  when (io.resps.sink_e.valid) {
+  when(io.resps.sink_e.valid) {
     w_grantack := true.B
   }
 
-
   // Release MSHR
-  when (no_wait && s_execute && s_probeack && meta_valid) {
+  when(no_wait && s_execute && s_probeack && meta_valid) {
     req_valid := false.B
     meta_valid := false.B
   }
 
   // Alloc MSHR (alloc has higher priority than release)
   assert(RegNext(!req_valid || !io.alloc.valid)) // TODO: support fully-pipelined
-  when (io.alloc.valid) {
+  when(io.alloc.valid) {
     req_valid := true.B
     req := io.alloc.bits
   }
@@ -437,6 +466,5 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.status.bits.set := req.set
   io.status.bits.tag := req.tag
   io.status.bits.reload := false.B // TODO
-
 
 }

@@ -16,10 +16,10 @@ class SinkA(val edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   io.task.ready := false.B
 
   def parseAddress(x: UInt): (UInt, UInt, UInt) = {
-    val offset = x  // TODO: check address mapping
+    val offset = x // TODO: check address mapping
     val set = offset >> offsetBits
     val tag = set >> setBits
-    (tag(tagBits-1, 0), set(setBits-1, 0), offset(offsetBits-1, 0))
+    (tag(tagBits - 1, 0), set(setBits - 1, 0), offset(offsetBits - 1, 0))
   }
 
   val a = io.a

@@ -71,10 +71,7 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   when(io.task.fire()) {
     s1_valid := true.B
     s1_counter := 0.U
-    s1_beats := Mux(s0_needData,
-      UIntToOH1(io.task.bits.size, log2Up(blockBytes)) >> log2Up(beatBytes),
-      0.U
-    )
+    s1_beats := Mux(s0_needData, UIntToOH1(io.task.bits.size, log2Up(blockBytes)) >> log2Up(beatBytes), 0.U)
     s1_needData := s0_needData
   }
 
@@ -98,7 +95,7 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
     TLMessages.Get -> TLMessages.AccessAckData,
     TLMessages.Hint -> TLMessages.HintAck,
     TLMessages.AcquireBlock -> TLMessages.GrantData,
-    TLMessages.AcquirePerm -> TLMessages.Grant,
+    TLMessages.AcquirePerm -> TLMessages.Grant
   )
 
   val a_resp_opcode :: Nil = DecodeLogic(
@@ -110,10 +107,8 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   )
   val s2_resp_opcode = Mux(s2_req.fromA, a_resp_opcode, TLMessages.ReleaseAck)
   val s2_acq = s2_req.opcode === TLMessages.AcquirePerm || s2_req.opcode === TLMessages.AcquireBlock
-  val s2_resp_param = Mux(s2_req.fromA && s2_acq,
-    Mux(s2_req.param =/= TLPermissions.NtoB, TLPermissions.toT, TLPermissions.toB),
-    0.U
-  )
+  val s2_resp_param =
+    Mux(s2_req.fromA && s2_acq, Mux(s2_req.param =/= TLPermissions.NtoB, TLPermissions.toT, TLPermissions.toB), 0.U)
 
   // stage3
   val s3_req = RegEnable(s2_req, s2_can_go)

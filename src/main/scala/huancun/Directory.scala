@@ -71,7 +71,7 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     result.bits.dirty := meta.dirty
     result.bits.state := meta.state
     result.bits.clients := meta.clients
-    result.bits.tag := 0.U// ParallelMux(hitVec.zip(tags)) // TODO
+    result.bits.tag := 0.U // ParallelMux(hitVec.zip(tags)) // TODO
   }
 
   for (dirWReq <- io.dirWReqs) {

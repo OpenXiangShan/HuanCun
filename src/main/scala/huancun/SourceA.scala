@@ -21,7 +21,7 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a.bits.param := io.task.bits.param
   a.bits.size := offsetBits.U
   a.bits.source := io.task.bits.source
-  a.bits.address :=  Cat(io.task.bits.tag, io.task.bits.set, 0.U(offsetBits.W))
+  a.bits.address := Cat(io.task.bits.tag, io.task.bits.set, 0.U(offsetBits.W))
   a.bits.mask := Fill(edgeOut.manager.beatBytes, 1.U(1.W))
   a.bits.data := DontCare
   a.bits.corrupt := false.B
