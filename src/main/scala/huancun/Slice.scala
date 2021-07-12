@@ -70,6 +70,9 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
 
   val dataStorage = Module(new DataStorage())
 
+  dataStorage.io.sinkD_wdata := sinkD.io.bs_wdata
+  dataStorage.io.sinkD_waddr <> sinkD.io.bs_waddr
+
   sourceDs.foreach(_.io.bs_rdata := dataStorage.io.sourceD_rdata)
   sourceDs.foreach(dataStorage.io.sourceD_wdata := _.io.bs_wdata)
   dataStorage.io.sourceD_raddr <> addrArb(sourceDs.map(_.io.bs_raddr))
@@ -182,5 +185,9 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
       mshr.io.dirResult.valid := Cat(dirResultMatch).orR()
       mshr.io.dirResult.bits := ParallelMux(dirResultMatch.zip(directory.io.results.map(_.bits)))
   }
+
+  // Provide MSHR info for sinkD
+  sinkD.io.way := VecInit(ms.map(_.io.status.bits.way))(sinkD.io.source)
+  sinkD.io.set := VecInit(ms.map(_.io.status.bits.set))(sinkD.io.source)
 
 }

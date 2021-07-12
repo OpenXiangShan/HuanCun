@@ -7,6 +7,8 @@ import huancun.utils.SRAMTemplate
 
 class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
+    val sinkD_waddr = Flipped(DecoupledIO(new DSAddress))
+    val sinkD_wdata = Input(new DSData)
     val sourceD_raddr = Flipped(DecoupledIO(new DSAddress))
     val sourceD_rdata = Output(new DSData)
     val sourceD_waddr = Flipped(DecoupledIO(new DSAddress))

@@ -97,6 +97,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val set = UInt(setBits.W)
   val tag = UInt(tagBits.W)
+  val way = UInt(wayBits.W)
   val reload = Bool()
 }
 

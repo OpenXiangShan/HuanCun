@@ -466,5 +466,6 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.status.bits.set := req.set
   io.status.bits.tag := req.tag
   io.status.bits.reload := false.B // TODO
+  io.status.bits.way := meta.way
 
 }
