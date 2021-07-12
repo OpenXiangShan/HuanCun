@@ -48,7 +48,7 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   val s1_needData = Reg(Bool())
   val s1_can_go = Wire(Bool())
 
-  s1_can_go := s1_valid && s1_r_done && s2_ready
+  s1_can_go := s1_valid && s2_ready
 
   io.bs_raddr.valid := s1_valid && s1_needData
   io.bs_raddr.bits.way := s1_req.way
@@ -91,29 +91,8 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
     s2_valid := false.B
   }
 
-  val resp_table = List(
-    TLMessages.Get -> TLMessages.AccessAckData,
-    TLMessages.Hint -> TLMessages.HintAck,
-    TLMessages.AcquireBlock -> TLMessages.GrantData,
-    TLMessages.AcquirePerm -> TLMessages.Grant
-  )
-
-  val a_resp_opcode :: Nil = DecodeLogic(
-    s2_req.opcode,
-    Seq(BitPat.dontCare(3)),
-    resp_table.map({
-      case (req, resp) => req -> Seq(BitPat(resp))
-    })
-  )
-  val s2_resp_opcode = Mux(s2_req.fromA, a_resp_opcode, TLMessages.ReleaseAck)
-  val s2_acq = s2_req.opcode === TLMessages.AcquirePerm || s2_req.opcode === TLMessages.AcquireBlock
-  val s2_resp_param =
-    Mux(s2_req.fromA && s2_acq, Mux(s2_req.param =/= TLPermissions.NtoB, TLPermissions.toT, TLPermissions.toB), 0.U)
-
   // stage3
   val s3_req = RegEnable(s2_req, s2_can_go)
-  val s3_resp_opcode = RegEnable(s2_resp_opcode, s2_can_go)
-  val s3_resp_param = RegEnable(s2_resp_param, s2_can_go)
   val s3_valid = RegInit(false.B)
   val s3_valid_d = RegInit(false.B)
 
@@ -126,9 +105,15 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
 
   val s3_rdata = queue.io.deq.bits.data
 
+  when(s2_can_go){
+    s3_valid := true.B
+  }.elsewhen(s3_valid && s3_ready){
+    s3_valid := false.B
+  }
+
   d.valid := s3_valid
-  d.bits.opcode := s3_resp_opcode
-  d.bits.param := s3_resp_param
+  d.bits.opcode := s3_req.opcode
+  d.bits.param := s3_req.param
   d.bits.sink := s3_req.sinkId
   d.bits.size := s3_req.size
   d.bits.source := s3_req.sourceId

@@ -4,7 +4,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
-import freechips.rocketchip.tilelink.{BankBinder, TLCacheCork, TLRAM, TLXbar}
+import freechips.rocketchip.tilelink.{BankBinder, TLCacheCork, TLFragmenter, TLRAM, TLWidthWidget, TLXbar}
 
 class ExampleSystem(nBanks: Int = 1, l1dReq: Int = 0, l1iReq: Int = 0, ptwReq: Int = 0)(implicit p: Parameters) extends LazyModule {
 
@@ -18,10 +18,12 @@ class ExampleSystem(nBanks: Int = 1, l1dReq: Int = 0, l1iReq: Int = 0, ptwReq: I
     *  ram <=
     *         xbar <= l2 bank1 <= { l1d_bank1, l1i_bank1 }
     */
-  val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffffffL)))
+  val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
   ram.node :=
     TLXbar() :=*
       BankBinder(nBanks, l2.cacheParams.blockBytes) :=*
+      TLFragmenter(32, 64) :=*
+      TLCacheCork() :=*
       l2.node
 
   l2.node :=*
