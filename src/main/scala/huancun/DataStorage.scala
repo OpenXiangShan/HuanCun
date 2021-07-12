@@ -84,8 +84,9 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   /* Arbitrates r&w by bank according to priority */
   val sourceD_rreq = req(wen = false, io.sourceD_raddr, io.sourceD_rdata)
   val sourceD_wreq = req(wen = true, io.sourceD_waddr, io.sourceD_wdata)
+  val sinkD_wreq = req(wen = true, io.sinkD_waddr, io.sinkD_wdata)
 
-  val reqs = Seq(sourceD_wreq, sourceD_rreq) // TODO: add more requests with priority carefully
+  val reqs = Seq(sourceD_wreq, sinkD_wreq, sourceD_rreq) // TODO: add more requests with priority carefully
   reqs.foldLeft(0.U(nrBanks.W)) {
     case (sum, req) =>
       req.bankSum := sum

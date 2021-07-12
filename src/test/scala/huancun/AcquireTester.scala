@@ -20,7 +20,7 @@ class AcquireTester extends L2Tester with DumpVCD with UseVerilatorBackend {
 
   it should "send outer acquire" in {
 
-    val top = LazyModule(new ExampleSystem(l1dReq = 1))
+    val top = LazyModule(new ExampleSystem(l1iReq = 1))
 
     test(top.module).withAnnotations(testAnnos) { dut =>
       while (!dut.success.peek().litToBoolean){

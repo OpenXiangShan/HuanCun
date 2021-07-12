@@ -11,6 +11,7 @@ class SinkA(val edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
     val alloc = DecoupledIO(new MSHRRequest)
     val task = Flipped(DecoupledIO(new SinkAReq))
   })
+  dontTouch(io)
 
   // TODO: Handle task
   io.task.ready := false.B

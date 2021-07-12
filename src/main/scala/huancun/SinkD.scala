@@ -36,5 +36,5 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule with 
   io.bs_waddr.bits.way  := io.way
   io.bs_waddr.bits.set  := io.set
   io.bs_waddr.bits.beat := Mux(io.d.valid, beat, RegEnable(beat + io.bs_waddr.ready.asUInt(), io.d.valid))
-  io.bs_wdata := io.d.bits.data
+  io.bs_wdata.data := io.d.bits.data
 }

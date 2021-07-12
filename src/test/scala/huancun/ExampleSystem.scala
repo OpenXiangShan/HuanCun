@@ -4,7 +4,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
-import freechips.rocketchip.tilelink.{BankBinder, TLRAM, TLXbar}
+import freechips.rocketchip.tilelink.{BankBinder, TLCacheCork, TLRAM, TLXbar}
 
 class ExampleSystem(nBanks: Int = 1, l1dReq: Int = 0, l1iReq: Int = 0, ptwReq: Int = 0)(implicit p: Parameters) extends LazyModule {
 
