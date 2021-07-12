@@ -10,7 +10,7 @@ class AcquireTester extends L2Tester with DumpVCD {
 
   it should "send outer acquire" in {
 
-    val top = LazyModule(new ExampleSystem(l1iReq = 1))
+    val top = LazyModule(new ExampleSystem(l1dReq = 2))
 
     test(top.module).withAnnotations(testAnnos) { dut =>
       dut.clock.setTimeout(2000)

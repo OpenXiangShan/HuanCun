@@ -70,7 +70,7 @@ class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0
       }
       val grantCnt = RegInit(reqs.U)
       val grantAck = RegNext(edge.GrantAck(out.d.bits))
-      when(RegNext(out.d.fire())){
+      when(RegNext(out.d.fire() && edge.last(out.d))){
         out.e.valid := probe.B
         out.e.bits := grantAck
       }
