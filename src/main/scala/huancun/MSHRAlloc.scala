@@ -93,7 +93,7 @@ class MSHRAlloc(val nrRelaxClints: Int, val nrCohClints: Int)(implicit p: Parame
   val blockC = false.B
 
   val cohMaskVec2 = Seq() :+
-    ParallelOR(io.status.map(s => s.bits.set === cohClient.a.bits.set)) :+
+    ParallelOR(io.status.map(s => s.bits.set === cohClient.a.bits.set && s.valid)) :+
     (!nestB && !blockB) :+
     (!nestC && !blockC)
 
@@ -112,7 +112,7 @@ class MSHRAlloc(val nrRelaxClints: Int, val nrCohClints: Int)(implicit p: Parame
 
   // Collision mask
   val relaxMask = relaxMaskVec1.zip(relaxMaskVec2).map(c => c._1 || c._2)
-  val cohMask = VecInit(cohMaskVec2)
+  val cohMask = VecInit(cohMaskVec2.reverse)
 
   // Arbiter relaxReqs
   val relaxReqs = Wire(Vec(nrRelaxClints, DecoupledIO(new MSHRRequest)))
