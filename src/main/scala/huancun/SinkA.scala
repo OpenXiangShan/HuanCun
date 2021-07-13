@@ -19,7 +19,9 @@ class SinkA(val edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   val a = io.a
   val first = edge.first(a)
   val hasData = edge.hasData(a.bits)
-  assert(!hasData)
+  when(a.valid) {
+    assert(!hasData)
+  }
   val (tag, set, offset) = parseAddress(a.bits.address)
 
   io.alloc.valid := a.valid && first
