@@ -460,6 +460,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   when(io.alloc.valid) {
     req_valid := true.B
     req := io.alloc.bits
+    printf("alloc valid: %d\n", io.id)
   }
   // Status
   io.status.valid := req_valid

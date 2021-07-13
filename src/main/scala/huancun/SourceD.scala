@@ -105,9 +105,9 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
 
   val s3_rdata = queue.io.deq.bits.data
 
-  when(s2_can_go){
+  when(s2_can_go) {
     s3_valid := true.B
-  }.elsewhen(s3_valid && s3_ready){
+  }.elsewhen(s3_valid && s3_ready) {
     s3_valid := false.B
   }
 
