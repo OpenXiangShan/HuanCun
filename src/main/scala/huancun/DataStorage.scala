@@ -7,6 +7,8 @@ import huancun.utils.SRAMTemplate
 
 class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
+    val sourceC_raddr = Flipped(DecoupledIO(new DSAddress))
+    val sourceC_rdata = Output(new DSData)
     val sinkD_waddr = Flipped(DecoupledIO(new DSAddress))
     val sinkD_wdata = Input(new DSData)
     val sourceD_raddr = Flipped(DecoupledIO(new DSAddress))
@@ -82,11 +84,12 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   }
 
   /* Arbitrates r&w by bank according to priority */
+  val sourceC_req = req(wen = false, io.sourceC_raddr, io.sourceC_rdata)
   val sourceD_rreq = req(wen = false, io.sourceD_raddr, io.sourceD_rdata)
   val sourceD_wreq = req(wen = true, io.sourceD_waddr, io.sourceD_wdata)
   val sinkD_wreq = req(wen = true, io.sinkD_waddr, io.sinkD_wdata)
 
-  val reqs = Seq(sourceD_wreq, sinkD_wreq, sourceD_rreq) // TODO: add more requests with priority carefully
+  val reqs = Seq(sourceC_req, sourceD_wreq, sinkD_wreq, sourceD_rreq) // TODO: add more requests with priority carefully
   reqs.foldLeft(0.U(nrBanks.W)) {
     case (sum, req) =>
       req.bankSum := sum
@@ -114,6 +117,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   /* Pack out-data to channels */
   val sourceDrdata = Mux1H(RegNext(RegNext(sourceD_rreq.bankEn)), outData)
+  val sourceCrdata = Mux1H(RegNext(RegNext(sourceC_req.bankEn)), outData)
 
   io.sourceD_rdata.data := sourceDrdata
+  io.sourceC_rdata.data := sourceCrdata
 }
