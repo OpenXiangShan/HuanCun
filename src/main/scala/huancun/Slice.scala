@@ -72,6 +72,8 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
 
   dataStorage.io.sinkD_wdata := sinkD.io.bs_wdata
   dataStorage.io.sinkD_waddr <> sinkD.io.bs_waddr
+  sourceC.io.bs_rdata := dataStorage.io.sourceC_rdata
+  dataStorage.io.sourceC_raddr <> sourceC.io.bs_raddr
 
   sourceDs.foreach(_.io.bs_rdata := dataStorage.io.sourceD_rdata)
   sourceDs.foreach(dataStorage.io.sourceD_wdata := _.io.bs_wdata)
