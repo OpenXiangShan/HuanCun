@@ -101,7 +101,9 @@ class FakeL1I(nBanks: Int, reqs: Int = 0)(implicit p: Parameters)
 class FakePTW(nBanks: Int, reqs: Int = 0)(implicit p: Parameters)
     extends FakeClient("PTW", nBanks, probe = false, reqs = reqs)
 
-class MasterAgent(
+class MasterAgent
+(
+  id: Int,
   name:       String,
   probe:      Boolean,
   serialList: ArrayBuffer[(Int, TLCTrans)],
@@ -111,7 +113,7 @@ class MasterAgent(
     extends BaseFakeClient(name, 1, probe) {
   val addrStateList = scala.collection.mutable.Map[BigInt, AddrState]()
   lazy val agent = new TLCMasterAgent(
-    0,
+    id,
     name,
     node.out.head._2.master.endSourceId,
     addrStateList,
@@ -123,9 +125,6 @@ class MasterAgent(
   lazy val module = new LazyModuleImp(this) {
     val tl_master_io = IO(Flipped(new TLBundle(node.out.head._1.params)))
     node.out.head._1 <> tl_master_io
-    val cycle = RegInit(0.U(32.W))
-    cycle := cycle + 1.U
-    printf("cycle = %d\n", cycle)
   }
 
   def peekFire[T <: Data](port: DecoupledIO[T]): Boolean = {
@@ -137,10 +136,6 @@ class MasterAgent(
 
   def update(io: TLBundle) = {
     // a channel
-    if(peekFire(io.a)){
-      agent.fireA()
-      println("a fire")
-    }
     val opt_a = agent.peekA()
     if (opt_a.isDefined) {
       val a = opt_a.get
@@ -155,12 +150,10 @@ class MasterAgent(
     } else {
       io.a.valid.poke(false.B)
     }
-
-
-    // c channel
-    if(peekFire(io.c)){
-      agent.fireC()
+    if(peekFire(io.a)){
+      agent.fireA()
     }
+    // c channel
     val opt_c = agent.peekC()
     if (opt_c.isDefined) {
       val c = opt_c.get
@@ -174,10 +167,10 @@ class MasterAgent(
     } else {
       io.c.valid.poke(false.B)
     }
-    // e channel
-    if(peekFire(io.e)){
-      agent.fireE()
+    if(peekFire(io.c)){
+      agent.fireC()
     }
+    // e channel
     val opt_e = agent.peekE()
     if (opt_e.isDefined) {
       val e = opt_e.get
@@ -185,6 +178,9 @@ class MasterAgent(
       io.e.bits.sink.poke(e.sink.U)
     } else {
       io.e.valid.poke(false.B)
+    }
+    if(peekFire(io.e)){
+      agent.fireE()
     }
     // b channel
     io.b.ready.poke(true.B) // TODO: random stall

@@ -18,7 +18,8 @@ class TestTop
 )(implicit p: Parameters) extends LazyModule {
 
   val l1d = LazyModule(new MasterAgent(
-    "l1d",
+    id = 0,
+    name = "l1d",
     probe = true,
     serialList,
     scoreboard
@@ -51,17 +52,14 @@ class TestTop
 
 class TLCTest extends L2Tester with DumpVCD with UseVerilatorBackend {
 
-
-
   it should "" in {
     val serialList = ArrayBuffer[(Int, TLCTrans)]()
     val scoreboard = mutable.Map[BigInt, ScoreboardData]()
     val testTop = LazyModule(new TestTop(serialList, scoreboard))
     test(testTop.module).withAnnotations(testAnnos){ dut =>
-      for(i <- 0 until 10000){
-        if(i == 0){
-          testTop.l1d.agent.addAcquire(512, TLMessagesBigInt.toT)
-        }
+      testTop.l1d.agent.addAcquire(512, TLMessagesBigInt.toT)
+      testTop.l1d.agent.addAcquire(0, TLMessagesBigInt.toT)
+      while (testTop.l1d.agent.outerAcquire.nonEmpty) {
         testTop.l1d.agent.issueA()
         testTop.l1d.agent.issueC()
         testTop.l1d.update(dut.io)
