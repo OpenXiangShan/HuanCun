@@ -20,21 +20,21 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule with 
   val uncache = io.d.bits.opcode === AccessAckData
   val cache = !uncache
 
-  io.d.ready := cache && io.bs_waddr.ready  // TODO: handle uncache access
+  io.d.ready := cache && io.bs_waddr.ready // TODO: handle uncache access
 
   // Generate resp
-  io.resp.valid := (first || last) && io.d.fire()  // MSHR need to be notified when both first & last
-  io.resp.bits.last   := last
+  io.resp.valid := (first || last) && io.d.fire() // MSHR need to be notified when both first & last
+  io.resp.bits.last := last
   io.resp.bits.opcode := io.d.bits.opcode
-  io.resp.bits.param  := io.d.bits.param
+  io.resp.bits.param := io.d.bits.param
   io.resp.bits.source := io.d.bits.source
-  io.resp.bits.sink   := io.d.bits.sink
+  io.resp.bits.sink := io.d.bits.sink
   io.resp.bits.denied := io.d.bits.denied
 
   // Save data to Datastorage
   io.bs_waddr.valid := cache && io.d.valid
-  io.bs_waddr.bits.way  := io.way
-  io.bs_waddr.bits.set  := io.set
+  io.bs_waddr.bits.way := io.way
+  io.bs_waddr.bits.set := io.set
   io.bs_waddr.bits.beat := Mux(io.d.valid, beat, RegEnable(beat + io.bs_waddr.ready.asUInt(), io.d.valid))
   io.bs_wdata.data := io.d.bits.data
 }
