@@ -22,7 +22,9 @@ class SourceBReq(implicit p: Parameters) extends HuanCunBundle {
 }
 class SinkCReq(implicit p: Parameters) extends InnerTask {
   val size = UInt(msgSizeBits.W)
+  val way = UInt(wayBits.W)
   val off = UInt(offsetBits.W)
+  val bufIdx = UInt(bufIdxBits.W)
 }
 class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val opcode = UInt(3.W)
@@ -92,6 +94,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val set = UInt(setBits.W)
   val tag = UInt(tagBits.W)
   val off = UInt(offsetBits.W)
+  val bufIdx = UInt(bufIdxBits.W)
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {

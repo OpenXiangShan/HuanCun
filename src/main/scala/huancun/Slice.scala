@@ -60,12 +60,12 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   val ms_c = ms.last
 
   // TODO: Connect more channels to DataStorage
-  def addrArb[T <: DSAddress](in: Seq[DecoupledIO[T]]) = {
+  def addrArb[T <: DSAddress](in: Seq[DecoupledIO[T]]): (DecoupledIO[T], UInt) = {
     val arbiter = Module(new Arbiter(chiselTypeOf(in.head.bits), in.size))
     for ((arbIn, req) <- arbiter.io.in.zip(in)) {
       arbIn <> req
     }
-    arbiter.io.out
+    (arbiter.io.out, arbiter.io.chosen)
   }
 
   val dataStorage = Module(new DataStorage())
@@ -77,8 +77,11 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
 
   sourceDs.foreach(_.io.bs_rdata := dataStorage.io.sourceD_rdata)
   sourceDs.foreach(dataStorage.io.sourceD_wdata := _.io.bs_wdata)
-  dataStorage.io.sourceD_raddr <> addrArb(sourceDs.map(_.io.bs_raddr))
-  dataStorage.io.sourceD_waddr <> addrArb(sourceDs.map(_.io.bs_waddr))
+  dataStorage.io.sourceD_raddr <> addrArb(sourceDs.map(_.io.bs_raddr))._1
+  dataStorage.io.sourceD_waddr <> addrArb(sourceDs.map(_.io.bs_waddr))._1
+  val (sinkC_waddr, sinkC_w_chosen) = addrArb(sinkCs.map(_.io.bs_waddr))
+  dataStorage.io.sinkC_waddr <> sinkC_waddr
+  dataStorage.io.sinkC_wdata <> VecInit(sinkCs.map(_.io.bs_wdata))(sinkC_w_chosen)
 
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
@@ -189,7 +192,7 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   }
 
   // Provide MSHR info for sinkD
-  sinkD.io.way := VecInit(ms.map(_.io.status.bits.way))(sinkD.io.source)
-  sinkD.io.set := VecInit(ms.map(_.io.status.bits.set))(sinkD.io.source)
+  sinkD.io.way := VecInit(ms.map(_.io.status.bits.way))(sinkD.io.resp.bits.source)
+  sinkD.io.set := VecInit(ms.map(_.io.status.bits.set))(sinkD.io.resp.bits.source)
 
 }

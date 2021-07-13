@@ -377,6 +377,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   ic.tag := req.tag
   ic.size := req.size
   ic.off := req.off
+  ic.way := meta.way
+  ic.bufIdx := req.bufIdx
 
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := meta.way

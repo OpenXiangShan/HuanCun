@@ -5,12 +5,11 @@ import chisel3.util._
 import freechips.rocketchip.tilelink._
 import TLMessages.{AccessAckData}
 
-class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule with DontCareInnerLogic {
+class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val d = Flipped(DecoupledIO(new TLBundleD(edge.bundle)))
     val bs_waddr = DecoupledIO(new DSAddress)
     val bs_wdata = Output(new DSData)
-    val source = Output(UInt(mshrBits.W))
     val way = Input(UInt(wayBits.W))
     val set = Input(UInt(setBits.W))
     val resp = ValidIO(new SinkDResp)
@@ -36,5 +35,6 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule with 
   io.bs_waddr.bits.way := io.way
   io.bs_waddr.bits.set := io.set
   io.bs_waddr.bits.beat := Mux(io.d.valid, beat, RegEnable(beat + io.bs_waddr.ready.asUInt(), io.d.valid))
+  io.bs_waddr.bits.write := true.B
   io.bs_wdata.data := io.d.bits.data
 }

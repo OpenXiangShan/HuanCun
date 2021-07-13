@@ -28,6 +28,9 @@ trait HasHuanCunParameters {
 
   val stateBits = MetaData.stateBits
 
+  val bufBlocks = 4
+  val bufIdxBits = log2Ceil(bufBlocks)
+
   lazy val edgeInSeq = p(EdgeInSeqKey)
   lazy val edgeOut = p(EdgeOutKey)
 
@@ -50,6 +53,13 @@ trait HasHuanCunParameters {
         ).flatten.reverse
       )
     }
+  }
+
+  def parseAddress(x: UInt): (UInt, UInt, UInt) = {
+    val offset = x // TODO: check address mapping
+    val set = offset >> offsetBits
+    val tag = set >> setBits
+    (tag(tagBits - 1, 0), set(setBits - 1, 0), offset(offsetBits - 1, 0))
   }
 }
 
