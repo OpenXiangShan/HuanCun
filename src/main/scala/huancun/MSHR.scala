@@ -46,7 +46,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
 
   // Get directory result
   assert(
-    RegNext(!io.dirResult.valid || req_valid && !meta_valid),
+    RegNext(!io.dirResult.valid || req_valid && !meta_valid, true.B),
     "Directory result was sent to mismatch MSHR(mshrId:%d, resultId:%d)",
     io.id,
     OHToUInt(io.dirResult.bits.idOH)
@@ -134,7 +134,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // TODO: update meta after a nested mshr completes
-  assert(RegNext(!meta_valid || !req.fromC || meta.hit)) // Release should always hit
+  assert(RegNext(!meta_valid || !req.fromC || meta.hit, true.B)) // Release should always hit
 
   // Set tasks to be scheduled and resps to wait for
   val s_acquire = RegInit(true.B) // source_a
@@ -456,7 +456,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // Alloc MSHR (alloc has higher priority than release)
-  assert(RegNext(!req_valid || !io.alloc.valid)) // TODO: support fully-pipelined
+  assert(RegNext(!req_valid || !io.alloc.valid, true.B)) // TODO: support fully-pipelined
   when(io.alloc.valid) {
     req_valid := true.B
     req := io.alloc.bits
