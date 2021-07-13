@@ -22,8 +22,11 @@ trait HasTestAnnos {
 }
 
 trait UseVerilatorBackend { this: HasTestAnnos =>
+  testAnnos = testAnnos ++ Seq(VerilatorBackendAnnotation)
+}
+
+trait RandomResetRegs { this: HasTestAnnos with UseVerilatorBackend =>
   testAnnos = testAnnos ++ Seq(
-    VerilatorBackendAnnotation,
     VerilatorFlags(Seq(
       "+define+RANDOMIZE_REG_INIT",
       "+define+RANDOMIZE_MEM_INIT",
@@ -31,7 +34,6 @@ trait UseVerilatorBackend { this: HasTestAnnos =>
       "+define+RANDOMIZE_DELAY=0"
     ))
   )
-
 }
 
 trait DumpVCD { this: HasTestAnnos =>

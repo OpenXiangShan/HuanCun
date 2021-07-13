@@ -50,7 +50,7 @@ class TestTop
 }
 
 
-class TLCTest extends L2Tester with DumpVCD with UseVerilatorBackend {
+class TLCTest extends L2Tester with DumpVCD {
 
   it should "do single acquire" in {
     val serialList = ArrayBuffer[(Int, TLCTrans)]()
