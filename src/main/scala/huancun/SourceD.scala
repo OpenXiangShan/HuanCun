@@ -7,7 +7,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.UIntToOH1
 import freechips.rocketchip.rocket.DecodeLogic
 
-class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
+class SourceD(implicit p: Parameters) extends HuanCunModule {
   /*
       Message         Operation       Channel          Data
       -------------|---------------|------------|--------------
@@ -19,7 +19,7 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
       ReleaseAck      Release            C            N
    */
   val io = IO(new Bundle() {
-    val d = DecoupledIO(new TLBundleD(edge.bundle))
+    val d = DecoupledIO(new TLBundleD(edgeIn.bundle))
     val task = Flipped(DecoupledIO(new SourceDReq))
     val bs_raddr = DecoupledIO(new DSAddress)
     val bs_rdata = Input(new DSData)

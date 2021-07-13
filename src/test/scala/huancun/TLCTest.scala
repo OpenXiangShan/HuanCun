@@ -27,6 +27,7 @@ class TestTop
 
   val l1i = LazyModule(new FakeL1I(nBanks = 1))
   val ptw = LazyModule(new FakePTW(nBanks = 1))
+  val xbar = TLXbar()
 
   val l2 = LazyModule(new HuanCun())
   val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
@@ -34,13 +35,11 @@ class TestTop
     TLXbar() :=*
       TLFragmenter(32, 64) :=*
       TLCacheCork() :=*
-      l2.node
+      l2.node :=* xbar
 
-  l2.node :=*
-    l1d.node
-
-  l2.node :=* l1i.node
-  l2.node :=* ptw.node
+  xbar := l1d.node
+  xbar := l1i.node
+  xbar := ptw.node
 
   lazy val module = new LazyModuleImp(this){
     val io = IO(Flipped(l1d.module.tl_master_io.cloneType))

@@ -31,12 +31,12 @@ trait HasHuanCunParameters {
   val bufBlocks = 4
   val bufIdxBits = log2Ceil(bufBlocks)
 
-  lazy val edgeInSeq = p(EdgeInSeqKey)
+  lazy val edgeIn = p(EdgeInKey)
   lazy val edgeOut = p(EdgeOutKey)
 
-  lazy val clientBits = edgeInSeq.map(e => e.client.clients.count(_.supports.probe)).sum
-  lazy val sourceIdBits = edgeInSeq.map(e => e.bundle.sourceBits).max // source field
-  lazy val msgSizeBits = edgeInSeq.map(e => e.bundle.sizeBits).max // size field
+  lazy val clientBits = edgeIn.client.clients.count(_.supports.probe)
+  lazy val sourceIdBits = edgeIn.bundle.sourceBits
+  lazy val msgSizeBits = edgeIn.bundle.sizeBits
 
   lazy val addressBits = edgeOut.bundle.addressBits
   lazy val tagBits = addressBits - setBits - offsetBits
@@ -48,9 +48,12 @@ trait HasHuanCunParameters {
       0.U
     } else {
       Cat(
-        (
-          edgeInSeq.map(e => e.client.clients.filter(_.supports.probe).map(_.sourceId.contains(sourceId)))
-        ).flatten.reverse
+        edgeIn.client.clients
+          .filter(_.supports.probe)
+          .map(c => {
+            c.sourceId.contains(sourceId).asInstanceOf[Bool]
+          })
+          .reverse
       )
     }
   }
@@ -74,39 +77,6 @@ trait DontCareInnerLogic { this: Module =>
 abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with HasHuanCunParameters
 
 abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
-//    with DontCareInnerLogic
-
-/**
-  * We want to create hierarchy like this:
-  *   <= L2-bank0 <= { L1D-bank0, L1I-bank0, PTW-bank0 }
-  *   <= L2-bank1 <= { L1D-bank1, L1I-bank1, PTW-bank1 }
-  * So a custom node is needed.
-  */
-case class L2Node(
-  clientPortParameters: TLClientPortParameters,
-  managerFn:            TLManagerPortParameters => TLManagerPortParameters
-)(
-  implicit valName: ValName)
-    extends TLCustomNode {
-
-  def nClients: Int = iPorts.map(_._2).distinct.size
-  def nBanks:   Int = iPorts.size / nClients
-
-  override def resolveStar(iKnown: Int, oKnown: Int, iStars: Int, oStars: Int): (Int, Int) = {
-    require(iStars == 0 && iKnown > 0)
-    require((oStars == 0 && oKnown == nBanks) || oKnown == 0)
-    val oStar = if (oStars == 0) 0 else nBanks
-    (0, oStar)
-  }
-
-  override def mapParamsD(n: Int, p: Seq[TLClientPortParameters]): Seq[TLClientPortParameters] = {
-    Seq.fill(n)(clientPortParameters)
-  }
-
-  override def mapParamsU(n: Int, p: Seq[TLManagerPortParameters]): Seq[TLManagerPortParameters] = {
-    Seq.fill(nClients)(p.map(managerFn)).flatten
-  }
-}
 
 class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
@@ -131,8 +101,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     responseKeys = cacheParams.respKey
   )
 
-  val node: L2Node = L2Node(
-    clientPortParams,
+  val node = TLAdapterNode(
+    clientFn = { _ => clientPortParams },
     managerFn = { m =>
       TLSlavePortParameters.v1(
         m.managers.map { m =>
@@ -161,19 +131,20 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   )
 
   lazy val module = new LazyModuleImp(this) {
-
     println(s"====== ${cacheParams.name} ======")
-    node.in.grouped(node.nBanks).toList.transpose.zip(node.out).zipWithIndex.foreach {
-      case ((inGroup, (out, edgeOut)), idx) => {
-        println(s"slice # $idx [${inGroup.flatMap(_._2.client.clients.map(_.name)).mkString(" ")}]")
-        val (newIn, newEdgesIn) = SourceIdConverter.convert(inGroup).unzip
-        val inputIds = TLXbar.mapInputIds(inGroup.unzip._2.map(_.client))
-        val slice = Module(new Slice(inputIds)(p.alterPartial {
-          case EdgeInSeqKey => newEdgesIn
-          case EdgeOutKey   => edgeOut
+    node.in.zip(node.out).foreach {
+      case ((in, edgeIn), (out, edgeOut)) =>
+        val slice = Module(new Slice()(p.alterPartial {
+          case EdgeInKey  => edgeIn
+          case EdgeOutKey => edgeOut
         }))
-        slice.io.inSeq.zip(newIn).foreach { case (x, y) => x <> y }
+        slice.io.in <> in
         out <> slice.io.out
+    }
+    node.edges.in.headOption.foreach { n =>
+      n.client.clients.zipWithIndex.foreach {
+        case (c, i) =>
+          println(s"\t${i} <= ${c.name}")
       }
     }
   }

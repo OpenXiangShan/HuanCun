@@ -16,7 +16,7 @@ class AllocatorTest extends L2Tester {
   }.head
 
   it should "pass" in {
-    test(new MSHRAlloc(mshrAlloc.nrRelaxClints, mshrAlloc.nrCohClints)(mshrAlloc.p)){ dut =>
+    test(new MSHRAlloc()(mshrAlloc.p)){ dut =>
       dut.clock.step(10)
     }
   }

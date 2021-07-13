@@ -4,30 +4,26 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.diplomacy.{sourceLine, IdRange}
 import huancun.utils.ParallelMux
 
-class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModule {
+class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
-    val inSeq = MixedVec(edgeInSeq.map(e => Flipped(TLBundle(e.bundle))))
+    val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
   })
 
-  val (cohEdges, cohIns) = edgeInSeq.zip(io.inSeq).filter(_._1.client.anySupportProbe).unzip
-  val cohIds = edgeInSeq.zip(inputIds).filter(_._1.client.anySupportProbe).map(_._2)
-
   // Inner channels
-  val sinkAs = edgeInSeq.map(e => Module(new SinkA(e)))
-  val sourceBs = cohEdges.map(e => Module(new SourceB(e)))
-  val sinkCs = cohEdges.map(e => Module(new SinkC(e)))
-  val sourceDs = edgeInSeq.map(e => Module(new SourceD(e)))
-  val sinkEs = cohEdges.map(e => Module(new SinkE(e)))
+  val sinkA = Module(new SinkA)
+  val sourceB = Module(new SourceB)
+  val sinkC = Module(new SinkC)
+  val sourceD = Module(new SourceD)
+  val sinkE = Module(new SinkE)
 
-  io.inSeq.zip(sinkAs).foreach { case (bus, mod) => mod.io.a <> bus.a }
-  cohIns.zip(sourceBs).foreach { case (bus, mod) => bus.b <> mod.io.b }
-  cohIns.zip(sinkCs).foreach { case (bus, mod) => mod.io.c <> bus.c }
-  io.inSeq.zip(sourceDs).foreach { case (bus, mod) => bus.d <> mod.io.d }
-  cohIns.zip(sinkEs).foreach { case (bus, mod) => mod.io.e <> bus.e }
+  sinkA.io.a <> io.in.a
+  io.in.b <> sourceB.io.b
+  sinkC.io.c <> io.in.c
+  io.in.d <> sourceD.io.d
+  sinkE.io.e <> io.in.e
 
   // Outer channles
   val sourceA = Module(new SourceA(edgeOut))
@@ -42,16 +38,6 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   sinkD.io.d <> io.out.d
   io.out.e <> sourceE.io.e
 
-  // Connect to MSHR Allocator
-  val mshrAlloc = Module(new MSHRAlloc(edgeInSeq.size - cohEdges.size, cohEdges.size))
-  mshrAlloc.io.cohClints.map(_.a).zip(sinkAs.filter(_.edge.client.anySupportProbe)).foreach(c => c._1 <> c._2.io.alloc)
-  mshrAlloc.io.cohClints.map(_.b).zip(Seq(sinkB)).foreach(c => c._1 <> c._2.io.alloc)
-  mshrAlloc.io.cohClints.map(_.c).zip(sinkCs).foreach(c => c._1 <> c._2.io.alloc)
-  mshrAlloc.io.relaxClints
-    .map(_.a)
-    .zip(sinkAs.filter(!_.edge.client.anySupportProbe))
-    .foreach(c => c._1 <> c._2.io.alloc)
-
   // MSHRs
   val ms = Seq.fill(mshrsAll) { Module(new MSHR()) }
   require(mshrsAll == mshrs + 2)
@@ -59,29 +45,24 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   val ms_bc = ms.init.last
   val ms_c = ms.last
 
-  // TODO: Connect more channels to DataStorage
-  def addrArb[T <: DSAddress](in: Seq[DecoupledIO[T]]): (DecoupledIO[T], UInt) = {
-    val arbiter = Module(new Arbiter(chiselTypeOf(in.head.bits), in.size))
-    for ((arbIn, req) <- arbiter.io.in.zip(in)) {
-      arbIn <> req
-    }
-    (arbiter.io.out, arbiter.io.chosen)
-  }
-
   val dataStorage = Module(new DataStorage())
 
   dataStorage.io.sinkD_wdata := sinkD.io.bs_wdata
   dataStorage.io.sinkD_waddr <> sinkD.io.bs_waddr
   sourceC.io.bs_rdata := dataStorage.io.sourceC_rdata
   dataStorage.io.sourceC_raddr <> sourceC.io.bs_raddr
+  sourceD.io.bs_rdata := dataStorage.io.sourceD_rdata
+  dataStorage.io.sourceD_raddr <> sourceD.io.bs_raddr
+  dataStorage.io.sourceD_waddr <> sourceD.io.bs_waddr
+  dataStorage.io.sourceD_wdata <> sourceD.io.bs_wdata
+  dataStorage.io.sinkC_waddr <> sinkC.io.bs_waddr
+  dataStorage.io.sinkC_wdata <> sinkC.io.bs_wdata
 
-  sourceDs.foreach(_.io.bs_rdata := dataStorage.io.sourceD_rdata)
-  sourceDs.foreach(dataStorage.io.sourceD_wdata := _.io.bs_wdata)
-  dataStorage.io.sourceD_raddr <> addrArb(sourceDs.map(_.io.bs_raddr))._1
-  dataStorage.io.sourceD_waddr <> addrArb(sourceDs.map(_.io.bs_waddr))._1
-  val (sinkC_waddr, sinkC_w_chosen) = addrArb(sinkCs.map(_.io.bs_waddr))
-  dataStorage.io.sinkC_waddr <> sinkC_waddr
-  dataStorage.io.sinkC_wdata <> VecInit(sinkCs.map(_.io.bs_wdata))(sinkC_w_chosen)
+  val mshrAlloc = Module(new MSHRAlloc)
+
+  mshrAlloc.io.a_req <> sinkA.io.alloc
+  mshrAlloc.io.b_req <> sinkB.io.alloc
+  mshrAlloc.io.c_req <> sinkC.io.alloc
 
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
@@ -89,8 +70,6 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
       mshr.io.alloc := mshrAlloc.io.alloc(i)
       mshrAlloc.io.status(i) := mshr.io.status
   }
-
-  mshrAlloc.io.alloc <> VecInit(ms.map(_.io.alloc))
 
   val directory = Module(new Directory)
   directory.io.reads <> mshrAlloc.io.dirReads
@@ -104,41 +83,13 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
   }
 
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
+  arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
+  arbTasks(sourceD.io.task, ms.map(_.io.tasks.source_d), Some("sourceD"))
   arbTasks(sourceE.io.task, ms.map(_.io.tasks.source_e), Some("sourceE"))
+  arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"))
+  arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"))
   arbTasks(directory.io.tagWReq, ms.map(_.io.tasks.tag_write), Some("tagWrite"))
-
-  def validSourceId(x: UInt, range: IdRange): Bool = {
-    require(isPow2(range.start) || range.start == 0)
-    require(isPow2(range.size))
-    /*  eg:
-        10xxxx (32, 48) bit5 == 0
-        01xxxx (16, 32) bit4 =0 0
-        00xxxx (0, 16)  (bit5, bit4) == 00
-     */
-    range.start match {
-      case 0 =>
-        val highBits = x.getWidth - log2Up(range.size)
-        if (highBits > 0) !x.head(highBits).orR() else true.B
-      case n =>
-        x(log2Up(n))
-    }
-  }
-
-  def validInnerTask[T <: InnerTask](t: DecoupledIO[T], idRange: IdRange): Bool = {
-    t.valid && validSourceId(t.bits.sourceId, idRange)
-  }
-
-  def arbInnerTasks[T <: InnerTask](
-    out:     DecoupledIO[T],
-    in:      Seq[DecoupledIO[T]],
-    idRange: IdRange,
-    name:    Option[String] = None
-  ) = {
-    for ((arb, req) <- arbTasks(out, in, name).io.in.zip(in)) {
-      arb.valid := validInnerTask(req, idRange)
-    }
-  }
 
   def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
     val arbiter = Module(new Arbiter[T](chiselTypeOf(out.bits), in.size))
@@ -150,37 +101,15 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
     arbiter
   }
 
-  for ((sinkA, idRange) <- sinkAs.zip(inputIds)) {
-    arbInnerTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), idRange, Some("sinkA"))
-  }
-  for ((sourceD, idRange) <- sourceDs.zip(inputIds)) {
-    arbInnerTasks(sourceD.io.task, ms.map(_.io.tasks.source_d), idRange, Some("sourceD"))
-  }
-  // for ((sourceB, idRange) <- sourceBs.zip(cohIds)) {
-  //   arbInnerTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), idRange, Some("sourceB"))
-  // }
-  sourceBs.zipWithIndex.foreach {
-    case (sourceB, i) =>
-      val arbiter = arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
-      for ((in, req) <- arbiter.io.in.zip(ms.map(_.io.tasks.source_b))) {
-        in.valid := req.valid && req.bits.clients(i).asBool
-      }
-  }
-  for ((sinkC, idRange) <- sinkCs.zip(cohIds)) {
-    arbInnerTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), idRange, Some("sinkC"))
-  }
-
   // Resps to MSHRs
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
-      val sinkCRespMatch = sinkCs.map(s => s.io.resp.valid && s.io.resp.bits.set === mshr.io.status.bits.set)
-      val sinkERespMatch = sinkEs.map(s => s.io.resp.valid && s.io.resp.bits.sink === i.U)
-      mshr.io.resps.sink_c.valid := Cat(sinkCRespMatch).orR
+      mshr.io.resps.sink_c.valid := sinkC.io.resp.valid && sinkC.io.resp.bits.set === mshr.io.status.bits.set
       mshr.io.resps.sink_d.valid := sinkD.io.resp.valid && sinkD.io.resp.bits.source === i.U
-      mshr.io.resps.sink_e.valid := Cat(sinkERespMatch).orR
-      mshr.io.resps.sink_c.bits := ParallelMux(sinkCRespMatch.zip(sinkCs.map(_.io.resp.bits)))
+      mshr.io.resps.sink_e.valid := sinkE.io.resp.valid && sinkE.io.resp.bits.sink === i.U
+      mshr.io.resps.sink_c.bits := sinkC.io.resp.bits
       mshr.io.resps.sink_d.bits := sinkD.io.resp.bits
-      mshr.io.resps.sink_e.bits := ParallelMux(sinkERespMatch.zip(sinkEs.map(_.io.resp.bits)))
+      mshr.io.resps.sink_e.bits := sinkE.io.resp.bits
   }
 
   // Directory read results to MSHRs
@@ -188,7 +117,7 @@ class Slice(inputIds: Seq[IdRange])(implicit p: Parameters) extends HuanCunModul
     case (mshr, i) =>
       val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.idOH(i))
       mshr.io.dirResult.valid := Cat(dirResultMatch).orR()
-      mshr.io.dirResult.bits := ParallelMux(dirResultMatch.zip(directory.io.results.map(_.bits)))
+      mshr.io.dirResult.bits := Mux1H(dirResultMatch.zip(directory.io.results.map(_.bits)))
   }
 
   // Provide MSHR info for sinkD

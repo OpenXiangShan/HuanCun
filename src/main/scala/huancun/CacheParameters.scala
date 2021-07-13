@@ -27,5 +27,5 @@ case class CacheParameters(
   require(channelBytes.d.get >= 8)
 }
 
-case object EdgeInSeqKey extends Field[Seq[TLEdgeIn]]
+case object EdgeInKey extends Field[TLEdgeIn]
 case object EdgeOutKey extends Field[TLEdgeOut]

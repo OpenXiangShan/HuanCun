@@ -11,6 +11,7 @@ class ExampleSystem(nBanks: Int = 1, l1dReq: Int = 0, l1iReq: Int = 0, ptwReq: I
   val l1d = LazyModule(new FakeL1D(nBanks, l1dReq))
   val l1i = LazyModule(new FakeL1I(nBanks, l1iReq))
   val ptw = LazyModule(new FakePTW(nBanks, ptwReq))
+  val xbar = TLXbar()
   val l2 = LazyModule(new HuanCun())
 
   /**
@@ -24,16 +25,11 @@ class ExampleSystem(nBanks: Int = 1, l1dReq: Int = 0, l1iReq: Int = 0, ptwReq: I
       BankBinder(nBanks, l2.cacheParams.blockBytes) :=*
       TLFragmenter(32, 64) :=*
       TLCacheCork() :=*
-      l2.node
+      l2.node :=* xbar
 
-  l2.node :=*
-    l1d.node
-
-  l2.node :=*
-    l1i.node
-
-  l2.node :=*
-    ptw.node
+  xbar := l1d.node
+  xbar := l1i.node
+  xbar := ptw.node
 
   lazy val module = new LazyModuleImp(this) {
     val success = IO(Output(Bool()))

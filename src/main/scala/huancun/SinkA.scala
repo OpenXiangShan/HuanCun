@@ -5,9 +5,9 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 
-class SinkA(val edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
+class SinkA(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
-    val a = Flipped(DecoupledIO(new TLBundleA(edge.bundle)))
+    val a = Flipped(DecoupledIO(new TLBundleA(edgeIn.bundle)))
     val alloc = DecoupledIO(new MSHRRequest)
     val task = Flipped(DecoupledIO(new SinkAReq))
   })
@@ -17,8 +17,8 @@ class SinkA(val edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   io.task.ready := false.B
 
   val a = io.a
-  val first = edge.first(a)
-  val hasData = edge.hasData(a.bits)
+  val first = edgeIn.first(a)
+  val hasData = edgeIn.hasData(a.bits)
   when(a.valid) {
     assert(!hasData)
   }
