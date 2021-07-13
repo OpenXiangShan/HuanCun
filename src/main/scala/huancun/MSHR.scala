@@ -125,6 +125,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   new_dir.state := new_meta.state
   new_dir.clients := new_meta.clients
 
+  val sink = Reg(UInt(edgeOut.bundle.sinkBits.W))
+
   val bad_grant = Reg(Bool())
   when(bad_grant) {
     new_meta.dirty := false.B
@@ -362,7 +364,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   od.off := req.off
   od.denied := bad_grant
 
-  oe.sink := DontCare // TODO
+  oe.sink := sink
 
   ia.sourceId := req.source
   ia.set := req.set
@@ -434,6 +436,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     }
   }
   when(io.resps.sink_d.valid) {
+    sink := io.resps.sink_d.bits.sink
     when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData) {
       w_grantfirst := true.B
       w_grantlast := io.resps.sink_d.bits.last

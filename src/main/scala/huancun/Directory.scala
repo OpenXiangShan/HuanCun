@@ -67,11 +67,11 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     val hitWay = OHToUInt(hitVec)
     result.bits.hit := Cat(hitVec).orR()
     result.bits.way := hitWay // TODO: add replace way
-    val meta = ParallelMux(hitVec.zip(metaArray(rreqSets(i))))
+    val meta = Mux1H(hitVec, metaArray(rreqSets(i)))
     result.bits.dirty := meta.dirty
     result.bits.state := meta.state
     result.bits.clients := meta.clients
-    result.bits.tag := 0.U // ParallelMux(hitVec.zip(tags)) // TODO
+    result.bits.tag := Mux1H(hitVec, tags)
   }
 
   for (dirWReq <- io.dirWReqs) {
