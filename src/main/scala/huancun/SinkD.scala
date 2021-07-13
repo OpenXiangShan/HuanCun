@@ -21,6 +21,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule with 
   val cache = !uncache
 
   io.d.ready := cache && io.bs_waddr.ready // TODO: handle uncache access
+  io.source := io.d.bits.source
 
   // Generate resp
   io.resp.valid := (first || last) && io.d.fire() // MSHR need to be notified when both first & last
