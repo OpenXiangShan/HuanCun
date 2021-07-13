@@ -48,7 +48,7 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   val s1_needData = Reg(Bool())
   val s1_can_go = Wire(Bool())
 
-  s1_can_go := s1_valid && s2_ready
+  s1_can_go := s1_valid && s2_ready && ((io.bs_raddr.ready && s1_needData) || !s1_needData)
 
   io.bs_raddr.valid := s1_valid && s1_needData
   io.bs_raddr.bits.way := s1_req.way
@@ -75,7 +75,7 @@ class SourceD(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
     s1_needData := s0_needData
   }
 
-  s1_ready := !s1_valid || s1_can_go
+  s1_ready := !s1_valid || (s1_can_go && s1_r_done)
   io.task.ready := s1_ready
 
   // stage2

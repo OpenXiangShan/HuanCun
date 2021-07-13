@@ -3,6 +3,7 @@ package huancun
 import chipsalliance.rocketchip.config.Config
 import chiseltest._
 import chiseltest.internal.{VerilatorBackendAnnotation, WriteVcdAnnotation}
+import chiseltest.legacy.backends.verilator.{VerilatorCFlags, VerilatorFlags}
 import firrtl.AnnotationSeq
 import firrtl.stage.RunFirrtlTransformAnnotation
 import huancun.utils.FixSubModuleInputs
@@ -21,7 +22,16 @@ trait HasTestAnnos {
 }
 
 trait UseVerilatorBackend { this: HasTestAnnos =>
-  testAnnos = testAnnos :+ VerilatorBackendAnnotation
+  testAnnos = testAnnos ++ Seq(
+    VerilatorBackendAnnotation,
+    VerilatorFlags(Seq(
+      "+define+RANDOMIZE_REG_INIT",
+      "+define+RANDOMIZE_MEM_INIT",
+      "+define+RANDOMIZE_GARBAGE_ASSIGN",
+      "+define+RANDOMIZE_DELAY=0"
+    ))
+  )
+
 }
 
 trait DumpVCD { this: HasTestAnnos =>
