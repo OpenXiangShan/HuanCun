@@ -3,50 +3,25 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.utils.{ParallelMux, ParallelOR, ParallelPriorityMux}
+import huancun.utils._
 
-class CohClint(implicit p: Parameters) extends HuanCunBundle() {
-  val a = Flipped(DecoupledIO(new MSHRRequest))
-  val b = Flipped(DecoupledIO(new MSHRRequest))
-  val c = Flipped(DecoupledIO(new MSHRRequest))
-}
-
-class RelaxClint(implicit p: Parameters) extends HuanCunBundle() {
-  val a = Flipped(DecoupledIO(new MSHRRequest()))
-}
-
-class MSHRSelector(nrRelaxClints: Int, nrCohClints: Int)(implicit p: Parameters) extends HuanCunModule {
+class MSHRSelector(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val idle = Input(Vec(mshrs, Bool()))
-    // mshrIdOH
-    val result = Vec(dirReadPorts, ValidIO(UInt(mshrsAll.W)))
+    val out = ValidIO(UInt(mshrs.W))
   })
-  val relaxBatch: Int = mshrs / (nrRelaxClints + nrCohClints)
-  val cohBatch:   Int = mshrs - relaxBatch * nrRelaxClints
-  // Select idle position for relax client
-  for (i <- 0 until dirReadPorts - 1) {
-    val batch =
-      io.idle.zipWithIndex.filter(s => (s._2 >= i * relaxBatch) && (s._2 < (i + 1) * relaxBatch)).map(s => s._1)
-    io.result(i).valid := ParallelOR(batch)
-    io.result(i).bits := ParallelPriorityMux(batch.zipWithIndex.map {
-      case (b, index) => (b, (1 << (index + i * relaxBatch)).U)
-    })
-  }
-  // Select idle position for coh client
-  val batch = io.idle.takeRight(cohBatch)
-  io.result(dirReadPorts - 1).valid := ParallelOR(batch)
-  io.result(dirReadPorts - 1).bits := ParallelPriorityMux(batch.zipWithIndex.map {
-    case (b, index) => (b, (1 << (index + nrRelaxClints * relaxBatch)).U)
+  io.out.valid := ParallelOR(io.idle)
+  io.out.bits := ParallelMux(io.idle.zipWithIndex.map{
+    case (b, i) => (b, (1 << i).U)
   })
-
-  // TODO: append nestB & nestC select logic
 }
 
-class MSHRAlloc(val nrRelaxClints: Int, val nrCohClints: Int)(implicit p: Parameters) extends HuanCunModule {
+class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
-    // From clients
-    val relaxClints = Vec(nrRelaxClints, new RelaxClint)
-    val cohClints = Vec(nrCohClints, new CohClint)
+    // requests
+    val a_req = Flipped(DecoupledIO(new MSHRRequest))
+    val b_req = Flipped(DecoupledIO(new MSHRRequest))
+    val c_req = Flipped(DecoupledIO(new MSHRRequest))
     // From MSHRs
     val status = Vec(mshrsAll, Flipped(ValidIO(new MSHRStatus)))
     // To MSHRs
@@ -55,109 +30,70 @@ class MSHRAlloc(val nrRelaxClints: Int, val nrCohClints: Int)(implicit p: Parame
     val dirReads = Vec(dirReadPorts, DecoupledIO(new DirRead))
   })
 
-  /* nrA-allocs  nrB-allocs  nrC-allocs
-   *         allocated to
-   *  [ABC MSHRs] [BC MSHRs] [C MSHRs]
+  // Allocate one MSHR per cycle
+  assert(PopCount(io.alloc.map(_.valid)) <= 1.U)
+  // Only use the first dir read port
+  assert(io.dirReads.takeRight(dirReadPorts-1).map(_.valid).reduce(_||_) === false.B)
+
+  /* case1: selected request matches set of pending MSHR => stall
+   * case2: selected request needs new MSHR but no room left => stall
+   * case3: selected request needs new MSHR but dir not ready => stall
+   * case4: selected request needs new MSHR and dir ready => good!
    */
 
-  /* Requirements */
+  /* Select one request from a_req/b_req/c_req */
+  val request = Wire(ValidIO(new MSHRRequest()))
+  request.valid := io.c_req.valid || io.b_req.valid || io.a_req.valid
+  request.bits := Mux(io.c_req.valid, io.c_req.bits, Mux(io.b_req.valid, io.b_req.bits, io.a_req.bits))
 
-  require(nrRelaxClints == 2)
-  require(nrCohClints == 1)
-  assert(PopCount(io.alloc.map(_.valid)) <= dirReadPorts.U)
+  /* Whether selected request can be accepted */
 
-  /* Judge collision mutually */
-
-  val cohClient = io.cohClints.head
-
-  // elimination mask
-
-  val relaxMaskVec1 = io.relaxClints.zipWithIndex.map {
-    case (_, index) =>
-      val allA = io.relaxClints.map(_.a) ++ io.cohClints.map(_.a)
-      val highPrioA = allA.zipWithIndex.filter(_._2 > index)
-      cohClient.c.valid || cohClient.b.valid || highPrioA.foldLeft(false.B) { case (result, c) => result || c._1.valid }
+  def set_conflict(req: MSHRRequest): Bool = {
+    Cat(io.status.map(s => s.valid && s.bits.set === req.set)).orR()
   }
 
-  /*
-   * Judge collision with MSHRs
-   */
+  val conflict_c = set_conflict(io.c_req.bits)
+  val conflict_b = set_conflict(io.b_req.bits)
+  val conflict_a = set_conflict(io.a_req.bits)
 
-  val relaxMaskVec2 =
-    io.relaxClints.map(_.a).map(c => ParallelOR(io.status.map(s => s.bits.set === c.bits.set && s.valid)))
+  val dirRead = io.dirReads.head
+  val mshrFree = Cat(io.status.map(!_.valid)).orR()
 
-  // TODO: implement nest & block logic
-  val nestB = false.B
-  val nestC = false.B
-  val blockB = false.B
-  val blockC = false.B
+  val can_accept_c = mshrFree && !conflict_c
+  val can_accept_b = mshrFree && !conflict_b && !io.c_req.valid
+  val can_accept_a = mshrFree && !conflict_a && !io.c_req.valid && !io.b_req.valid
 
-  val cohMaskVec2 = Seq() :+
-    ParallelOR(io.status.map(s => s.bits.set === cohClient.a.bits.set && s.valid)) :+
-    (!nestB && !blockB) :+
-    (!nestC && !blockC)
+  val accept_c = io.c_req.valid && can_accept_c
+  val accept_b = io.b_req.valid && can_accept_b
+  val accept_a = io.a_req.valid && can_accept_a
 
-  /*
-   * Find idle MSHR entries
-   */
+  /* Provide signals for outer components*/
+  io.c_req.ready := dirRead.ready && can_accept_c
+  io.b_req.ready := dirRead.ready && can_accept_b
+  io.a_req.ready := dirRead.ready && can_accept_a
 
-  val mshrIdle = Wire(Vec(dirReadPorts, ValidIO(UInt(mshrsAll.W))))
-  val selector = Module(new MSHRSelector(nrRelaxClints, nrCohClints))
-  selector.io.idle := io.status.take(mshrs).map(!_.valid)
-  mshrIdle := selector.io.result
-
-  /*
-   * Arbitration & allocation of directory read ports
-   */
-
-  // Collision mask
-  val relaxMask = relaxMaskVec1.zip(relaxMaskVec2).map(c => c._1 || c._2)
-  val cohMask = VecInit(cohMaskVec2.reverse)
-
-  // Arbiter relaxReqs
-  val relaxReqs = Wire(Vec(nrRelaxClints, DecoupledIO(new MSHRRequest)))
-  relaxReqs.zip(io.relaxClints.map(_.a)).zip(relaxMask).foreach {
-    case ((r, c), mask) =>
-      r.bits := c.bits
-      r.valid := c.valid && !mask
-      c.ready := r.ready && !mask
+  val recv_req = io.c_req.fire() || io.b_req.fire() || io.a_req.fire()
+  val mshrSelector = Module(new MSHRSelector())
+  mshrSelector.io.idle := io.status.take(mshrs).map(!_.valid)
+  val selectedMSHROH = mshrSelector.io.out.bits
+  for ((mshr, i) <- io.alloc.take(mshrs).zipWithIndex) {
+    mshr.valid := recv_req && selectedMSHROH(i)
+    mshr.bits := request.bits
   }
 
-  // Arbiter cohReqs, priority select C > B > A
-  val cohReqs = Wire(Vec(nrCohClints, DecoupledIO(new MSHRRequest)))
-  val cohReq = cohReqs.head
-  cohReq.valid := (cohClient.c.valid && !cohMask(0)) ||
-    (!cohClient.c.valid && cohClient.b.valid && !cohMask(1)) ||
-    (!cohClient.c.valid && !cohClient.b.valid && cohClient.a.valid && !cohMask(2))
-  cohReq.bits := Mux(cohClient.c.valid, cohClient.c.bits, Mux(cohClient.b.valid, cohClient.b.bits, cohClient.a.bits))
-  cohClient.c.ready := !cohMask(0) && cohReq.ready
-  cohClient.b.ready := !cohMask(1) && cohReq.ready && !cohClient.c.valid
-  cohClient.a.ready := !cohMask(2) && cohReq.ready && !cohClient.c.valid && !cohClient.b.valid
+  dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR()
+  dirRead.bits.tag := request.bits.tag
+  dirRead.bits.set := request.bits.set
+  dirRead.bits.idOH := selectedMSHROH
 
-  val allReqs = (relaxReqs ++ cohReqs)
-  io.dirReads.foreach(_.valid := false.B)
-  io.dirReads.zip(allReqs).zip(mshrIdle).foreach {
-    case ((dir, req), alloc) =>
-      dir.valid := req.valid && alloc.valid
-      dir.bits.tag := req.bits.tag
-      dir.bits.set := req.bits.set
-      dir.bits.idOH := alloc.bits
-      req.ready := dir.ready && alloc.valid
+  io.alloc.drop(mshrs).map {
+    a =>
+      a.valid := false.B
+      a.bits <> DontCare
   }
-
-  /*
-   * Provide MSHR allocation response
-   */
-
-  io.alloc.foreach(_.valid := false.B)
-  io.alloc.foreach(_.bits := DontCare)
-
-  for ((mshr, i) <- io.alloc.zipWithIndex) {
-    val validVec = mshrIdle.zip(allReqs).zip(io.dirReads).map {
-      case ((sel, req), dir) => sel.valid && sel.bits(i) && req.valid && dir.ready
-    }
-    mshr.valid := Cat(validVec).orR()
-    mshr.bits := ParallelMux(validVec.zip(allReqs.map(_.bits)))
+  io.dirReads.drop(1).map {
+    d =>
+      d.valid := false.B
+      d.bits <> DontCare
   }
-
 }

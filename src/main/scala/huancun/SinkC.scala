@@ -5,9 +5,9 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 
-class SinkC(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
+class SinkC(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
-    val c = Flipped(DecoupledIO(new TLBundleC(edge.bundle)))
+    val c = Flipped(DecoupledIO(new TLBundleC(edgeIn.bundle)))
     val alloc = DecoupledIO(new MSHRRequest)
     val resp = ValidIO(new SinkCResp)
     val task = Flipped(DecoupledIO(new SinkCReq))
@@ -26,8 +26,8 @@ class SinkC(edge: TLEdgeIn)(implicit p: Parameters) extends HuanCunModule {
   val c = io.c
   val isRelease = c.bits.opcode === TLMessages.Release
   val isReleaseData = c.bits.opcode === TLMessages.ReleaseData
-  val (first, last, done, count) = edge.count(c)
-  val hasData = edge.hasData(c.bits)
+  val (first, last, done, count) = edgeIn.count(c)
+  val hasData = edgeIn.hasData(c.bits)
 
   assert(!c.fire() || c.fire() && (isRelease || isReleaseData), "Unknown sink c opcode: %d", c.bits.opcode)
 
