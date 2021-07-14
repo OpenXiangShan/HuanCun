@@ -6,7 +6,7 @@ import chiseltest.experimental.TestOptionBuilder.ChiselScalatestOptionBuilder
 import freechips.rocketchip.diplomacy.{AddressSet, InModuleBody, LazyModule, LazyModuleImp}
 import freechips.rocketchip.tilelink.{BankBinder, TLCacheCork, TLEphemeralNode, TLFragmenter, TLFuzzer, TLRAM, TLWidthWidget, TLXbar}
 
-class AcquireTester extends L2Tester with DumpVCD {
+class AcquireTester extends L2Tester with DumpVCD with UseVerilatorBackend {
 
   it should "send outer acquire" in {
 

@@ -8,7 +8,9 @@ import chiseltest._
 import chiseltest.experimental.TestOptionBuilder.ChiselScalatestOptionBuilder
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 import freechips.rocketchip.tilelink.{BankBinder, TLBundle, TLBundleParameters, TLCacheCork, TLFragmenter, TLRAM, TLXbar}
+import org.scalatest.ParallelTestExecution
 import tltest.{ScoreboardData, TLCTrans, TLMessagesBigInt}
+
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
@@ -91,7 +93,7 @@ class TLCTest extends L2Tester with DumpVCD with UseVerilatorBackend {
     val scoreboard = mutable.Map[BigInt, ScoreboardData]()
     val testTop = LazyModule(new TestTop(serialList, scoreboard))
     test(testTop.module).withAnnotations(testAnnos) { dut =>
-      testTop.l1d.agent.addAcquire(512, TLMessagesBigInt.toT)
+      testTop.l1d.agent.addAcquire(512, TLMessagesBigInt.toB)
       testTop.l1d.agent.addAcquire(512, TLMessagesBigInt.toT)
       while (testTop.l1d.agent.outerAcquire.nonEmpty) {
         testTop.l1d.agent.issueA()

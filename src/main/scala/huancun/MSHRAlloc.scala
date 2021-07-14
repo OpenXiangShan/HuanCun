@@ -11,7 +11,7 @@ class MSHRSelector(implicit p: Parameters) extends HuanCunModule {
     val out = ValidIO(UInt(mshrs.W))
   })
   io.out.valid := ParallelOR(io.idle)
-  io.out.bits := ParallelPriorityMux(io.idle.zipWithIndex.map{
+  io.out.bits := ParallelPriorityMux(io.idle.zipWithIndex.map {
     case (b, i) => (b, (1 << i).U)
   })
 }
@@ -33,7 +33,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   // Allocate one MSHR per cycle
   assert(PopCount(io.alloc.map(_.valid)) <= 1.U)
   // Only use the first dir read port
-  assert(io.dirReads.takeRight(dirReadPorts-1).map(_.valid).reduce(_||_) === false.B)
+  assert(io.dirReads.takeRight(dirReadPorts - 1).map(_.valid).reduce(_ || _) === false.B)
 
   /* case1: selected request matches set of pending MSHR => stall
    * case2: selected request needs new MSHR but no room left => stall
@@ -86,14 +86,12 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   dirRead.bits.set := request.bits.set
   dirRead.bits.idOH := selectedMSHROH
 
-  io.alloc.drop(mshrs).map {
-    a =>
-      a.valid := false.B
-      a.bits <> DontCare
+  io.alloc.drop(mshrs).map { a =>
+    a.valid := false.B
+    a.bits <> DontCare
   }
-  io.dirReads.drop(1).map {
-    d =>
-      d.valid := false.B
-      d.bits <> DontCare
+  io.dirReads.drop(1).map { d =>
+    d.valid := false.B
+    d.bits <> DontCare
   }
 }
