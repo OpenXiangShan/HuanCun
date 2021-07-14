@@ -3,7 +3,7 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.utils.{ParallelMux, SRAMTemplate}
+import huancun.utils.{ParallelMux, ParallelPriorityMux, SRAMTemplate}
 
 class Directory(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
@@ -59,19 +59,27 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
   val rreqSets = io.reads.map(r => RegEnable(r.bits.set, enable = r.fire()))
   val rreqValids = io.reads.map(r => RegNext(r.fire(), false.B))
 
+  val hitVec = Seq.fill(dirReadPorts)(Wire(Vec(cacheParams.ways, Bool())))
   for ((result, i) <- io.results.zipWithIndex) {
     result.valid := rreqValids(i)
     result.bits.idOH := rreqIds(i)
     val tags = tagRead(i)
-    val hitVec = tags.map(t => t === rreqTags(i))
-    val hitWay = OHToUInt(hitVec)
-    result.bits.hit := Cat(hitVec).orR()
-    result.bits.way := hitWay // TODO: add replace way
-    val meta = Mux1H(hitVec, metaArray(rreqSets(i)))
+    val metas = metaArray(rreqSets(i))
+    val tagMatchVec = tags.map(_ === rreqTags(i))
+    val metaValidVec = metas.map(_.state =/= MetaData.INVALID)
+    hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
+    val hitWay = OHToUInt(hitVec(i))
+    val replaceWay = 0.U // TODO: implement replace way
+    val invalidWay = ParallelPriorityMux(metaValidVec.zipWithIndex.map(a => (!a._1, a._2.U)))
+    val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
+
+    result.bits.hit := Cat(hitVec(i)).orR()
+    result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
+    val meta = metas(result.bits.way)
     result.bits.dirty := meta.dirty
     result.bits.state := meta.state
     result.bits.clients := meta.clients
-    result.bits.tag := Mux1H(hitVec, tags)
+    result.bits.tag := ParallelMux(hitVec(i).zip(tags))
   }
 
   for (dirWReq <- io.dirWReqs) {
