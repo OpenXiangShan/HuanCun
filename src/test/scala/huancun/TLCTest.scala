@@ -76,7 +76,6 @@ class TLCTest extends L2Tester with DumpVCD with UseVerilatorBackend {
       for (i <- 0 until 5) {
         testTop.l1d.agent.addAcquire(512*i, TLMessagesBigInt.toT)
       }
-      var clock: BigInt = 0
       while (testTop.l1d.agent.outerAcquire.nonEmpty) {
         testTop.l1d.agent.issueA()
         testTop.l1d.agent.issueC()
@@ -87,4 +86,39 @@ class TLCTest extends L2Tester with DumpVCD with UseVerilatorBackend {
     }
   }
 
+  // TODO: has bugs here
+  it should "second acuqire hit" in {
+    val serialList = ArrayBuffer[(Int, TLCTrans)]()
+    val scoreboard = mutable.Map[BigInt, ScoreboardData]()
+    val testTop = LazyModule(new TestTop(serialList, scoreboard))
+    test(testTop.module).withAnnotations(testAnnos) { dut =>
+      testTop.l1d.agent.addAcquire(512, TLMessagesBigInt.toT)
+      testTop.l1d.agent.addAcquire(512, TLMessagesBigInt.toT)
+      while (testTop.l1d.agent.outerAcquire.nonEmpty) {
+        testTop.l1d.agent.issueA()
+        testTop.l1d.agent.issueC()
+        testTop.l1d.update(dut.io)
+        testTop.l1d.agent.step()
+        dut.clock.step(1)
+      }
+    }
+  }
+
+  it should "trigger release" in {
+    val serialList = ArrayBuffer[(Int, TLCTrans)]()
+    val scoreboard = mutable.Map[BigInt, ScoreboardData]()
+    val testTop = LazyModule(new TestTop(serialList, scoreboard))
+    test(testTop.module).withAnnotations(testAnnos) { dut =>
+      for (i <- 0 until 5) {
+        testTop.l1d.agent.addAcquire(i * 0x2000, TLMessagesBigInt.toT)
+      }
+      while (testTop.l1d.agent.outerAcquire.nonEmpty) {
+        testTop.l1d.agent.issueA()
+        testTop.l1d.agent.issueC()
+        testTop.l1d.update(dut.io)
+        testTop.l1d.agent.step()
+        dut.clock.step(1)
+      }
+    }
+  }
 }
