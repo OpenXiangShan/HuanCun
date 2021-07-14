@@ -8,6 +8,9 @@ compile:
 test:
 	mill -i HuanCun.test.test
 
+basic-test:
+	mill -i HuanCun.test.testOnly -o -s huancun.ConnectionTester
+
 bsp:
 	mill -i mill.bsp.BSP/install
 
