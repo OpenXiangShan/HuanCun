@@ -41,7 +41,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
 
   val req = Reg(new MSHRRequest)
   val req_valid = RegInit(false.B)
-  val meta = Reg(new DirResult)
+  val meta_reg = Reg(new DirResult)
+  val meta = Wire(new DirResult)
   val meta_valid = RegInit(false.B)
 
   // Get directory result
@@ -53,8 +54,10 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   )
   when(io.dirResult.valid) {
     meta_valid := true.B
-    meta := io.dirResult.bits
+    meta_reg := io.dirResult.bits
   }
+  meta := Mux(io.dirResult.valid, io.dirResult.bits, meta_reg)
+  dontTouch(meta)
 
   // Final meta to be written
   val new_meta = WireInit(meta)
