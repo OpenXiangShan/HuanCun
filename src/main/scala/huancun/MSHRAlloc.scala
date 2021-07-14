@@ -11,7 +11,7 @@ class MSHRSelector(implicit p: Parameters) extends HuanCunModule {
     val out = ValidIO(UInt(mshrs.W))
   })
   io.out.valid := ParallelOR(io.idle)
-  io.out.bits := ParallelMux(io.idle.zipWithIndex.map{
+  io.out.bits := ParallelPriorityMux(io.idle.zipWithIndex.map{
     case (b, i) => (b, (1 << i).U)
   })
 }
