@@ -3,8 +3,20 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import huancun.utils._
 
-class MSHRAlloc(implicit p: Parameters) extends HuanCunModule with DontCareInnerLogic {
+class MSHRSelector(implicit p: Parameters) extends HuanCunModule {
+  val io = IO(new Bundle() {
+    val idle = Input(Vec(mshrs, Bool()))
+    val out = ValidIO(UInt(mshrs.W))
+  })
+  io.out.valid := ParallelOR(io.idle)
+  io.out.bits := ParallelMux(io.idle.zipWithIndex.map{
+    case (b, i) => (b, (1 << i).U)
+  })
+}
+
+class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     // requests
     val a_req = Flipped(DecoupledIO(new MSHRRequest))
@@ -18,4 +30,55 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule with DontCareInner
     val dirReads = Vec(dirReadPorts, DecoupledIO(new DirRead))
   })
 
+  // Allocate one MSHR per cycle
+  assert(PopCount(io.alloc.map(_.valid)) <= 1.U)
+  // Only use the first dir read port
+  assert(io.dirReads.takeRight(dirReadPorts-1).map(_.valid).reduce(_||_) === false.B)
+
+  /* case1: selected request matches set of pending MSHR => stall
+   * case2: selected request needs new MSHR but no room left => stall
+   * case3: selected request needs new MSHR but dir not ready => stall
+   * case4: selected request needs new MSHR and dir ready => good!
+   */
+
+  /* Select one request from a_req/b_req/c_req */
+  val request = Wire(ValidIO(new MSHRRequest()))
+  request.valid := io.c_req.valid || io.b_req.valid || io.a_req.valid
+  request.bits := Mux(io.c_req.valid, io.c_req.bits, Mux(io.b_req.valid, io.b_req.bits, io.a_req.bits))
+
+  /* Whether selected request can be accepted */
+  val dirRead = io.dirReads.head
+  val setCollide = !Cat(io.status.map(s => s.valid && s.bits.set === request.bits.set)).orR()
+  val mshrFree = Cat(io.status.map(_.valid)).orR()
+  val acceptReq = !setCollide && mshrFree
+  val reqCanIn = dirRead.ready && acceptReq
+
+  /* Provide signals for outer components*/
+  io.c_req.ready := reqCanIn
+  io.b_req.ready := reqCanIn && !io.c_req.valid
+  io.a_req.ready := reqCanIn && !io.c_req.valid && !io.b_req.valid
+
+  val mshrSelector = Module(new MSHRSelector())
+  mshrSelector.io.idle := io.status.take(mshrs).map(!_.valid)
+  val selectedMSHROH = mshrSelector.io.out.bits
+  for ((mshr, i) <- io.alloc.take(mshrs).zipWithIndex) {
+    mshr.valid := reqCanIn && selectedMSHROH(i)
+    mshr.bits := request.bits
+  }
+
+  dirRead.valid := request.valid && acceptReq
+  dirRead.bits.tag := request.bits.tag
+  dirRead.bits.set := request.bits.set
+  dirRead.bits.idOH := OHToUInt(selectedMSHROH)
+
+  io.alloc.takeRight(mshrsAll - mshrs).map {
+    case a =>
+      a.valid := false.B
+      a.bits <> DontCare
+  }
+  io.dirReads.takeRight(dirReadPorts - 1).map{
+    case d =>
+      d.valid := false.B
+      d.bits <> DontCare
+  }
 }
