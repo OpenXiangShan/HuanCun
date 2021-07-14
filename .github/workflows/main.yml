@@ -6,7 +6,7 @@ name: CI
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
-    branches: [ main ]
+    branches: [ main, ci-test ]
   pull_request:
     branches: [ main ]
 
@@ -31,7 +31,11 @@ jobs:
         uses: olafurpg/setup-scala@v10
 
       - name: Cache
+        id: cache
         uses: coursier/cache-action@v5
+
+      - name: Verilator
+        run: sudo apt install verilator
 
       - name: Setup Mill
         uses: jodersky/setup-mill@v0.2.3
