@@ -58,6 +58,19 @@ trait HasHuanCunParameters {
     }
   }
 
+  def getSourceId(client: UInt): UInt = {
+    if (clientBits == 0) {
+      0.U
+    } else {
+      Mux1H(
+        client,
+        edgeIn.client.clients
+          .filter(_.supports.probe)
+          .map(c => c.sourceId.start.U)
+      )
+    }
+  }
+
   def parseAddress(x: UInt): (UInt, UInt, UInt) = {
     val offset = x // TODO: check address mapping
     val set = offset >> offsetBits

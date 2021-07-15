@@ -327,7 +327,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   ob.tag := Mux(!s_rprobe, meta.tag, req.tag)
   ob.set := req.set
   ob.param := Mux(!s_rprobe, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
-  ob.clients := Mux(meta.hit, probes_toN, 0.U) // TODO
+  ob.clients := meta.clients & ~probe_exclude // TODO: Provides all clients needing probe
 
   oc.opcode := Cat(Mux(req.fromB, ProbeAck, Release)(2, 1), meta.dirty.asUInt)
   oc.tag := meta.tag
@@ -458,7 +458,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // Release MSHR
-  when(no_wait && s_execute && s_probeack && meta_valid) {
+  when(no_wait && s_execute && s_probeack && meta_valid && s_writebacktag) {
     req_valid := false.B
     meta_valid := false.B
   }

@@ -111,7 +111,7 @@ class TLCTest extends L2Tester with DumpVCD with UseVerilatorBackend {
     val testTop = LazyModule(new TestTop(serialList, scoreboard))
     test(testTop.module).withAnnotations(testAnnos) { dut =>
       for (i <- 0 until 5) {
-        testTop.l1d.agent.addAcquire(i * 0x2000, TLMessagesBigInt.toT)
+        testTop.l1d.agent.addAcquire((i+1) * 0x2000, TLMessagesBigInt.toT)
       }
       while (testTop.l1d.agent.outerAcquire.nonEmpty) {
         testTop.l1d.agent.issueA()
