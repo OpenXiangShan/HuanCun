@@ -32,7 +32,7 @@ class SourceB(implicit p: Parameters) extends HuanCunModule with DontCareInnerLo
   io.b.bits.param := taskLatch.param
   io.b.bits.size := offsetBits.U
   io.b.bits.source := getSourceId(chosenClient)
-  io.b.bits.address := Cat(taskLatch.tag, taskLatch.set, 0.U(offsetBits))
+  io.b.bits.address := Cat(taskLatch.tag, taskLatch.set, 0.U(offsetBits.W))
   io.b.bits.mask := ~0.U(beatBytes.W)
   io.b.bits.data := 0.U
 }

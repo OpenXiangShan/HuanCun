@@ -65,7 +65,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   queue.io.enq.bits.param := s2_task.param
   queue.io.enq.bits.size := offsetBits.U
   queue.io.enq.bits.source := s2_task.source
-  queue.io.enq.bits.address := Cat(s2_task.tag, s2_task.set, 0.U(offsetBits))
+  queue.io.enq.bits.address := Cat(s2_task.tag, s2_task.set, 0.U(offsetBits.W))
   queue.io.enq.bits.data := io.bs_rdata.data
   queue.io.enq.bits.corrupt := false.B
 
