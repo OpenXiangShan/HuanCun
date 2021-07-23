@@ -362,7 +362,13 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   od.set := req.set
   od.tag := req.tag
   od.channel := Cat(req.fromC.asUInt, 0.U(1.W), req.fromA.asUInt)
-  od.opcode := Mux(req.opcode(0), Grant, GrantData) // TODO: consider other opcodes
+  def odOpGen(r: MSHRRequest) = {
+    val grantOp = Mux(r.param === BtoT, Grant, GrantData)
+    val opSeq = Seq(AccessAck, AccessAck, AccessAckData, AccessAckData, AccessAckData, HintAck, grantOp, Grant)
+    val opToA = VecInit(opSeq)(r.opcode)
+    Mux(r.fromA, opToA, ReleaseAck)
+  }
+  od.opcode := odOpGen(req)
   od.param := Mux(
     !req_acquire,
     req.param,
