@@ -363,12 +363,11 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   od.tag := req.tag
   od.channel := Cat(req.fromC.asUInt, 0.U(1.W), req.fromA.asUInt)
   od.opcode := Mux(req.opcode(0), Grant, GrantData) // TODO: consider other opcodes
-  od.param := Mux(!req_acquire, req.param,
-    MuxLookup(req.param, req.param, Seq(
-      NtoB -> Mux(req_promoteT, toT, toB),
-      BtoT -> toT,
-      NtoT -> toT)
-    ))
+  od.param := Mux(
+    !req_acquire,
+    req.param,
+    MuxLookup(req.param, req.param, Seq(NtoB -> Mux(req_promoteT, toT, toB), BtoT -> toT, NtoT -> toT))
+  )
   od.size := req.size
   od.way := meta.way
   od.off := req.off
