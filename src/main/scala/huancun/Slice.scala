@@ -120,7 +120,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io.dirResult.bits := Mux1H(dirResultMatch.zip(directory.io.results.map(_.bits)))
   }
 
-  // Provide MSHR info for sinkD
+  // Provide MSHR info for sinkC, sinkD
+  sinkC.io.way := VecInit(ms.map(_.io.status.bits.way))(sinkC.io.resp.bits.source)
+  sinkC.io.set := VecInit(ms.map(_.io.status.bits.set))(sinkC.io.resp.bits.source)
   sinkD.io.way := VecInit(ms.map(_.io.status.bits.way))(sinkD.io.resp.bits.source)
   sinkD.io.set := VecInit(ms.map(_.io.status.bits.set))(sinkD.io.resp.bits.source)
 

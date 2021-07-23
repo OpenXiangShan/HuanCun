@@ -196,6 +196,7 @@ class MasterAgent
       )
       agent.fireB(b)
     }
+    agent.tickB()
     // d channel
     io.d.ready.poke(true.B)
     if (peekFire(io.d)) {

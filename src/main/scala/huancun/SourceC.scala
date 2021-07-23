@@ -40,22 +40,20 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.bs_raddr.bits.write := false.B
 
   // Stage 0 => Stage 1
-  val s1_valid = RegInit(false.B)
+  val task_handled = Mux(has_data, io.bs_raddr.ready, io.task.fire())
   val s1_task = RegInit(io.task.bits)
   val s1_beat = RegInit(0.U(beatBits.W))
-  val task_handled = Mux(has_data, io.bs_raddr.ready, io.task.fire())
+  val s1_valid = RegNext(task_handled, false.B)
   when(task_handled) {
-    s1_valid := true.B
     s1_task := task
     s1_beat := beat
   }
 
   // Stage 1 => Stage 2
-  val s2_valid = RegInit(false.B)
+  val s2_valid = RegNext(s1_valid, false.B)
   val s2_task = RegInit(io.task.bits)
   val s2_beat = RegInit(0.U(beatBits.W))
   when(s1_valid) {
-    s2_valid := true.B
     s2_task := s1_task
     s2_beat := s1_beat
   }
@@ -65,7 +63,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   queue.io.enq.bits.param := s2_task.param
   queue.io.enq.bits.size := offsetBits.U
   queue.io.enq.bits.source := s2_task.source
-  queue.io.enq.bits.address := Cat(s2_task.tag, s2_task.set, 0.U(offsetBits))
+  queue.io.enq.bits.address := Cat(s2_task.tag, s2_task.set, 0.U(offsetBits.W))
   queue.io.enq.bits.data := io.bs_rdata.data
   queue.io.enq.bits.corrupt := false.B
 
