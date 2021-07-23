@@ -65,6 +65,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   val req_needT = needT(req.opcode, req.param)
   val gotT = RegInit(false.B) // L3 might return T even though L2 wants B
   val meta_no_client = !meta.clients.orR
+  val req_promoteT = req_acquire && Mux(meta.hit, meta_no_client && meta.state === TIP, gotT)
+  val req_realBtoT = meta.hit && (meta.clients & getClientBitOH(req.source)).orR
   val probes_toN = RegInit(0.U(clientBits.W))
   val probes_done = RegInit(0.U(clientBits.W))
   val probe_exclude =
@@ -361,7 +363,12 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   od.tag := req.tag
   od.channel := Cat(req.fromC.asUInt, 0.U(1.W), req.fromA.asUInt)
   od.opcode := Mux(req.opcode(0), Grant, GrantData) // TODO: consider other opcodes
-  od.param := req.param // TODO: consider more detailed situations
+  od.param := Mux(!req_acquire, req.param,
+    MuxLookup(req.param, req.param, Seq(
+      NtoB -> Mux(req_promoteT, toT, toB),
+      BtoT -> toT,
+      NtoT -> toT)
+    ))
   od.size := req.size
   od.way := meta.way
   od.off := req.off
@@ -435,9 +442,15 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     w_pprobeackfirst := w_pprobeackfirst || probeack_last
     w_pprobeacklast := w_pprobeacklast || probeack_last && resp.last
     w_pprobeack := w_pprobeack || (resp.last || req.off === 0.U) && probeack_last
+
+    // TODO: is the following logic correct?
+    // When ProbeAck for pprobe writes back dirty data, set dirty bit
     when((req.fromB && req.param === toT || req.fromA && meta.hit) && resp.hasData) {
-      // When ProbeAck for pprobe writes back dirty data, set dirty bit
       new_meta.dirty := true.B
+    }
+    // When ProbeAck for rprobe writes back dirty data, set dirty bit immediately for release
+    when(meta.state =/= INVALID && resp.hasData) {
+      meta_reg.dirty := true.B
     }
   }
   when(io.resps.sink_d.valid) {
