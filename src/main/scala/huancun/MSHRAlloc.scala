@@ -57,7 +57,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val conflict_a = set_conflict(io.a_req.bits)
 
   val dirRead = io.dirReads.head
-  val mshrFree = Cat(io.status.map(!_.valid)).orR()
+  val mshrFree = Cat(io.status.take(mshrs).map(!_.valid)).orR()
 
   val can_accept_c = mshrFree && !conflict_c
   val can_accept_b = mshrFree && !conflict_b && !io.c_req.valid
