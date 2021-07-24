@@ -6,6 +6,7 @@ import chisel3.util._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.UIntToOH1
 import freechips.rocketchip.rocket.DecodeLogic
+import freechips.rocketchip.tilelink.TLMessages.{AcquireBlock, AcquirePerm}
 
 class SourceD(implicit p: Parameters) extends HuanCunModule {
   /*
@@ -73,6 +74,10 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     s1_counter := 0.U
     s1_beats := Mux(s0_needData, UIntToOH1(io.task.bits.size, log2Up(blockBytes)) >> log2Up(beatBytes), 0.U)
     s1_needData := s0_needData
+  }.otherwise {
+    when(!s1_needData) {
+      s1_valid := false.B
+    }
   }
 
   s1_ready := !s1_valid || (s1_can_go && s1_r_done)
@@ -111,9 +116,11 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     s3_valid := false.B
   }
 
+  val s3_acquire = s3_req.opcode === AcquireBlock || s3_req.opcode === AcquirePerm
+
   d.valid := s3_valid
   d.bits.opcode := s3_req.opcode
-  d.bits.param := s3_req.param
+  d.bits.param := Mux(s3_req.fromA && s3_acquire, s3_req.param, 0.U)
   d.bits.sink := s3_req.sinkId
   d.bits.size := s3_req.size
   d.bits.source := s3_req.sourceId
