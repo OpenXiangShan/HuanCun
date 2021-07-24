@@ -77,7 +77,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   // Send tasks
   val mshrGroups = ms.grouped((ms.size + dirWritePorts - 1) / dirWritePorts)
   for ((grp, i) <- mshrGroups.zipWithIndex) {
-    val dirWriteArb = Module(new Arbiter(new DirWrite, grp.size))
+    val dirWriteArb = Module(new RRArbiter(new DirWrite, grp.size))
     dirWriteArb.io.in <> VecInit(grp.map(_.io.tasks.dir_write))
     directory.io.dirWReqs(i) <> dirWriteArb.io.out
   }
@@ -92,7 +92,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(directory.io.tagWReq, ms.map(_.io.tasks.tag_write), Some("tagWrite"))
 
   def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
-    val arbiter = Module(new Arbiter[T](chiselTypeOf(out.bits), in.size))
+    val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), in.size))
     if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
     for ((arb, req) <- arbiter.io.in.zip(in)) {
       arb <> req
