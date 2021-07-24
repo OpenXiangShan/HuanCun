@@ -271,10 +271,14 @@ abstract class TLCTrans extends PermissionTransition {
   private var timer = 0
   private var timerRunning = false
 
+  override def toString: String = {
+    "not implemented toString for TLCTrans"
+  }
+
   def step(): Unit = {
     if (timerRunning) {
       timer += 1
-      assert(timer <= 1000, "transaction time out!")
+      assert(timer <= 1000, s"transaction time out: [${this.toString}]")
     }
   }
 
@@ -311,6 +315,19 @@ class AcquireCallerTrans() extends AcquireTrans with TLCCallerTrans {
   var grantAckIssued: Option[Boolean] = None
 
   var targetPerm: BigInt = nothing
+
+  override def toString: String = {
+    if(a.nonEmpty){
+      val addr = a.get.address
+      val op = a.get.opcode
+      val param = a.get.param
+      val source = a.get.source
+      s"address: ${addr.toString(16)} op: $op param: $param source:$source " +
+        s"acquire issued: ${acquireIssued.getOrElse(false)} " +
+        s"grant pending: ${grantPending.getOrElse(false)} " +
+        s"grant ack issued: ${grantAckIssued.getOrElse(false)}"
+    } else ""
+  }
 
   //record metaData in Acquire Message
   def prepareAcquire(reqAddr: BigInt, reqTargetPerm: BigInt): Unit = {
