@@ -64,7 +64,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     //                          aka [index, stack, block]
     val innerAddr = Cat(addr.bits.way, addr.bits.set, addr.bits.beat)
     val innerIndex = innerAddr >> stackBits
-    val stackSel = UIntToOH(innerAddr(stackBits - 1, 0), stackBits) // Select which stack to access
+    val stackSel = UIntToOH(innerAddr(stackBits - 1, 0), stackSize) // Select which stack to access
 
     val out = Wire(new DSRequest)
     val accessVec = Cat(
@@ -126,9 +126,16 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   }
 
   /* Pack out-data to channels */
-  val sourceDrdata = Mux1H(RegNext(RegNext(sourceD_rreq.bankEn)), outData)
-  val sourceCrdata = Mux1H(RegNext(RegNext(sourceC_req.bankEn)), outData)
+  val sourceDlatch = RegNext(RegNext(sourceD_rreq.bankEn))
+  val sourceClatch = RegNext(RegNext(sourceC_req.bankEn))
 
-  io.sourceD_rdata.data := sourceDrdata
-  io.sourceC_rdata.data := sourceCrdata
+  val sourceDrdata = outData.zipWithIndex.map{
+    case (r, i) => Mux(sourceDlatch(i), r, 0.U)
+  }.grouped(stackSize).toList.transpose.map(s => s.reduce(_|_))
+  val sourceCrdata = outData.zipWithIndex.map{
+    case (r, i) => Mux(sourceClatch(i), r, 0.U)
+  }.grouped(stackSize).toList.transpose.map(s => s.reduce(_|_))
+
+  io.sourceD_rdata.data := Cat(sourceDrdata.reverse)
+  io.sourceC_rdata.data := Cat(sourceCrdata.reverse)
 }
