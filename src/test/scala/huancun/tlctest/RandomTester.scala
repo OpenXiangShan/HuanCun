@@ -69,9 +69,9 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
 
         l1d.issueA()
         l1d.issueC()
-        l1d.step()
         testTop.l1d.update(dut.io)
 
+        l1d.step()
         dut.clock.step(1)
       }
     }

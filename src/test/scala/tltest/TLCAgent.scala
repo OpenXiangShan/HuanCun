@@ -868,6 +868,7 @@ class TLCMasterAgent(
 
   def freeSource(): Unit = {
     sourceAFreeQueue.dequeueAll { id =>
+      println(s"free sourceA id[${id}]")
       sourceAMap.remove(id)
       true
     }
@@ -959,6 +960,10 @@ class TLCMasterAgent(
         //TODO: notify father transaction here
       }
       case Grant => {
+        if(!sourceAMap.contains(d.source)){
+          println(s"source id [${d.source}] not found")
+          println(sourceAMap.keys.mkString(" "))
+        }
         require(sourceAMap.contains(d.source), "no sourceID for Grant")
         val acq = sourceAMap(d.source)
         acq.pairGrant(d)

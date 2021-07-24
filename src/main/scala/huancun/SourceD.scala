@@ -38,7 +38,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s3_ready = Wire(Bool())
 
   // stage0
-  val s0_needData = io.task.bits.fromA
+  // TODO: check this
+  val s0_needData = io.task.bits.fromA && io.task.bits.opcode === TLMessages.GrantData
 
   // stage1
   val s1_req = RegEnable(io.task.bits, io.task.fire())
