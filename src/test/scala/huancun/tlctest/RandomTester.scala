@@ -2,7 +2,7 @@ package huancun.tlctest
 
 import chiseltest._
 import chiseltest.experimental.TestOptionBuilder.ChiselScalatestOptionBuilder
-import huancun.DumpVCD
+import huancun.{DumpVCD, UseVerilatorBackend}
 import tltest._
 import tltest.TLMessagesBigInt._
 
@@ -29,7 +29,7 @@ trait RandomSampleUtil {
   }
 }
 
-class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD {
+class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVerilatorBackend {
   it should "random run" in {
 
     val totalTick = 150000
@@ -37,7 +37,7 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD {
     val nrAddingTrans = 16
     val rand = new Random(0xbeef)
     val addr_pool = {
-      for (_ <- 0 to 128) yield BigInt(rand.nextInt(0xffff) << 6)
+      for (_ <- 0 to 128) yield (BigInt(rand.nextInt(0xffff) << 6) & BigInt(0xffff))
     }.distinct.toList // align to block size
 
     val addrRange = addr_pool.length
