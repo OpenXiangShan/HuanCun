@@ -20,7 +20,7 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
       Release/ReleaseData
       ProbeAck/ProbeAckData
    */
-  val releaseBuf = Mem(bufBlocks, Vec(blockBytes / beatBytes, UInt(beatBits.W)))
+  val releaseBuf = Reg(Vec(bufBlocks, Vec(blockBytes / beatBytes, UInt((beatBytes * 8).W))))
   val bufValids = RegInit(VecInit(Seq.fill(bufBlocks)(false.B)))
   val bufFull = Cat(bufValids).andR()
   val insertIdx = PriorityEncoder(bufValids.map(b => !b))
@@ -72,7 +72,9 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
 
   when(c.fire() && isReleaseData) {
     releaseBuf(insertIdx)(count) := c.bits.data
-    bufValids(insertIdx) := true.B
+    when(last){
+      bufValids(insertIdx) := true.B
+    }
   }
   when(w_done && busy_r) { // release data write done
     bufValids(task_r.bufIdx) := false.B
