@@ -18,7 +18,7 @@ import tltest.{AddrState, ScoreboardData, TLCMasterAgent, TLCScalaB, TLCScalaD, 
 import scala.collection.mutable.ArrayBuffer
 
 abstract class BaseFakeClient(name: String, nBanks: Int, probe: Boolean = true)(implicit p: Parameters)
-    extends LazyModule
+  extends LazyModule
     with HasHuanCunParameters {
   val xfer = TransferSizes(blockBytes)
   val node: TLClientNode = TLClientNode(Seq.tabulate(nBanks) { i =>
@@ -40,13 +40,15 @@ abstract class BaseFakeClient(name: String, nBanks: Int, probe: Boolean = true)(
 }
 
 class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0)(implicit p: Parameters)
-    extends BaseFakeClient(name, nBanks, probe) {
+  extends BaseFakeClient(name, nBanks, probe) {
 
   lazy val module = new LazyModuleImp(this) {
 
     val finish = IO(Output(Bool()))
 
-    val flags = Seq.fill(node.out.size) { RegInit(false.B) }
+    val flags = Seq.fill(node.out.size) {
+      RegInit(false.B)
+    }
 
     finish := flags.reduce(_ && _)
 
@@ -96,21 +98,23 @@ class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0
 }
 
 class FakeL1D(nBanks: Int, reqs: Int = 0)(implicit p: Parameters) extends FakeClient("L1D", nBanks, reqs = reqs)
+
 class FakeL1I(nBanks: Int, reqs: Int = 0)(implicit p: Parameters)
-    extends FakeClient("L1I", nBanks, probe = false, reqs = reqs)
+  extends FakeClient("L1I", nBanks, probe = false, reqs = reqs)
+
 class FakePTW(nBanks: Int, reqs: Int = 0)(implicit p: Parameters)
-    extends FakeClient("PTW", nBanks, probe = false, reqs = reqs)
+  extends FakeClient("PTW", nBanks, probe = false, reqs = reqs)
 
 class MasterAgent
 (
   id: Int,
-  name:       String,
-  probe:      Boolean,
+  name: String,
+  probe: Boolean,
   serialList: ArrayBuffer[(Int, TLCTrans)],
   scoreboard: scala.collection.mutable.Map[BigInt, ScoreboardData]
 )(
   implicit p: Parameters)
-    extends BaseFakeClient(name, 1, probe) {
+  extends BaseFakeClient(name, 1, probe) {
   val addrStateList = scala.collection.mutable.Map[BigInt, AddrState]()
   lazy val agent = new TLCMasterAgent(
     id,
@@ -130,12 +134,44 @@ class MasterAgent
   def peekFire[T <: Data](port: DecoupledIO[T]): Boolean = {
     port.valid.peek().litToBoolean && port.ready.peek().litToBoolean
   }
+
   def peekReady[T <: Data](port: DecoupledIO[T]): Boolean = port.ready.peek().litToBoolean
-  def peekBigInt(sig:  UInt): BigInt = sig.peek().litValue()
+
+  def peekBigInt(sig: UInt): BigInt = sig.peek().litValue()
+
   def peekBoolean(sig: Bool): Boolean = sig.peek().litToBoolean
 
   def update(io: TLBundle) = {
+    // e channel
+    val opt_e = agent.peekE()
+    if (opt_e.isDefined) {
+      val e = opt_e.get
+      io.e.valid.poke(true.B)
+      io.e.bits.sink.poke(e.sink.U)
+    } else {
+      io.e.valid.poke(false.B)
+    }
+    // d
+    io.d.ready.poke(true.B)
+    // c channel
+    agent.issueC()
+    val opt_c = agent.peekC()
+    if (opt_c.isDefined) {
+      val c = opt_c.get
+      io.c.valid.poke(true.B)
+      io.c.bits.opcode.poke(c.opcode.U)
+      io.c.bits.param.poke(c.param.U)
+      io.c.bits.size.poke(c.size.U)
+      io.c.bits.source.poke(c.source.U)
+      io.c.bits.address.poke(c.address.U)
+      io.c.bits.data.poke(c.data.U)
+    } else {
+      io.c.valid.poke(false.B)
+    }
+    // b
+    io.b.ready.poke(true.B) // TODO: random stall
     // a channel
+    agent.issueA()
     val opt_a = agent.peekA()
     if (opt_a.isDefined) {
       val a = opt_a.get
@@ -150,40 +186,27 @@ class MasterAgent
     } else {
       io.a.valid.poke(false.B)
     }
-    if(peekFire(io.a)){
-      agent.fireA()
-    }
-    // c channel
-    val opt_c = agent.peekC()
-    if (opt_c.isDefined) {
-      val c = opt_c.get
-      io.c.valid.poke(true.B)
-      io.c.bits.opcode.poke(c.opcode.U)
-      io.c.bits.param.poke(c.param.U)
-      io.c.bits.size.poke(c.size.U)
-      io.c.bits.source.poke(c.source.U)
-      io.c.bits.address.poke(c.address.U)
-      io.c.bits.data.poke(c.data.U)
-    } else {
-      io.c.valid.poke(false.B)
-    }
-    if(peekFire(io.c)){
-      agent.fireC()
-    }
-    // e channel
-    val opt_e = agent.peekE()
-    if (opt_e.isDefined) {
-      val e = opt_e.get
-      io.e.valid.poke(true.B)
-      io.e.bits.sink.poke(e.sink.U)
-    } else {
-      io.e.valid.poke(false.B)
-    }
-    if(peekFire(io.e)){
+
+    if (peekFire(io.e)) {
       agent.fireE()
     }
+    // d channel
+    if (peekFire(io.d)) {
+      val d = new TLCScalaD(
+        opcode = peekBigInt(io.d.bits.opcode),
+        param = peekBigInt(io.d.bits.param),
+        size = peekBigInt(io.d.bits.size),
+        source = peekBigInt(io.d.bits.source),
+        sink = peekBigInt(io.d.bits.sink),
+        denied = peekBoolean(io.d.bits.denied),
+        data = peekBigInt(io.d.bits.data)
+      )
+      agent.fireD(d)
+    }
+    if (peekFire(io.c)) {
+      agent.fireC()
+    }
     // b channel
-    io.b.ready.poke(true.B) // TODO: random stall
     if (peekFire(io.b)) {
       val b = new TLCScalaB(
         opcode = peekBigInt(io.b.bits.opcode),
@@ -197,19 +220,9 @@ class MasterAgent
       agent.fireB(b)
     }
     agent.tickB()
-    // d channel
-    io.d.ready.poke(true.B)
-    if (peekFire(io.d)) {
-      val d = new TLCScalaD(
-        opcode = peekBigInt(io.d.bits.opcode),
-        param = peekBigInt(io.d.bits.param),
-        size = peekBigInt(io.d.bits.size),
-        source = peekBigInt(io.d.bits.source),
-        sink = peekBigInt(io.d.bits.sink),
-        denied = peekBoolean(io.d.bits.denied),
-        data = peekBigInt(io.d.bits.data)
-      )
-      agent.fireD(d)
+    if (peekFire(io.a)) {
+      agent.fireA()
     }
+    agent.step()
   }
 }

@@ -868,7 +868,6 @@ class TLCMasterAgent(
 
   def freeSource(): Unit = {
     sourceAFreeQueue.dequeueAll { id =>
-      println(s"free sourceA id[${id}]")
       sourceAMap.remove(id)
       true
     }
