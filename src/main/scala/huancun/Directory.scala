@@ -23,7 +23,6 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
   }
   when(resetIdx === 0.U) { resetFinish := true.B }
 
-
   io.tagWReq.ready := true.B // let tag write block tag read
   io.reads.foreach(_.ready := !io.tagWReq.valid && resetFinish)
 

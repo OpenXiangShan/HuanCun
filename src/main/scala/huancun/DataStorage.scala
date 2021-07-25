@@ -129,12 +129,12 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val sourceDlatch = RegNext(RegNext(sourceD_rreq.bankEn))
   val sourceClatch = RegNext(RegNext(sourceC_req.bankEn))
 
-  val sourceDrdata = outData.zipWithIndex.map{
+  val sourceDrdata = outData.zipWithIndex.map {
     case (r, i) => Mux(sourceDlatch(i), r, 0.U)
-  }.grouped(stackSize).toList.transpose.map(s => s.reduce(_|_))
-  val sourceCrdata = outData.zipWithIndex.map{
+  }.grouped(stackSize).toList.transpose.map(s => s.reduce(_ | _))
+  val sourceCrdata = outData.zipWithIndex.map {
     case (r, i) => Mux(sourceClatch(i), r, 0.U)
-  }.grouped(stackSize).toList.transpose.map(s => s.reduce(_|_))
+  }.grouped(stackSize).toList.transpose.map(s => s.reduce(_ | _))
 
   io.sourceD_rdata.data := Cat(sourceDrdata.reverse)
   io.sourceC_rdata.data := Cat(sourceCrdata.reverse)

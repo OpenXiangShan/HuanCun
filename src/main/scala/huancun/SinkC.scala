@@ -72,12 +72,12 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
 
   val insertIdxReg = RegEnable(insertIdx, c.fire() && isReleaseData && first)
   when(c.fire() && isReleaseData) {
-    when(first){
+    when(first) {
       releaseBuf(insertIdx)(count) := c.bits.data
     }.otherwise({
       releaseBuf(insertIdxReg)(count) := c.bits.data
     })
-    when(last){
+    when(last) {
       bufValids(insertIdxReg) := true.B
     }
   }

@@ -46,9 +46,11 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
 
     var total_acquire = 0
     var total_release = 0
+    var total_get = 0
 
     test(testTop.module).withAnnotations(testAnnos) { dut =>
       val l1d = testTop.l1d.agent
+      val l1i = testTop.l1i.agent
 
       for (_ <- 0 to totalTick) {
 
@@ -72,7 +74,16 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
           }
         }
 
-        testTop.l1d.update(dut.io)
+        if (l1i.outerGet.size <= pendingThreshold) {
+          total_get += nrAddingTrans
+          for (_ <- 0 until nrAddingTrans) {
+            val addr = getRandomElement(addr_pool, rand)
+            l1i.addGet(addr)
+          }
+        }
+
+        testTop.l1d.update(dut.l1dio)
+        testTop.l1i.update(dut.l1iio)
         dut.clock.step(1)
       }
 

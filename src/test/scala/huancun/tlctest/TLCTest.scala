@@ -23,7 +23,14 @@ class TestTop
     scoreboard
   ))
 
-  val l1i = LazyModule(new FakeL1I(nBanks = 1))
+  val l1i = LazyModule(new MasterULAgent(
+    id = 1,
+    name = "l1i",
+    probe = false,
+    serialList,
+    scoreboard
+  ))
+
   val ptw = LazyModule(new FakePTW(nBanks = 1))
   val xbar = TLXbar()
 
@@ -40,8 +47,10 @@ class TestTop
   xbar := ptw.node
 
   lazy val module = new LazyModuleImp(this) {
-    val io = IO(Flipped(l1d.module.tl_master_io.cloneType))
-    l1d.module.tl_master_io <> io
+    val l1dio = IO(Flipped(l1d.module.tl_master_io.cloneType))
+    l1d.module.tl_master_io <> l1dio
+    val l1iio = IO(Flipped(l1i.module.tl_master_io.cloneType))
+    l1i.module.tl_master_io <> l1iio
   }
 
 }

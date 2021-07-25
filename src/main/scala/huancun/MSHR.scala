@@ -231,7 +231,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       // TODO: consider parameterized write-through policy for put/atomics
       s_execute := false.B
       // need replacement
-      when(!meta.hit && meta.state =/= INVALID) {
+      when(!meta.hit && meta.state =/= INVALID && (req.opcode =/= Get)) {
         s_release := false.B
         w_releaseack := false.B
         // need rprobe for release
@@ -247,11 +247,13 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
         w_grantfirst := false.B
         w_grantlast := false.B
         w_grant := false.B
-        s_grantack := false.B
-        s_writebackdir := false.B
+        when (req.opcode =/= Get) {
+          s_grantack := false.B
+          s_writebackdir := false.B
+        }
       }
       // need pprobe
-      when(meta.hit && (req_needT || meta.state === TRUNK) && (meta.clients & ~getClientBitOH(req.source)) =/= 0.U) {
+      when(meta.hit && (req_needT || meta.state === TRUNK) && (meta.clients & ~getClientBitOH(req.source) & ~skipProbeN(req.opcode)) =/= 0.U) {
         s_pprobe := false.B
         w_pprobeackfirst := false.B
         w_pprobeacklast := false.B
@@ -268,7 +270,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
         s_writebackdir := false.B
       }
       // need write tag
-      when(!meta.hit) {
+      when(!meta.hit&& (req.opcode =/= Get)) {
         s_writebacktag := false.B
       }
       // need wirte putbuffer in Sink A into data array

@@ -591,7 +591,40 @@ class GetTrans() extends TLCTrans {
 }
 
 class GetCallerTrans() extends GetTrans with TLCCallerTrans {
+  var getIssued: Option[Boolean] = None
   var accessAckDataPending: Option[Boolean] = None
+
+  override def toString: String = {
+    if (a.nonEmpty) {
+      val addr = a.get.address
+      val op = a.get.opcode
+      val param = a.get.param
+      val source = a.get.source
+      s"address: ${addr.toString(16)} op: $op param: $param source:$source " +
+        s"get issued: ${getIssued.getOrElse(false)} " +
+        s"accessAck pending: ${accessAckDataPending.getOrElse(false)} "
+    } else ""
+  }
+
+  def prepareGet(reqAddr: BigInt): Unit = {
+    val genA = new TLCScalaA(
+      size = blockSizeL2,
+      address = reqAddr,
+      mask = beatFullMask,
+    )
+    a = Some(genA)
+    getIssued = Some(false)
+  }
+
+  def issueGet(sourceMapId: BigInt): TLCScalaA = {
+    a.get.opcode = Get
+    a.get.source = sourceMapId
+    a.get.param = 0
+    getIssued = Some(true)
+    accessAckDataPending = Some(true)
+    a.get.trans = Some(this)
+    a.get
+  }
 
   def pairGet(inA: TLCScalaA): Unit = {
     a = Some(inA)

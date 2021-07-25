@@ -1206,3 +1206,114 @@ class TLCMasterAgent(
   }
 
 }
+
+class TLULMasterAgent(
+  ID:            Int,
+  name:          String = "",
+  val maxSource: Int,
+  addrStateMap:  mutable.Map[BigInt, AddrState],
+  serialList:    ArrayBuffer[(Int, TLCTrans)],
+  scoreboard:    mutable.Map[BigInt, ScoreboardData],
+  blockBytes:    Int,
+  beatBytes:     Int)
+    extends TLCAgent(ID, name, addrStateMap, serialList, scoreboard, blockBytes, beatBytes) {
+  val outerGet: ListBuffer[GetCallerTrans] = ListBuffer()
+  val outerPut: ListBuffer[PutCallerTrans] = ListBuffer()
+
+  val getMap: mutable.Map[BigInt, GetCallerTrans] = mutable.Map[BigInt, GetCallerTrans]()
+  val putMap: mutable.Map[BigInt, PutCallerTrans] = mutable.Map[BigInt, PutCallerTrans]()
+
+  val getQueue = new FireQueue[TLCScalaA]()
+  val putQueue = new FireQueue[TLCScalaA]()
+
+  val sourceAFreeIdQueue = mutable.Queue[BigInt]()  // TODO: handle Put in exactly one id queue?
+
+  def freeSource(): Unit = {
+    sourceAFreeIdQueue.dequeueAll { id =>
+      getMap.remove(id)
+      true
+    }
+  }
+
+  override def transStep(): Unit = {
+    outerGet.foreach(_.step())
+//    outerPut.foreach(_.step())
+  }
+
+  var tmpA = new TLCScalaA()
+  var a_cnt = 0
+  var a_cnt_end = 0
+  var tmpD = new TLCScalaD()
+  var d_cnt = 0
+  var d_cnt_end = 0
+  var snapData: BigInt = 0
+
+  def fireD(inD: TLCScalaD): Unit = {
+    if (inD.opcode == AccessAckData) {
+      if (d_cnt == 0) { // Start burst
+        val getT = getMap(inD.source)
+        // snapData = insertVersionRead(getT.a.get.address, inD.param)
+        tmpD = inD.copy()
+        d_cnt += 1
+      }
+      else {
+        tmpD.data = dataConcatBeat(tmpD.data, inD.data, d_cnt)
+        d_cnt += 1
+        if (d_cnt == beatNum) {
+          d_cnt = 0
+          val getT = getMap(inD.source)
+          getT.pairAccessAckData(tmpD)
+          // insertMaskedReadSnap(getT.a.get.address, tmpD.data, snapData, getT.a.get.mask)
+          getMap.remove(inD.source)
+          outerGet -= getT
+          sourceAFreeIdQueue.enqueue(inD.source)
+        }
+      }
+      // TODO: do FireD
+      debugPrintln(f"AccessAckData, Source: ${inD.source}%x, Data: ${inD.data}%x")
+    } else {
+      assert(false, "Put test is not implemented yet")
+    }
+  }
+
+  def fireA(): Unit = {
+    // TODO: identify whether opcode is Get or Put
+    getQueue.fireHead()
+  }
+
+  def issueA(): Unit = {
+    if (getMap.size < maxSource) {
+      val sourceQ = mutable.Queue() ++ List.tabulate(maxSource)(a => BigInt(a)).filterNot(k => getMap.contains(k))
+      outerGet.foreach { acq =>
+        if (!acq.getIssued.getOrElse(true)) { // Haven't issue get
+          val addr = acq.a.get.address
+          if (sourceQ.nonEmpty) {
+            val allocId = sourceQ.dequeue()
+            getQueue.enqMessage(acq.issueGet(allocId))
+            appendSerial(acq)
+            getMap(allocId) = acq
+          }
+        }
+      }
+    }
+  }
+
+  def peekA(): Option[TLCScalaA] = {
+    if (getQueue.q.isEmpty) {
+      None
+    } else {
+      Some(getQueue.q.head._1)
+    }
+  }
+
+  def addGet(addr: BigInt): Unit = {
+    val acq = new GetCallerTrans()
+    acq.prepareGet(addr)
+    outerGet.append(acq)
+  }
+
+  override def step(): Unit = {
+    freeSource()
+    super.step()
+  }
+}
