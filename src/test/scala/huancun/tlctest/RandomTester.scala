@@ -44,6 +44,9 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
     val acquireProbMap = Map(branch -> 0.3, trunk -> 0.7)
     val releaseProbMap = Map(nothing -> 0.6, branch -> 0.3, trunk -> 0.1)
 
+    var total_acquire = 0
+    var total_release = 0
+
     test(testTop.module).withAnnotations(testAnnos) { dut =>
       val l1d = testTop.l1d.agent
 
@@ -51,6 +54,7 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
 
         // Enqueue pending Acquire
         if (l1d.outerAcquire.size <= pendingThreshold) {
+          total_acquire += nrAddingTrans
           for (_ <- 0 until nrAddingTrans) {
             val addr = getRandomElement(addr_pool, rand)
             val targetPerm = sample(acquireProbMap, rand)
@@ -60,6 +64,7 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
 
         // Enqueue pending Release
         if (l1d.outerRelease.size <= pendingThreshold) {
+          total_release += nrAddingTrans
           for (_ <- 0 until nrAddingTrans) {
             val addr = getRandomElement(addr_pool, rand)
             val targetPerm = sample(releaseProbMap, rand)
@@ -70,6 +75,9 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
         testTop.l1d.update(dut.io)
         dut.clock.step(1)
       }
+
+      println(s"total acquire: $total_acquire")
+      println(s"total release: $total_release")
     }
   }
 }

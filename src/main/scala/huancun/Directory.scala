@@ -23,19 +23,9 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
   }
   when(resetIdx === 0.U) { resetFinish := true.B }
 
-  val writeFactor = 10
-  val writeCounter = RegInit(writeFactor.U)
 
-  when(io.tagWReq.valid && resetFinish) {
-    when(io.tagWReq.ready) {
-      writeCounter := writeFactor.U
-    }.otherwise({
-      writeCounter := writeCounter - 1.U
-    })
-  }
-  io.tagWReq.ready := writeCounter === 0.U
-
-  io.reads.foreach(_.ready := !io.tagWReq.fire() && resetFinish)
+  io.tagWReq.ready := true.B // let tag write block tag read
+  io.reads.foreach(_.ready := !io.tagWReq.valid && resetFinish)
 
   val tagArray = Array.fill(dirReadPorts) {
     Module(new SRAMTemplate(UInt(tagBits.W), cacheParams.sets, cacheParams.ways, singlePort = true))
