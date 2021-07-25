@@ -476,7 +476,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // Release MSHR
-  when(no_wait && s_execute && s_probeack && meta_valid && s_writebacktag) {
+  when(no_wait && s_execute && s_probeack && meta_valid && s_writebacktag && s_writerelease) {
     req_valid := false.B
     meta_valid := false.B
   }
