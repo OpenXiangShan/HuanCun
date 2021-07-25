@@ -70,10 +70,24 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   io.alloc.bits.off := off
   io.alloc.bits.bufIdx := insertIdx
 
+  when(c.fire()){
+    when(isRelease){
+      printf("release: addr:[%x]\n", c.bits.address)
+    }
+    when(isReleaseData){
+      printf("release data: addr:[%x] data[%x]\n", c.bits.address, c.bits.data)
+    }
+  }
+
+  val insertIdxReg = RegEnable(insertIdx, c.fire() && isReleaseData && first)
   when(c.fire() && isReleaseData) {
-    releaseBuf(insertIdx)(count) := c.bits.data
+    when(first){
+      releaseBuf(insertIdx)(count) := c.bits.data
+    }.otherwise({
+      releaseBuf(insertIdxReg)(count) := c.bits.data
+    })
     when(last){
-      bufValids(insertIdx) := true.B
+      bufValids(insertIdxReg) := true.B
     }
   }
   when(w_done && busy_r) { // release data write done
