@@ -3,7 +3,7 @@ package huancun.tlctest
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
-import freechips.rocketchip.tilelink.{TLCacheCork, TLFragmenter, TLRAM, TLXbar}
+import freechips.rocketchip.tilelink.{TLBuffer, TLCacheCork, TLFragmenter, TLRAM, TLXbar}
 import huancun._
 import tltest.{ScoreboardData, TLCTrans, TLMessagesBigInt}
 
@@ -35,10 +35,8 @@ class TestTop
   val xbar = TLXbar()
 
   val l2 = LazyModule(new HuanCun())
-  val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
+  val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 64))
   ram.node :=
-    TLXbar() :=*
-      TLFragmenter(32, 64) :=*
       TLCacheCork() :=*
       l2.node :=* xbar
 
