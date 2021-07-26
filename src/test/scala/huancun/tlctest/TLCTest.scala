@@ -40,9 +40,9 @@ class TestTop
       TLCacheCork() :=*
       l2.node :=* xbar
 
-  xbar := l1d.node
-  xbar := l1i.node
-  xbar := ptw.node
+  xbar := TLBuffer() := l1d.node
+  xbar := TLBuffer() := l1i.node
+  xbar := TLBuffer() := ptw.node
 
   lazy val module = new LazyModuleImp(this) {
     val l1dio = IO(Flipped(l1d.module.tl_master_io.cloneType))
