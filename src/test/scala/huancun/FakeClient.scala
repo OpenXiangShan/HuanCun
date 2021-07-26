@@ -5,15 +5,8 @@ import chisel3.util._
 import chiseltest._
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp, TransferSizes}
-import freechips.rocketchip.tilelink.{
-  TLBundle,
-  TLChannelBeatBytes,
-  TLClientNode,
-  TLMasterParameters,
-  TLMasterPortParameters,
-  TLPermissions
-}
-import tltest.{AddrState, ScoreboardData, TLCMasterAgent, TLCScalaB, TLCScalaD, TLCTrans}
+import freechips.rocketchip.tilelink.{TLBundle, TLChannelBeatBytes, TLClientNode, TLMasterParameters, TLMasterPortParameters, TLPermissions}
+import tltest.{AddrState, ScoreboardData, TLCMasterAgent, TLCScalaB, TLCScalaD, TLCTrans, TLULMasterAgent}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -220,6 +213,81 @@ class MasterAgent
       agent.fireB(b)
     }
     agent.tickB()
+    if (peekFire(io.a)) {
+      agent.fireA()
+    }
+    agent.step()
+  }
+}
+
+class MasterULAgent
+(
+  id: Int,
+  name: String,
+  probe: Boolean,
+  serialList: ArrayBuffer[(Int, TLCTrans)],
+  scoreboard: scala.collection.mutable.Map[BigInt, ScoreboardData]
+)(
+  implicit p: Parameters)
+  extends BaseFakeClient(name, 1, probe) {
+  val addrStateList = scala.collection.mutable.Map[BigInt, AddrState]()
+  lazy val agent = new TLULMasterAgent(
+    id,
+    name,
+    node.out.head._2.master.endSourceId,
+    addrStateList,
+    serialList,
+    scoreboard,
+    blockBytes,
+    beatBytes
+  )
+  lazy val module = new LazyModuleImp(this) {
+    val tl_master_io = IO(Flipped(new TLBundle(node.out.head._1.params)))
+    node.out.head._1 <> tl_master_io
+  }
+
+  def peekFire[T <: Data](port: DecoupledIO[T]): Boolean = {
+    port.valid.peek().litToBoolean && port.ready.peek().litToBoolean
+  }
+
+  def peekReady[T <: Data](port: DecoupledIO[T]): Boolean = port.ready.peek().litToBoolean
+
+  def peekBigInt(sig: UInt): BigInt = sig.peek().litValue()
+
+  def peekBoolean(sig: Bool): Boolean = sig.peek().litToBoolean
+
+  def update(io: TLBundle) = {
+    // d
+    io.d.ready.poke(true.B)
+    // a channel
+    agent.issueA()
+    val opt_a = agent.peekA()
+    if (opt_a.isDefined) {
+      val a = opt_a.get
+      io.a.valid.poke(true.B)
+      io.a.bits.opcode.poke(a.opcode.U)
+      io.a.bits.param.poke(a.param.U)
+      io.a.bits.size.poke(a.size.U)
+      io.a.bits.source.poke(a.source.U)
+      io.a.bits.address.poke(a.address.U)
+      io.a.bits.mask.poke(a.mask.U)
+      io.a.bits.data.poke(a.data.U)
+    } else {
+      io.a.valid.poke(false.B)
+    }
+    // d channel
+    if (peekFire(io.d)) {
+      val d = new TLCScalaD(
+        opcode = peekBigInt(io.d.bits.opcode),
+        param = peekBigInt(io.d.bits.param),
+        size = peekBigInt(io.d.bits.size),
+        source = peekBigInt(io.d.bits.source),
+        sink = peekBigInt(io.d.bits.sink),
+        denied = peekBoolean(io.d.bits.denied),
+        data = peekBigInt(io.d.bits.data)
+      )
+      agent.fireD(d)
+    }
     if (peekFire(io.a)) {
       agent.fireA()
     }
