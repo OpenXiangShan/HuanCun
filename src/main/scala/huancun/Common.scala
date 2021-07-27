@@ -140,6 +140,7 @@ class DSAddress(implicit p: Parameters) extends HuanCunBundle {
   val set = UInt(width = setBits.W)
   val beat = UInt(width = beatBits.W)
   val write = Bool()
+  val noop = Bool()
 }
 
 class DSData(implicit p: Parameters) extends HuanCunBundle {

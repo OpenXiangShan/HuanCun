@@ -80,7 +80,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     out.index := innerIndex
     // FillInterleaved: 0010 => 00000000 00000000 11111111 00000000
     out.bankSel := Mux(addr.valid, FillInterleaved(stackSize, stackSel), 0.U) // TODO: consider mask
-    out.bankEn := out.bankSel & FillInterleaved(stackSize, accessVec) // TODO: consider noop req
+    out.bankEn := Mux(addr.bits.noop, 0.U, out.bankSel & FillInterleaved(stackSize, accessVec))
     out.data := Cat(Seq.fill(nrStacks)(data.data)).asTypeOf(out.data.cloneType)
     out
   }

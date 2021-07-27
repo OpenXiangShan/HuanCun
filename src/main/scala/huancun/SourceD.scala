@@ -60,6 +60,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.bs_raddr.bits.set := s1_req.set
   io.bs_raddr.bits.beat := (s1_req.off >> log2Up(beatBytes)).asUInt() | s1_counter
   io.bs_raddr.bits.write := false.B
+  io.bs_raddr.bits.noop := false.B  // TODO: assign noop signal
 
   s1_r_done := s1_counter === s1_beats
 

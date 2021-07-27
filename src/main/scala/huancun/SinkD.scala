@@ -36,5 +36,6 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.bs_waddr.bits.set := io.set
   io.bs_waddr.bits.beat := Mux(io.d.valid, beat, RegEnable(beat + io.bs_waddr.ready.asUInt(), io.d.valid))
   io.bs_waddr.bits.write := true.B
+  io.bs_waddr.bits.noop := false.B  // TODO: assign noop signal
   io.bs_wdata.data := io.d.bits.data
 }

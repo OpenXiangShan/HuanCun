@@ -96,6 +96,7 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, io.set) // TODO: do we need io.set?
   io.bs_waddr.bits.beat := w_counter
   io.bs_waddr.bits.write := true.B
+  io.bs_waddr.bits.noop := false.B  // TODO: assign noop signal
   io.bs_wdata.data := Mux(req_w_valid, releaseBuf(bs_w_task.bufIdx)(w_counter), c.bits.data)
 
   io.resp.valid := c.valid && isResp && can_recv_resp
