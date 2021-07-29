@@ -289,7 +289,8 @@ class MasterULAgent
       agent.fireD(d)
     }
     if (peekFire(io.a)) {
-      agent.fireA()
+      // TODO: check whether to fire-Get or fire-Put
+      agent.fireAGet()
     }
     agent.step()
   }

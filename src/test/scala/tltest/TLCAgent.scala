@@ -1252,7 +1252,9 @@ class TLULMasterAgent(
     if (inD.opcode == AccessAckData) {
       if (d_cnt == 0) { // Start burst
         val getT = getMap(inD.source)
-        // snapData = insertVersionRead(getT.a.get.address, inD.param)
+        // if Get from L2, version = 0
+        // if Get from L3, version is carefully assigned
+        snapData = insertVersionRead(getT.a.get.address, inD.param)
         tmpD = inD.copy()
         d_cnt += 1
       }
@@ -1264,9 +1266,12 @@ class TLULMasterAgent(
           val getT = getMap(inD.source)
           getT.pairAccessAckData(tmpD)
           // insertMaskedReadSnap(getT.a.get.address, tmpD.data, snapData, getT.a.get.mask)
-          getMap.remove(inD.source)
-          outerGet -= getT
+          if (!tmpD.denied) {
+            // insertRead(getT.a.get.address, tmpD.data)
+            // TODO: verify correctness of data
+          }
           sourceAFreeIdQueue.enqueue(inD.source)
+          outerGet -= getT
         }
       }
       // TODO: do FireD
@@ -1276,8 +1281,7 @@ class TLULMasterAgent(
     }
   }
 
-  def fireA(): Unit = {
-    // TODO: identify whether opcode is Get or Put
+  def fireAGet(): Unit = {
     getQueue.fireHead()
   }
 
