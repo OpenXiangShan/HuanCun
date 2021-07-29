@@ -5,7 +5,6 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
-import huancun.utils.SourceIdConverter
 
 trait HasHuanCunParameters {
   val p: Parameters
