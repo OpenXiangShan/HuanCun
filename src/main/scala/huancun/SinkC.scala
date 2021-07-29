@@ -15,6 +15,7 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
     val task = Flipped(DecoupledIO(new SinkCReq))
     val bs_waddr = DecoupledIO(new DSAddress)
     val bs_wdata = Output(new DSData)
+    val sourceD_r_hazard = Flipped(ValidIO(new SourceDHazard))
   })
   /*
       Release/ReleaseData
@@ -45,7 +46,6 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   val busy_r = RegInit(false.B)
   val do_release = io.task.valid || busy_r
 
-  io.task.ready := !busy_r // TODO: flow here
   when(w_done) {
     busy_r := false.B
   }.elsewhen(io.task.fire()) {
@@ -73,11 +73,11 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   io.alloc.bits.bufIdx := insertIdx
 
   if (cacheParams.enableDebug) {
-    when(c.fire()){
-      when(isRelease){
+    when(c.fire()) {
+      when(isRelease) {
         printf("release: addr:[%x]\n", c.bits.address)
       }
-      when(isReleaseData){
+      when(isReleaseData) {
         printf("release data: addr:[%x] data[%x]\n", c.bits.address, c.bits.data)
       }
     }
@@ -98,12 +98,21 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
     bufValids(task_r.bufIdx) := false.B
   }
 
-  when(io.bs_waddr.fire()) { w_counter := w_counter + 1.U }
-  when(w_done) { w_counter := 0.U }
+  when(io.bs_waddr.fire()) {
+    w_counter := w_counter + 1.U
+  }
+  when(w_done) {
+    w_counter := 0.U
+  }
 
   val bs_w_task = Mux(busy_r, task_r, io.task.bits)
+  val task_w_safe = !(io.sourceD_r_hazard.valid &&
+    io.sourceD_r_hazard.bits.safe(io.task.bits.set, io.task.bits.way))
+
   val req_w_valid = io.task.fire() || busy_r // ReleaseData
   val resp_w_valid = isRespLatch && (!first || (c.valid && hasData)) // ProbeAckData
+
+  io.task.ready := !busy_r && task_w_safe // TODO: flow here
 
   io.bs_waddr.valid := req_w_valid || resp_w_valid
   io.bs_waddr.bits.way := Mux(req_w_valid, bs_w_task.way, io.way)

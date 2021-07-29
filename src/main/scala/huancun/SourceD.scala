@@ -26,6 +26,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     val bs_rdata = Input(new DSData)
     val bs_waddr = DecoupledIO(new DSAddress)
     val bs_wdata = Output(new DSData)
+    // data hazards
+    val sourceD_r_hazard = ValidIO(new SourceDHazard)
   })
 
   io.bs_waddr.valid := false.B
@@ -134,4 +136,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   d.bits.corrupt := false.B
 
   s3_ready := d.ready
+
+  io.sourceD_r_hazard.valid := s1_valid && s1_needData
+  io.sourceD_r_hazard.bits.set := s1_req.set
+  io.sourceD_r_hazard.bits.way := s1_req.way
 }
