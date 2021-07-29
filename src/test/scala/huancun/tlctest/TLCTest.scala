@@ -3,7 +3,7 @@ package huancun.tlctest
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
-import freechips.rocketchip.tilelink.{TLBuffer, TLCacheCork, TLFragmenter, TLRAM, TLXbar}
+import freechips.rocketchip.tilelink.{TLBuffer, TLCacheCork, TLDelayer, TLFragmenter, TLRAM, TLXbar}
 import huancun._
 import tltest.{ScoreboardData, TLCTrans, TLMessagesBigInt}
 
@@ -38,11 +38,12 @@ class TestTop
   val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 64))
   ram.node :=
       TLCacheCork() :=*
-      l2.node :=* xbar
+        TLDelayer(0.8) :=*
+        l2.node :=* xbar
 
-  xbar := TLBuffer() := l1d.node
-  xbar := TLBuffer() := l1i.node
-  xbar := TLBuffer() := ptw.node
+  xbar := TLDelayer(0.5) := TLBuffer() := l1d.node
+  xbar := TLDelayer(0.5) := TLBuffer() := l1i.node
+  xbar := TLDelayer(0.5) := TLBuffer() := ptw.node
 
   lazy val module = new LazyModuleImp(this) {
     val l1dio = IO(Flipped(l1d.module.tl_master_io.cloneType))
