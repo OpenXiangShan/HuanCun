@@ -35,96 +35,84 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.bs_wdata := DontCare
 
   val d = io.d
-  val s1_ready = Wire(Bool())
-  val s2_ready = Wire(Bool())
-  val s3_ready = Wire(Bool())
-
-  // stage0
-  // TODO: check this
-  val s0_needData = io.task.bits.fromA && (
-    io.task.bits.opcode === TLMessages.GrantData ||
-      io.task.bits.opcode === TLMessages.AccessAckData
-  )
+  val s1_valid = Wire(Bool())
+  val s2_valid, s2_ready = Wire(Bool())
+  val s3_valid, s3_ready = Wire(Bool())
 
   // stage1
-  val s1_req = RegEnable(io.task.bits, io.task.fire())
-  val s1_valid = RegInit(false.B)
-  val s1_counter = Reg(UInt(beatBits.W)) // how many beats have been sent
-  val s1_beats = Reg(UInt(beatBits.W)) // total beats need to be sent
-  val s1_r_done = Wire(Bool())
-  val s1_needData = Reg(Bool())
-  val s1_can_go = Wire(Bool())
+  val busy = RegInit(false.B)
+  val s1_block_r = RegInit(false.B)
+  val s1_req_reg = RegEnable(io.task.bits, io.task.fire())
+  val s1_req = Mux(busy, s1_req_reg, io.task.bits)
+  val s1_needData = s1_req.fromA && (
+    s1_req.opcode === TLMessages.GrantData ||
+      s1_req.opcode === TLMessages.AccessAckData
+  )
+  val s1_counter = RegInit(0.U(beatBits.W)) // how many beats have been sent
+  val s1_beats = Mux(s1_needData, ~0.U(beatBits.W), 0.U(beatBits.W)).asUInt() // total beats need to be sent
+  val s1_valid_r = (busy || io.task.valid) && s1_needData && !s1_block_r
+  val s1_last = s1_counter === s1_beats
 
-  s1_can_go := s1_valid && s2_ready && ((io.bs_raddr.ready && s1_needData) || !s1_needData)
-
-  io.bs_raddr.valid := s1_valid && s1_needData
+  io.bs_raddr.valid := s1_valid_r
   io.bs_raddr.bits.way := s1_req.way
   io.bs_raddr.bits.set := s1_req.set
-  io.bs_raddr.bits.beat := (s1_req.off >> log2Up(beatBytes)).asUInt() | s1_counter
+  io.bs_raddr.bits.beat := s1_counter // TODO: support unaligned address
   io.bs_raddr.bits.write := false.B
   io.bs_raddr.bits.noop := false.B
 
-  s1_r_done := s1_counter === s1_beats
-
-  when(io.bs_raddr.fire()) {
-    when(s1_r_done) {
-      when(s2_ready) { s1_valid := false.B }
-      s1_needData := false.B
-    }.otherwise({
-      s1_counter := s1_counter + 1.U
-    })
-  }
-
-  // S0 -> S1
   when(io.task.fire()) {
-    s1_valid := true.B
-    s1_counter := 0.U
-    s1_beats := Mux(s0_needData, UIntToOH1(io.task.bits.size, log2Up(blockBytes)) >> log2Up(beatBytes), 0.U)
-    s1_needData := s0_needData
-  }.otherwise {
-    when(!s1_needData) {
-      s1_valid := false.B
+    busy := true.B
+  }
+  when(io.bs_raddr.fire()) {
+    s1_block_r := true.B
+  }
+  when(s1_valid && s2_ready) {
+    s1_counter := s1_counter + 1.U
+    s1_block_r := false.B
+    when(s1_last) {
+      s1_counter := 0.U
+      busy := false.B
     }
   }
-
-  s1_ready := !s1_valid || (s1_can_go && s1_r_done)
-  io.task.ready := s1_ready
+  io.task.ready := !busy
+  s1_valid := (busy || io.task.valid) && (!s1_valid_r || io.bs_raddr.ready)
 
   // stage2
-  val s2_req = RegEnable(s1_req, s1_can_go)
-  val s2_valid = RegInit(false.B)
-  val s2_can_go = Wire(Bool())
+  val s2_latch = s1_valid && s2_ready
+  val s2_req = RegEnable(s1_req, s2_latch)
+  val s2_needData = RegEnable(s1_needData, s2_latch)
+  val s2_full = RegInit(false.B)
+  val s2_acquire = s2_req.opcode === AcquireBlock || s2_req.opcode === AcquirePerm
 
-  s2_ready := !s2_valid || s3_ready
-  s2_can_go := s2_valid && s3_ready
-  when(s1_can_go) {
-    s2_valid := true.B
-  }.elsewhen(s2_can_go) {
-    s2_valid := false.B
-  }
+  when(s2_valid && s3_ready) { s2_full := false.B }
+  when(s2_latch) { s2_full := true.B }
+
+  s2_valid := s2_full
+  s2_ready := !s2_full || s3_ready
 
   // stage3
-  val s3_req = RegEnable(s2_req, s2_can_go)
-  val s3_valid = RegInit(false.B)
-  val s3_valid_d = RegInit(false.B)
+  val s3_latch = s2_valid && s3_ready
+  val s3_full = RegInit(false.B)
+  val s3_needData = RegInit(false.B)
+  val s3_req = RegEnable(s2_req, s3_latch)
+  val s3_acquire = RegEnable(s2_acquire, s3_latch)
 
   val queue = Module(new Queue(new DSData, 3, flow = true))
   queue.io.enq.valid := RegNext(RegNext(io.bs_raddr.fire(), false.B), false.B)
   queue.io.enq.bits := io.bs_rdata
   assert(!queue.io.enq.valid || queue.io.enq.ready)
+  queue.io.deq.ready := d.ready && s3_needData && s3_valid
 
-  queue.io.deq.ready := d.ready
-
-  val s3_rdata = queue.io.deq.bits.data
-
-  when(s2_can_go) {
-    s3_valid := true.B
-  }.elsewhen(s3_valid && s3_ready) {
-    s3_valid := false.B
+  when(d.ready) {
+    s3_full := false.B
+    s3_needData := false.B
+  }
+  when(s3_latch) {
+    s3_full := true.B
+    s3_needData := s2_needData
   }
 
-  val s3_acquire = s3_req.opcode === AcquireBlock || s3_req.opcode === AcquirePerm
-
+  val s3_rdata = queue.io.deq.bits.data
   d.valid := s3_valid
   d.bits.opcode := s3_req.opcode
   d.bits.param := Mux(s3_req.fromA && s3_acquire, s3_req.param, 0.U)
@@ -136,8 +124,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   d.bits.corrupt := false.B
 
   s3_ready := d.ready
+  s3_valid := s3_full
 
-  io.sourceD_r_hazard.valid := s1_valid && s1_needData
+  io.sourceD_r_hazard.valid := !busy && s1_needData
   io.sourceD_r_hazard.bits.set := s1_req.set
   io.sourceD_r_hazard.bits.way := s1_req.way
 }
