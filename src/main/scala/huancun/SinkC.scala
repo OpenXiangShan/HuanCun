@@ -35,6 +35,8 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   val (first, last, done, count) = edgeIn.count(c)
   val hasData = edgeIn.hasData(c.bits)
 
+  val isRespLatch = Mux(c.valid, isResp, RegEnable(isResp, c.valid))
+
   // bankedstore w counter
   val w_counter = RegInit(0.U(beatBits.W))
   val w_done = (w_counter === ((blockBytes / beatBytes) - 1).U) && io.bs_waddr.ready
@@ -101,13 +103,14 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
 
   val bs_w_task = Mux(busy_r, task_r, io.task.bits)
   val req_w_valid = io.task.fire() || busy_r // ReleaseData
-  val resp_w_valid = c.valid && isProbeAckData && can_recv_resp // ProbeAckData
+  val resp_w_valid = isRespLatch && (!first || (c.valid && hasData)) // ProbeAckData
+
   io.bs_waddr.valid := req_w_valid || resp_w_valid
   io.bs_waddr.bits.way := Mux(req_w_valid, bs_w_task.way, io.way)
   io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, io.set) // TODO: do we need io.set?
   io.bs_waddr.bits.beat := w_counter
   io.bs_waddr.bits.write := true.B
-  io.bs_waddr.bits.noop := false.B  // TODO: assign noop signal
+  io.bs_waddr.bits.noop := Mux(req_w_valid, false.B, !c.valid)
   io.bs_wdata.data := Mux(req_w_valid, releaseBuf(bs_w_task.bufIdx)(w_counter), c.bits.data)
 
   io.resp.valid := c.valid && isResp && can_recv_resp
