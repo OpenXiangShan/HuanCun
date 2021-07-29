@@ -100,8 +100,8 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   when(w_done) { w_counter := 0.U }
 
   val bs_w_task = Mux(busy_r, task_r, io.task.bits)
-  val req_w_valid = io.task.fire() || busy_r
-  val resp_w_valid = c.valid && isProbeAckData && can_recv_req
+  val req_w_valid = io.task.fire() || busy_r // ReleaseData
+  val resp_w_valid = c.valid && isProbeAckData && can_recv_resp // ProbeAckData
   io.bs_waddr.valid := req_w_valid || resp_w_valid
   io.bs_waddr.bits.way := Mux(req_w_valid, bs_w_task.way, io.way)
   io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, io.set) // TODO: do we need io.set?
