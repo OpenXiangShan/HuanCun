@@ -21,17 +21,17 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   back_pressure := queue.io.count >= (queue_size - 2).U
 
   // Handle task
-  val task_latch = RegEnable(io.task.bits, !bs_busy && io.task.valid)
-  val task = Mux(!bs_busy, io.task.bits, task_latch)
-  when(io.task.valid && !back_pressure && io.task.bits.dirty) { bs_busy := true.B }
-  when(io.bs_raddr.fire()) { bs_busy := false.B }
-  io.task.ready := !bs_busy && !back_pressure
-
-  // Read Datastorage
   val beat = RegInit(0.U(beatBits.W))
   when(io.bs_raddr.fire()) {
     beat := beat + 1.U
   }
+  val task_latch = RegEnable(io.task.bits, !bs_busy && io.task.valid)
+  val task = Mux(!bs_busy, io.task.bits, task_latch)
+  when(io.task.valid && !back_pressure && io.task.bits.dirty) { bs_busy := true.B }
+  when(io.bs_raddr.fire() && beat === ~0.U(beatBits.W)) { bs_busy := false.B }
+  io.task.ready := !bs_busy && !back_pressure
+
+  // Read Datastorage
   val has_data = (io.task.valid && io.task.bits.dirty && !back_pressure) || bs_busy
   io.bs_raddr.valid := has_data
   io.bs_raddr.bits.way := task.way
