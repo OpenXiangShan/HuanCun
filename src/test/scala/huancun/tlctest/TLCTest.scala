@@ -40,12 +40,14 @@ class TestTop
   val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 64))
   ram.node :=
       TLCacheCork() :=*
+        TLBuffer() :=
         TLDelayer(delayFactor) :=*
+        TLBuffer() :=
         l2.node :=* xbar
 
-  xbar := TLDelayer(delayFactor) := TLBuffer() := l1d.node
-  xbar := TLDelayer(delayFactor) := TLBuffer() := l1i.node
-  xbar := TLDelayer(delayFactor) := TLBuffer() := ptw.node
+  xbar := TLBuffer() := TLDelayer(delayFactor) := TLBuffer() := l1d.node
+  xbar := TLBuffer() := TLDelayer(delayFactor) := TLBuffer() := l1i.node
+  xbar := TLBuffer() := TLDelayer(delayFactor) := TLBuffer() := ptw.node
 
   lazy val module = new LazyModuleImp(this) {
     val l1dio = IO(Flipped(l1d.module.tl_master_io.cloneType))
