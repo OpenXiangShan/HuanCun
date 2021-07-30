@@ -37,6 +37,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     val tasks = new MSHRTasks
     val dirResult = Flipped(ValidIO(new DirResult))
     val resps = Flipped(new MSHRResps)
+    val nestedwb = Input(new NestedWriteback)
   })
 
   val req = Reg(new MSHRRequest)
@@ -140,8 +141,17 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     new_meta.hit := meta.hit
   }
 
-  // TODO: update meta after a nested mshr completes
   assert(RegNext(!meta_valid || !req.fromC || meta.hit, true.B)) // Release should always hit
+
+  val change_meta = meta_valid && meta_reg.state =/= INVALID &&
+    (io.nestedwb.set === req.set && io.nestedwb.tag === req.tag)
+
+  when(change_meta) {
+    when(io.nestedwb.b_clr_dirty) { meta_reg.dirty := false.B }
+    when(io.nestedwb.c_set_dirty) { meta_reg.dirty := true.B }
+    when(io.nestedwb.b_toB) { meta_reg.state := BRANCH }
+    when(io.nestedwb.b_toN) { meta_reg.hit := false.B }
+  }
 
   // Set tasks to be scheduled and resps to wait for
   val s_acquire = RegInit(true.B) // source_a
@@ -244,14 +254,18 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       // need Acquire downwards
       when(!meta.hit || meta.state === BRANCH && req_needT) {
         s_acquire := false.B
+        s_grantack := false.B
+        s_writebackdir := false.B
         w_grantfirst := false.B
         w_grantlast := false.B
         w_grant := false.B
-        s_grantack := false.B
-        s_writebackdir := false.B
       }
       // need pprobe
-      when(meta.hit && (req_needT || meta.state === TRUNK) && (meta.clients & ~getClientBitOH(req.source)) =/= 0.U) {
+      when(
+        meta.hit && (req_needT || meta.state === TRUNK) && (meta.clients & ~getClientBitOH(req.source) & ~skipProbeN(
+          req.opcode
+        )) =/= 0.U
+      ) {
         s_pprobe := false.B
         w_pprobeackfirst := false.B
         w_pprobeacklast := false.B
@@ -362,7 +376,13 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   od.set := req.set
   od.tag := req.tag
   od.channel := Cat(req.fromC.asUInt, 0.U(1.W), req.fromA.asUInt)
-  od.opcode := Mux(req.opcode(0), Grant, GrantData) // TODO: consider other opcodes
+  def odOpGen(r: MSHRRequest) = {
+    val grantOp = Mux(r.param === BtoT && req_realBtoT, Grant, GrantData)
+    val opSeq = Seq(AccessAck, AccessAck, AccessAckData, AccessAckData, AccessAckData, HintAck, grantOp, Grant)
+    val opToA = VecInit(opSeq)(r.opcode)
+    Mux(r.fromA, opToA, ReleaseAck)
+  }
+  od.opcode := odOpGen(req)
   od.param := Mux(
     !req_acquire,
     req.param,
@@ -470,7 +490,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // Release MSHR
-  when(no_wait && s_execute && s_probeack && meta_valid && s_writebacktag) {
+  when(no_wait && s_execute && s_probeack && meta_valid && s_writebacktag && s_writerelease) {
     req_valid := false.B
     meta_valid := false.B
   }
@@ -487,5 +507,13 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.status.bits.tag := req.tag
   io.status.bits.reload := false.B // TODO
   io.status.bits.way := meta.way
+  io.status.bits.blockB := !meta_valid ||
+    ((!w_releaseack || !w_rprobeacklast || !w_pprobeacklast) && !w_grantfirst)
+  // B nest A
+  io.status.bits.nestB := meta_valid &&
+    w_releaseack && w_rprobeacklast && w_pprobeacklast && !w_grantfirst
 
+  io.status.bits.blockC := !meta_valid
+  // C nest B | C nest A
+  io.status.bits.nestC := meta_valid && (!w_rprobeackfirst || !w_pprobeackfirst || !w_grantfirst)
 }

@@ -102,6 +102,15 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val tag = UInt(tagBits.W)
   val way = UInt(wayBits.W)
   val reload = Bool()
+  val blockB, blockC = Bool()
+  val nestB, nestC = Bool()
+}
+
+class NestedWriteback(implicit p: Parameters) extends HuanCunBundle {
+  val set = UInt(setBits.W)
+  val tag = UInt(tagBits.W)
+  val b_toN, b_toB, b_clr_dirty = Bool()
+  val c_set_dirty = Bool()
 }
 
 class TagWrite(implicit p: Parameters) extends HuanCunBundle {
@@ -140,8 +149,18 @@ class DSAddress(implicit p: Parameters) extends HuanCunBundle {
   val set = UInt(width = setBits.W)
   val beat = UInt(width = beatBits.W)
   val write = Bool()
+  val noop = Bool()
 }
 
 class DSData(implicit p: Parameters) extends HuanCunBundle {
   val data = UInt((beatBytes * 8).W)
+}
+
+class SourceDHazard(implicit p: Parameters) extends HuanCunBundle {
+  val way = UInt(width = wayBits.W)
+  val set = UInt(width = setBits.W)
+
+  def safe(s: UInt, w: UInt): Bool = {
+    set === s && way === w
+  }
 }

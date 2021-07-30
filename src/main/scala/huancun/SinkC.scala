@@ -9,18 +9,19 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val c = Flipped(DecoupledIO(new TLBundleC(edgeIn.bundle)))
     val way = Input(UInt(wayBits.W))
-    val set = Input(UInt(setBits.W))
     val alloc = DecoupledIO(new MSHRRequest)
     val resp = ValidIO(new SinkCResp)
     val task = Flipped(DecoupledIO(new SinkCReq))
     val bs_waddr = DecoupledIO(new DSAddress)
     val bs_wdata = Output(new DSData)
+    val sourceD_r_hazard = Flipped(ValidIO(new SourceDHazard))
   })
   /*
       Release/ReleaseData
       ProbeAck/ProbeAckData
    */
-  val releaseBuf = Mem(bufBlocks, Vec(blockBytes / beatBytes, UInt(beatBits.W)))
+  val releaseBuf = Reg(Vec(bufBlocks, Vec(blockBytes / beatBytes, UInt((beatBytes * 8).W))))
+  val beatValids = RegInit(VecInit(Seq.fill(bufBlocks) { VecInit(Seq.fill(blockBytes / beatBytes)(false.B)) }))
   val bufValids = RegInit(VecInit(Seq.fill(bufBlocks)(false.B)))
   val bufFull = Cat(bufValids).andR()
   val insertIdx = PriorityEncoder(bufValids.map(b => !b))
@@ -35,15 +36,16 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   val (first, last, done, count) = edgeIn.count(c)
   val hasData = edgeIn.hasData(c.bits)
 
+  val isRespLatch = Mux(c.valid, isResp, RegEnable(isResp, c.valid))
+
   // bankedstore w counter
   val w_counter = RegInit(0.U(beatBits.W))
-  val w_done = (w_counter === ((blockBytes / beatBytes) - 1).U) && io.bs_waddr.ready
+  val w_done = (w_counter === ((blockBytes / beatBytes) - 1).U) && (io.bs_waddr.ready && !io.bs_waddr.bits.noop)
 
   val task_r = RegEnable(io.task.bits, io.task.fire())
   val busy_r = RegInit(false.B)
   val do_release = io.task.valid || busy_r
 
-  io.task.ready := !busy_r // TODO: flow here
   when(w_done) {
     busy_r := false.B
   }.elsewhen(io.task.fire()) {
@@ -70,25 +72,57 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   io.alloc.bits.off := off
   io.alloc.bits.bufIdx := insertIdx
 
+  if (cacheParams.enableDebug) {
+    when(c.fire()) {
+      when(isRelease) {
+        printf("release: addr:[%x]\n", c.bits.address)
+      }
+      when(isReleaseData) {
+        printf("release data: addr:[%x] data[%x]\n", c.bits.address, c.bits.data)
+      }
+    }
+  }
+
+  val insertIdxReg = RegEnable(insertIdx, c.fire() && isReleaseData && first)
   when(c.fire() && isReleaseData) {
-    releaseBuf(insertIdx)(count) := c.bits.data
-    bufValids(insertIdx) := true.B
+    when(first) {
+      releaseBuf(insertIdx)(count) := c.bits.data
+      beatValids(insertIdx)(count) := true.B
+    }.otherwise({
+      releaseBuf(insertIdxReg)(count) := c.bits.data
+      beatValids(insertIdxReg)(count) := true.B
+    })
+    when(last) {
+      bufValids(insertIdxReg) := true.B
+    }
   }
   when(w_done && busy_r) { // release data write done
     bufValids(task_r.bufIdx) := false.B
+    beatValids(task_r.bufIdx).foreach(_ := false.B)
   }
 
-  when(io.bs_waddr.fire()) { w_counter := w_counter + 1.U }
-  when(w_done) { w_counter := 0.U }
+  when(io.bs_waddr.fire() && !io.bs_waddr.bits.noop) {
+    w_counter := w_counter + 1.U
+  }
+  when(w_done) {
+    w_counter := 0.U
+  }
 
   val bs_w_task = Mux(busy_r, task_r, io.task.bits)
-  val req_w_valid = io.task.fire() || busy_r
-  val resp_w_valid = c.valid && isProbeAckData && can_recv_req
+  val task_w_safe = !(io.sourceD_r_hazard.valid &&
+    io.sourceD_r_hazard.bits.safe(io.task.bits.set, io.task.bits.way))
+
+  val req_w_valid = io.task.fire() || busy_r // ReleaseData
+  val resp_w_valid = isRespLatch && (!first || (c.valid && hasData)) // ProbeAckData
+
+  io.task.ready := !busy_r && task_w_safe // TODO: flow here
+
   io.bs_waddr.valid := req_w_valid || resp_w_valid
   io.bs_waddr.bits.way := Mux(req_w_valid, bs_w_task.way, io.way)
-  io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, io.set) // TODO: do we need io.set?
+  io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, set) // TODO: do we need io.set?
   io.bs_waddr.bits.beat := w_counter
   io.bs_waddr.bits.write := true.B
+  io.bs_waddr.bits.noop := Mux(req_w_valid, !beatValids(bs_w_task.bufIdx)(w_counter), !c.valid)
   io.bs_wdata.data := Mux(req_w_valid, releaseBuf(bs_w_task.bufIdx)(w_counter), c.bits.data)
 
   io.resp.valid := c.valid && isResp && can_recv_resp

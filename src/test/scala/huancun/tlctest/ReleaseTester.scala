@@ -16,10 +16,7 @@ class ReleaseTester extends TLCTest with DumpVCD {
         testTop.l1d.agent.addAcquire((i+1) * 0x2000, TLMessagesBigInt.NtoT)
       }
       while (testTop.l1d.agent.outerAcquire.nonEmpty) {
-        testTop.l1d.agent.issueA()
-        testTop.l1d.agent.issueC()
-        testTop.l1d.update(dut.io)
-        testTop.l1d.agent.step()
+        testTop.l1d.update(dut.l1dio)
         dut.clock.step(1)
       }
     }
