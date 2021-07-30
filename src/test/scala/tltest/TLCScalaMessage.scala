@@ -561,6 +561,16 @@ class ReleaseCallerTrans() extends ReleaseTrans with TLCCallerTrans {
     resetTimer()
   }
 
+  override def toString: String = {
+    if(c.nonEmpty){
+      val addr = c.get.address
+      val op = c.get.opcode
+      val param = c.get.param
+      val source = c.get.source
+      s"address: ${addr.toString(16)} op: $op param: $param source:$source "
+    } else ""
+  }
+
 }
 
 class ReleaseCalleeTrans() extends ReleaseTrans with TLCCalleeTrans {
