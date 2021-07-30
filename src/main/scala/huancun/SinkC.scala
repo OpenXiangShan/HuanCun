@@ -88,10 +88,11 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   when(c.fire() && isReleaseData) {
     when(first) {
       releaseBuf(insertIdx)(count) := c.bits.data
+      beatValids(insertIdx)(count) := true.B
     }.otherwise({
       releaseBuf(insertIdxReg)(count) := c.bits.data
+      beatValids(insertIdxReg)(count) := true.B
     })
-    beatValids(insertIdxReg)(count) := true.B
     when(last) {
       bufValids(insertIdxReg) := true.B
     }
