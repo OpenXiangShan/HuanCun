@@ -71,17 +71,41 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshrAlloc.io.status(i) := mshr.io.status
   }
 
+  val c_mshr = ms.last
+  val bc_mshr = ms.init.last
+  val abc_mshr = ms.init.init
+
+  val select_c = c_mshr.io.status.valid
+  val select_bc = bc_mshr.io.status.valid
+
+  val nestedWb = Wire(new NestedWriteback)
+  nestedWb.set := Mux(select_c, c_mshr.io.status.bits.set, bc_mshr.io.status.bits.set)
+  nestedWb.tag := Mux(select_c, c_mshr.io.status.bits.tag, bc_mshr.io.status.bits.tag)
+  nestedWb.b_toN := select_bc &&
+    bc_mshr.io.tasks.dir_write.valid &&
+    bc_mshr.io.tasks.dir_write.bits.data.state === MetaData.INVALID
+  nestedWb.b_toB := select_bc &&
+    bc_mshr.io.tasks.dir_write.valid &&
+    bc_mshr.io.tasks.dir_write.bits.data.state === MetaData.BRANCH
+  nestedWb.b_clr_dirty := select_bc && bc_mshr.io.tasks.dir_write.valid
+  nestedWb.c_set_dirty := select_c &&
+    c_mshr.io.tasks.dir_write.valid &&
+    c_mshr.io.tasks.dir_write.bits.data.dirty
+
+  abc_mshr.foreach(_.io.nestedwb := nestedWb)
+
+  bc_mshr.io.nestedwb := 0.U.asTypeOf(nestedWb)
+  bc_mshr.io.nestedwb.set := c_mshr.io.status.bits.set
+  bc_mshr.io.nestedwb.tag := c_mshr.io.status.bits.tag
+  bc_mshr.io.nestedwb.c_set_dirty := nestedWb.c_set_dirty
+
+  c_mshr.io.nestedwb := 0.U.asTypeOf(nestedWb)
+
   val directory = Module(new Directory)
   directory.io.reads <> mshrAlloc.io.dirReads
 
   // Send tasks
-  val mshrGroups = ms.grouped((ms.size + dirWritePorts - 1) / dirWritePorts)
-  for ((grp, i) <- mshrGroups.zipWithIndex) {
-    val dirWriteArb = Module(new RRArbiter(new DirWrite, grp.size))
-    dirWriteArb.io.in <> VecInit(grp.map(_.io.tasks.dir_write))
-    directory.io.dirWReqs(i) <> dirWriteArb.io.out
-  }
-
+  directory.io.dirWReqs <> ms.map(_.io.tasks.dir_write)
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
@@ -92,13 +116,19 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(directory.io.tagWReq, ms.map(_.io.tasks.tag_write), Some("tagWrite"))
 
   def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
-    val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), in.size))
+    val abc = in.init.init
+    val bc = in.init.last
+    val c = in.last
+    val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), abc.size))
     if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
-    for ((arb, req) <- arbiter.io.in.zip(in)) {
+    for ((arb, req) <- arbiter.io.in.zip(abc)) {
       arb <> req
     }
-    out <> arbiter.io.out
-    arbiter
+    out.valid := c.valid || bc.valid || arbiter.io.out.valid
+    out.bits := Mux(c.valid, c.bits, Mux(bc.valid, bc.bits, arbiter.io.out.bits))
+    c.ready := out.ready
+    bc.ready := out.ready && !c.valid
+    arbiter.io.out.ready := out.ready && !c.valid && !bc.valid
   }
 
   // Resps to MSHRs

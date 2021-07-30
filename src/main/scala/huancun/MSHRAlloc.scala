@@ -32,8 +32,6 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   // Allocate one MSHR per cycle
   assert(PopCount(io.alloc.map(_.valid)) <= 1.U)
-  // Only use the first dir read port
-  assert(io.dirReads.takeRight(dirReadPorts - 1).map(_.valid).reduce(_ || _) === false.B)
 
   /* case1: selected request matches set of pending MSHR => stall
    * case2: selected request needs new MSHR but no room left => stall
@@ -48,19 +46,44 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   /* Whether selected request can be accepted */
 
-  def set_conflict(req: MSHRRequest): Bool = {
-    Cat(io.status.map(s => s.valid && s.bits.set === req.set)).orR()
+  def get_match_vec(req: MSHRRequest): Vec[Bool] = {
+    VecInit(io.status.map(s => s.valid && s.bits.set === req.set))
   }
 
-  val conflict_c = set_conflict(io.c_req.bits)
-  val conflict_b = set_conflict(io.b_req.bits)
-  val conflict_a = set_conflict(io.a_req.bits)
+  val c_match_vec = get_match_vec(io.c_req.bits)
+  val b_match_vec = get_match_vec(io.b_req.bits)
+  val a_match_vec = get_match_vec(io.a_req.bits)
+
+  val nestC_vec = VecInit(
+    io.status.map(s => s.valid && s.bits.nestC).init :+ false.B
+  )
+  val nestB_vec = VecInit(
+    io.status.map(s => s.valid && s.bits.nestB).init.init ++ Seq(false.B, false.B)
+  )
+
+  val conflict_c = c_match_vec.asUInt().orR()
+  val conflict_b = b_match_vec.asUInt().orR()
+  val conflict_a = a_match_vec.asUInt().orR()
+
+  val may_nestC = (c_match_vec.asUInt() & nestC_vec.asUInt()).orR()
+  val may_nestB = (b_match_vec.asUInt() & nestB_vec.asUInt()).orR()
+
+  val abc_mshr_alloc = io.alloc.init.init
+  val bc_mshr_alloc = io.alloc.init.last
+  val c_mshr_alloc = io.alloc.last
+
+  val abc_mshr_status = io.status.init.init
+  val bc_mshr_status = io.status.init.last
+  val c_mshr_status = io.status.last
+
+  val nestC = may_nestC && !c_mshr_status.valid
+  val nestB = may_nestB && !bc_mshr_status.valid && !c_mshr_status.valid
 
   val dirRead = io.dirReads.head
-  val mshrFree = Cat(io.status.take(mshrs).map(!_.valid)).orR()
+  val mshrFree = Cat(abc_mshr_status.map(s => !s.valid)).orR()
 
-  val can_accept_c = mshrFree && !conflict_c
-  val can_accept_b = mshrFree && !conflict_b && !io.c_req.valid
+  val can_accept_c = (mshrFree && !conflict_c) || nestC
+  val can_accept_b = ((mshrFree && !conflict_b) || nestB) && !io.c_req.valid
   val can_accept_a = mshrFree && !conflict_a && !io.c_req.valid && !io.b_req.valid
 
   val accept_c = io.c_req.valid && can_accept_c
@@ -74,23 +97,24 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   val recv_req = io.c_req.fire() || io.b_req.fire() || io.a_req.fire()
   val mshrSelector = Module(new MSHRSelector())
-  mshrSelector.io.idle := io.status.take(mshrs).map(!_.valid)
+  mshrSelector.io.idle := abc_mshr_status.map(s => !s.valid)
   val selectedMSHROH = mshrSelector.io.out.bits
-  for ((mshr, i) <- io.alloc.take(mshrs).zipWithIndex) {
+  for ((mshr, i) <- abc_mshr_alloc.zipWithIndex) {
     mshr.valid := recv_req && selectedMSHROH(i)
     mshr.bits := request.bits
   }
 
+  bc_mshr_alloc.valid := nestB && !io.c_req.valid
+  bc_mshr_alloc.bits := request.bits
+  c_mshr_alloc.valid := nestC
+  c_mshr_alloc.bits := request.bits
+
   dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR()
   dirRead.bits.tag := request.bits.tag
   dirRead.bits.set := request.bits.set
-  dirRead.bits.idOH := selectedMSHROH
+  dirRead.bits.idOH := Cat(nestC, nestB, selectedMSHROH)
 
-  io.alloc.drop(mshrs).map { a =>
-    a.valid := false.B
-    a.bits <> DontCare
-  }
-  io.dirReads.drop(1).map { d =>
+  io.dirReads.drop(1).foreach { d =>
     d.valid := false.B
     d.bits <> DontCare
   }

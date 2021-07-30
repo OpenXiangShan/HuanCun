@@ -37,6 +37,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     val tasks = new MSHRTasks
     val dirResult = Flipped(ValidIO(new DirResult))
     val resps = Flipped(new MSHRResps)
+    val nestedwb = Input(new NestedWriteback)
   })
 
   val req = Reg(new MSHRRequest)
@@ -140,8 +141,17 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     new_meta.hit := meta.hit
   }
 
-  // TODO: update meta after a nested mshr completes
   assert(RegNext(!meta_valid || !req.fromC || meta.hit, true.B)) // Release should always hit
+
+  val change_meta = meta_valid && meta_reg.state =/= INVALID &&
+    (io.nestedwb.set === req.set && io.nestedwb.tag === req.tag)
+
+  when(change_meta) {
+    when(io.nestedwb.b_clr_dirty) { meta_reg.dirty := false.B }
+    when(io.nestedwb.c_set_dirty) { meta_reg.dirty := true.B }
+    when(io.nestedwb.b_toB) { meta_reg.state := BRANCH }
+    when(io.nestedwb.b_toN) { meta_reg.hit := false.B }
+  }
 
   // Set tasks to be scheduled and resps to wait for
   val s_acquire = RegInit(true.B) // source_a
@@ -497,5 +507,13 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.status.bits.tag := req.tag
   io.status.bits.reload := false.B // TODO
   io.status.bits.way := meta.way
+  io.status.bits.blockB := !meta_valid ||
+    ((!w_releaseack || !w_rprobeacklast || !w_pprobeacklast) && !w_grantfirst)
+  // B nest A
+  io.status.bits.nestB := meta_valid &&
+    w_releaseack && w_rprobeacklast && w_pprobeacklast && !w_grantfirst
 
+  io.status.bits.blockC := !meta_valid
+  // C nest B | C nest A
+  io.status.bits.nestC := meta_valid && (!w_rprobeackfirst || !w_pprobeackfirst || !w_grantfirst)
 }

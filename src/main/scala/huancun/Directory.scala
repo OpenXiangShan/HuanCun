@@ -9,7 +9,7 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val reads = Vec(dirReadPorts, Flipped(DecoupledIO(new DirRead)))
     val results = Vec(dirReadPorts, ValidIO(new DirResult))
-    val dirWReqs = Vec(dirWritePorts, Flipped(DecoupledIO(new DirWrite)))
+    val dirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new DirWrite)))
     val tagWReq = Flipped(DecoupledIO(new TagWrite))
   })
 
