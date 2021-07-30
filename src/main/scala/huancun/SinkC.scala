@@ -9,7 +9,6 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val c = Flipped(DecoupledIO(new TLBundleC(edgeIn.bundle)))
     val way = Input(UInt(wayBits.W))
-    val set = Input(UInt(setBits.W))
     val alloc = DecoupledIO(new MSHRRequest)
     val resp = ValidIO(new SinkCResp)
     val task = Flipped(DecoupledIO(new SinkCReq))
@@ -120,7 +119,7 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
 
   io.bs_waddr.valid := req_w_valid || resp_w_valid
   io.bs_waddr.bits.way := Mux(req_w_valid, bs_w_task.way, io.way)
-  io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, io.set) // TODO: do we need io.set?
+  io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, set) // TODO: do we need io.set?
   io.bs_waddr.bits.beat := w_counter
   io.bs_waddr.bits.write := true.B
   io.bs_waddr.bits.noop := Mux(req_w_valid, !beatValids(bs_w_task.bufIdx)(w_counter), !c.valid)
