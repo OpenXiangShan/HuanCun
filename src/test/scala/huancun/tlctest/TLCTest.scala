@@ -15,6 +15,8 @@ class TestTop
  scoreboard: mutable.Map[BigInt, ScoreboardData]
 )(implicit p: Parameters) extends LazyModule {
 
+  val delayFactor = 0
+
   val l1d = LazyModule(new MasterAgent(
     id = 0,
     name = "l1d",
@@ -38,12 +40,12 @@ class TestTop
   val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 64))
   ram.node :=
       TLCacheCork() :=*
-        TLDelayer(0.8) :=*
+        TLDelayer(delayFactor) :=*
         l2.node :=* xbar
 
-  xbar := TLDelayer(0.5) := TLBuffer() := l1d.node
-  xbar := TLDelayer(0.5) := TLBuffer() := l1i.node
-  xbar := TLDelayer(0.5) := TLBuffer() := ptw.node
+  xbar := TLDelayer(delayFactor) := TLBuffer() := l1d.node
+  xbar := TLDelayer(delayFactor) := TLBuffer() := l1i.node
+  xbar := TLDelayer(delayFactor) := TLBuffer() := ptw.node
 
   lazy val module = new LazyModuleImp(this) {
     val l1dio = IO(Flipped(l1d.module.tl_master_io.cloneType))
