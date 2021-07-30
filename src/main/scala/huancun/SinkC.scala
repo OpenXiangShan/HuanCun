@@ -22,6 +22,7 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
       ProbeAck/ProbeAckData
    */
   val releaseBuf = Reg(Vec(bufBlocks, Vec(blockBytes / beatBytes, UInt((beatBytes * 8).W))))
+  val beatValids = RegInit(VecInit(Seq.fill(bufBlocks) { VecInit(Seq.fill(blockBytes / beatBytes)(false.B)) }))
   val bufValids = RegInit(VecInit(Seq.fill(bufBlocks)(false.B)))
   val bufFull = Cat(bufValids).andR()
   val insertIdx = PriorityEncoder(bufValids.map(b => !b))
@@ -40,7 +41,7 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
 
   // bankedstore w counter
   val w_counter = RegInit(0.U(beatBits.W))
-  val w_done = (w_counter === ((blockBytes / beatBytes) - 1).U) && io.bs_waddr.ready
+  val w_done = (w_counter === ((blockBytes / beatBytes) - 1).U) && (io.bs_waddr.ready && !io.bs_waddr.bits.noop)
 
   val task_r = RegEnable(io.task.bits, io.task.fire())
   val busy_r = RegInit(false.B)
@@ -90,15 +91,17 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
     }.otherwise({
       releaseBuf(insertIdxReg)(count) := c.bits.data
     })
+    beatValids(insertIdxReg)(count) := true.B
     when(last) {
       bufValids(insertIdxReg) := true.B
     }
   }
   when(w_done && busy_r) { // release data write done
     bufValids(task_r.bufIdx) := false.B
+    beatValids(task_r.bufIdx).foreach(_ := false.B)
   }
 
-  when(io.bs_waddr.fire()) {
+  when(io.bs_waddr.fire() && !io.bs_waddr.bits.noop) {
     w_counter := w_counter + 1.U
   }
   when(w_done) {
@@ -119,7 +122,7 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, io.set) // TODO: do we need io.set?
   io.bs_waddr.bits.beat := w_counter
   io.bs_waddr.bits.write := true.B
-  io.bs_waddr.bits.noop := Mux(req_w_valid, false.B, !c.valid)
+  io.bs_waddr.bits.noop := Mux(req_w_valid, !beatValids(bs_w_task.bufIdx)(w_counter), !c.valid)
   io.bs_wdata.data := Mux(req_w_valid, releaseBuf(bs_w_task.bufIdx)(w_counter), c.bits.data)
 
   io.resp.valid := c.valid && isResp && can_recv_resp
