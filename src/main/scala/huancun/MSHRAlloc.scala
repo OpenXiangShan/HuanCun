@@ -95,24 +95,36 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   io.b_req.ready := dirRead.ready && can_accept_b
   io.a_req.ready := dirRead.ready && can_accept_a
 
-  val recv_req = io.c_req.fire() || io.b_req.fire() || io.a_req.fire()
   val mshrSelector = Module(new MSHRSelector())
   mshrSelector.io.idle := abc_mshr_status.map(s => !s.valid)
   val selectedMSHROH = mshrSelector.io.out.bits
   for ((mshr, i) <- abc_mshr_alloc.zipWithIndex) {
-    mshr.valid := recv_req && selectedMSHROH(i)
+    mshr.valid := (
+      mshrFree && dirRead.ready && (
+        io.c_req.valid && !conflict_c ||
+        io.b_req.valid && !conflict_b && !io.c_req.valid ||
+        io.a_req.valid && !conflict_a && !io.b_req.valid && !io.c_req.valid
+      )
+    ) && selectedMSHROH(i)
     mshr.bits := request.bits
   }
 
-  bc_mshr_alloc.valid := nestB && !io.c_req.valid
+  val nestB_valid = io.b_req.valid && nestB && !io.c_req.valid
+  val nestC_valid = io.c_req.valid && nestC
+
+  bc_mshr_alloc.valid := nestB_valid && dirRead.ready
   bc_mshr_alloc.bits := request.bits
-  c_mshr_alloc.valid := nestC
+  c_mshr_alloc.valid := nestC_valid && dirRead.ready
   c_mshr_alloc.bits := request.bits
 
-  dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR()
+  dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR() && dirRead.ready
   dirRead.bits.tag := request.bits.tag
   dirRead.bits.set := request.bits.set
-  dirRead.bits.idOH := Cat(nestC, nestB, selectedMSHROH)
+  dirRead.bits.idOH := Cat(
+    nestC_valid,
+    nestB_valid,
+    Mux(nestC_valid || nestB_valid, 0.U(mshrs.W), selectedMSHROH)
+  )
 
   io.dirReads.drop(1).foreach { d =>
     d.valid := false.B
