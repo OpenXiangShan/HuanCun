@@ -18,7 +18,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val bs_busy = RegInit(false.B)
   val back_pressure = RegInit(false.B)
   val queue = Module(new Queue(chiselTypeOf(io.c.bits), entries = queue_size, flow = queue_flow))
-  back_pressure := queue.io.count >= (queue_size - 2).U
+  back_pressure := queue.io.count >= (queue_size - 4).U
 
   // Handle task
   val beat = RegInit(0.U(beatBits.W))
