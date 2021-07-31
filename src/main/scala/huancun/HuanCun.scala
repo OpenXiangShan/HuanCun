@@ -79,7 +79,7 @@ trait HasHuanCunParameters {
   }
 
   def startBeat(offset: UInt): UInt = {
-    (offset >> beatBytes).asUInt()
+    (offset >> log2Up(beatBytes)).asUInt()
   }
 
   def totalBeats(size: UInt): UInt = {
