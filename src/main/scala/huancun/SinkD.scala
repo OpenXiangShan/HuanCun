@@ -16,6 +16,8 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val sourceD_r_hazard = Flipped(ValidIO(new SourceDHazard))
   })
 
+  assert(!io.d.valid || io.d.bits.size === log2Up(blockBytes).U, "SinkD must receive aligned message")
+
   val (first, last, _, beat) = edge.count(io.d)
   val uncache = io.d.bits.opcode === AccessAckData
   val cache = !uncache

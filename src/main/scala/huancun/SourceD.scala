@@ -49,14 +49,15 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
       s1_req.opcode === TLMessages.AccessAckData
   )
   val s1_counter = RegInit(0.U(beatBits.W)) // how many beats have been sent
-  val s1_beats = Mux(s1_needData, ~0.U(beatBits.W), 0.U(beatBits.W)).asUInt() // total beats need to be sent
+  val s1_total_beats = Mux(s1_needData, totalBeats(s1_req.size), 0.U(beatBits.W))
+  val s1_beat = startBeat(s1_req.off) | s1_counter
   val s1_valid_r = (busy || io.task.valid) && s1_needData && !s1_block_r
-  val s1_last = s1_counter === s1_beats
+  val s1_last = s1_beat === s1_total_beats
 
   io.bs_raddr.valid := s1_valid_r
   io.bs_raddr.bits.way := s1_req.way
   io.bs_raddr.bits.set := s1_req.set
-  io.bs_raddr.bits.beat := s1_counter // TODO: support unaligned address
+  io.bs_raddr.bits.beat := s1_beat // TODO: support unaligned address
   io.bs_raddr.bits.write := false.B
   io.bs_raddr.bits.noop := false.B
 

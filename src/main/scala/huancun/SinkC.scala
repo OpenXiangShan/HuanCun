@@ -61,6 +61,8 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
 
   val (tag, set, off) = parseAddress(c.bits.address)
 
+  assert(!c.valid || (c.bits.size === log2Up(blockBytes).U && off === 0.U), "SinkC must receive aligned message!")
+
   io.alloc.valid := c.valid && can_recv_req && isReq && first
   io.alloc.bits.channel := "b100".U
   io.alloc.bits.opcode := c.bits.opcode

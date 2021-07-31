@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
+import freechips.rocketchip.util.UIntToOH1
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -76,6 +77,15 @@ trait HasHuanCunParameters {
     val tag = set >> setBits
     (tag(tagBits - 1, 0), set(setBits - 1, 0), offset(offsetBits - 1, 0))
   }
+
+  def startBeat(offset: UInt): UInt = {
+    (offset >> beatBytes).asUInt()
+  }
+
+  def totalBeats(size: UInt): UInt = {
+    (UIntToOH1(size, log2Up(blockBytes)) >> log2Ceil(beatBytes)).asUInt()
+  }
+
 }
 
 trait DontCareInnerLogic { this: Module =>

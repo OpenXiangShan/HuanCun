@@ -151,8 +151,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // Provide MSHR info for sinkC, sinkD
-  sinkC.io.way := Mux(bc_mshr.io.status.valid &&
-    bc_mshr.io.status.bits.set === sinkC.io.resp.bits.set,
+  sinkC.io.way := Mux(
+    bc_mshr.io.status.valid &&
+      bc_mshr.io.status.bits.set === sinkC.io.resp.bits.set,
     bc_mshr.io.status.bits.way,
     Mux1H(
       abc_mshr.map(m => m.io.status.valid && m.io.status.bits.set === sinkC.io.resp.bits.set),
