@@ -262,9 +262,13 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       }
       // need pprobe
       when(
-        meta.hit && (req_needT || meta.state === TRUNK) && (meta.clients & ~getClientBitOH(req.source) & ~skipProbeN(
-          req.opcode
-        )) =/= 0.U
+        meta.hit && (req_needT || meta.state === TRUNK) &&
+          (
+            meta.clients & (~Mux(skipProbeN(req.opcode),
+              getClientBitOH(req.source),
+              0.U
+            )).asUInt()
+            ).orR()
       ) {
         s_pprobe := false.B
         w_pprobeackfirst := false.B
