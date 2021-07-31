@@ -336,7 +336,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   oa.tag := req.tag
   oa.set := req.set
   oa.opcode := TLMessages.AcquireBlock // TODO: change this
-  oa.param := Mux(req_needT, Mux(meta.state === BRANCH, BtoT, NtoT), NtoB)
+  oa.param := Mux(req_needT, Mux(meta.hit, BtoT, NtoT), NtoB)
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U
 
