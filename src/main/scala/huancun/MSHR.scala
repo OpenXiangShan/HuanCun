@@ -439,7 +439,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   when(io.tasks.source_e.fire()) {
     s_grantack := true.B
   }
-  when(io.tasks.dir_write.fire()) {
+  when(no_wait && !s_writebackdir && io.tasks.dir_write.ready) {
     s_writebackdir := true.B
   }
   when(io.tasks.tag_write.fire()) {
