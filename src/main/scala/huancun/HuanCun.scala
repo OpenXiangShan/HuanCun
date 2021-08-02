@@ -14,6 +14,7 @@ trait HasHuanCunParameters {
   val enablePrefetch = true
   val prefetchType = "bop"
   val bopParams = p(BOPParamsKey)
+  val hasPrefetchBit = enablePrefetch && prefetchType == "bop"
 
   val blockBytes = cacheParams.blockBytes
   val beatBytes = cacheParams.channelBytes.d.get

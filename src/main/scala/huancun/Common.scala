@@ -123,6 +123,7 @@ class DirectoryEntry(implicit p: Parameters) extends HuanCunBundle {
   val dirty = Bool()
   val state = UInt(stateBits.W)
   val clients = UInt(clientBits.W)
+  val prefetch = if (hasPrefetchBit) Bool() else UInt(0.W) // whether the block is prefetched
 }
 
 class DirWrite(implicit p: Parameters) extends HuanCunBundle {

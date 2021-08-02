@@ -130,6 +130,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   new_dir.dirty := new_meta.dirty
   new_dir.state := new_meta.state
   new_dir.clients := new_meta.clients
+  new_dir.prefetch := false.B
 
   val sink = Reg(UInt(edgeOut.bundle.sinkBits.W))
 
