@@ -144,7 +144,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   assert(RegNext(!meta_valid || !req.fromC || meta.hit, true.B)) // Release should always hit
 
   val change_meta = meta_valid && meta_reg.state =/= INVALID &&
-    (io.nestedwb.set === req.set && io.nestedwb.tag === req.tag)
+    (io.nestedwb.set === req.set && io.nestedwb.tag === meta.tag)
 
   when(change_meta) {
     when(io.nestedwb.b_clr_dirty) { meta_reg.dirty := false.B }
@@ -494,7 +494,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // Release MSHR
-  when(no_wait && s_execute && s_probeack && meta_valid && s_writebacktag && s_writerelease) {
+  when(no_wait && s_execute && s_probeack && meta_valid && s_writebacktag && s_writebackdir && s_writerelease) { // TODO: remove s_writebackdir to improve perf
     req_valid := false.B
     meta_valid := false.B
   }
