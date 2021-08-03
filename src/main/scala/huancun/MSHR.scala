@@ -273,7 +273,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       }
       // need pprobe
       when(
-        meta.hit && (req_needT || meta.state === TRUNK) &&
+        meta.hit && (req_needT || meta.state === TRUNK) && req.opcode =/= Hint &&
           (
             meta.clients & (~Mux(skipProbeN(req.opcode),
               getClientBitOH(req.source),
@@ -306,7 +306,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       }
       // trigger a prefetch when req is from DCache, and miss / prefetched hit in L2
       if (enablePrefetch) {
-        when (req.opcode =/= Hint && getClientBitOH(req.source).andR && (!meta.hit || meta.prefetch.getOrElse(false.B))) {
+        when (req.opcode =/= Hint && getClientBitOH(req.source).orR && (!meta.hit || meta.prefetch.getOrElse(false.B))) {
           s_triggerprefetch.map(_ := false.B)
         }
         when (req.opcode === Hint) {
@@ -329,6 +329,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
    *                   /     |     \
    *                  /      |      \
    *      s_grantack(E) s_execute(D) s_writeput
+   *                   or s_prefetchack
    *
    * The edges between s_* state regs from top to bottom indicate the scheduling priority.
    * For example, s_release > s_acquire and s_pprobe > s_acquire mean that before
@@ -349,7 +350,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.sink_a.valid := !s_writeput && w_grant && w_pprobeack
   io.tasks.sink_c.valid := !s_writerelease // && w_grant && w_pprobeack
   io.tasks.prefetch_train.map(_.valid := !s_triggerprefetch.getOrElse(true.B))
-  io.tasks.prefetch_resp.map(_.valid := !s_prefetchack.getOrElse(true.B))
+  io.tasks.prefetch_resp.map(_.valid := !s_prefetchack.getOrElse(true.B) && w_grantfirst)
 
   val oa = io.tasks.source_a.bits
   val ob = io.tasks.source_b.bits
@@ -451,7 +452,11 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       train.bits.needT := req_needT
   }
 
-  io.tasks.prefetch_resp.map(_.bits.id := req.source)
+  io.tasks.prefetch_resp.foreach {
+    case resp =>
+      resp.bits.tag := req.tag
+      resp.bits.set := req.set
+  }
 
   dontTouch(io.tasks)
   when(io.tasks.source_a.fire()) {

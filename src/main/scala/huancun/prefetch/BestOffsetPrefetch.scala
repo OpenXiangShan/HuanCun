@@ -9,11 +9,11 @@ import freechips.rocketchip.tilelink._
 case object BOPParamsKey extends Field[BOPParameters]
 
 case class BOPParameters (
-  rrTableEntries: Int,
-  rrTagBits: Int,
-  scoreBits: Int,
-  roundMax: Int,
-  badScore: Int,
+  rrTableEntries: Int  = 256,
+  rrTagBits: Int       = 12,
+  scoreBits: Int       = 5,
+  roundMax: Int        = 50,
+  badScore: Int        = 1,
   offsetList: Seq[Int] = Seq(
       1,   2,   3,   4,   5,   6,   8,   9,  10,  12,
      15,  16/*,  18,  20,  24,  25,  27,  30,  32,  36,
@@ -22,7 +22,7 @@ case class BOPParameters (
     150, 160, 162, 180, 192, 200, 216, 225, 240, 243,
     250, 256*/
   ),
-  inflightEntries: Int // max num of inflight prefetch reqs
+  inflightEntries: Int = 4 // max num of inflight prefetch reqs
 )
 
 class ScoreTableEntry(implicit p: Parameters) extends PrefetchBundle {

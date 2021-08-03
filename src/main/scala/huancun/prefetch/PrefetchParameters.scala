@@ -32,11 +32,13 @@ class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
   val needT = Bool()
-  val id = UInt(sourceIdBits.W)
+  // val id = UInt(sourceIdBits.W)
 }
 
 class PrefetchResp(implicit p: Parameters) extends PrefetchBundle {
-  val id = UInt(sourceIdBits.W)
+  // val id = UInt(sourceIdBits.W)
+  val tag = UInt(tagBits.W)
+  val set = UInt(setBits.W)
 }
 
 class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
