@@ -97,7 +97,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     // Acquire / Intent / Put / Get / Atomics
     new_meta.dirty := meta.hit && meta.dirty || !req.opcode(2) // Put / Atomics
     new_meta.state := Mux(
-      req_needT,
+      req_needT || req_promoteT,
       Mux(
         req_acquire,
         TRUNK, // Acquire (NtoT/BtoT)
