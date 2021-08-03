@@ -97,7 +97,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     // Acquire / Intent / Put / Get / Atomics
     new_meta.dirty := meta.hit && meta.dirty || !req.opcode(2) // Put / Atomics
     new_meta.state := Mux(
-      req_needT || req_promoteT,
+      req_needT,
       Mux(
         req_acquire,
         TRUNK, // Acquire (NtoT/BtoT)
@@ -388,11 +388,11 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     Mux(r.fromA, opToA, ReleaseAck)
   }
   od.opcode := odOpGen(req)
-  od.param := Mux(
-    !req_acquire,
-    req.param,
-    MuxLookup(req.param, req.param, Seq(NtoB -> Mux(req_promoteT, toT, toB), BtoT -> toT, NtoT -> toT))
-  )
+  od.param :=
+    Mux(!req_acquire, req.param,
+      MuxLookup(req.param, req.param, Seq(NtoB -> Mux(req_promoteT, toT, toB), BtoT -> toT, NtoT -> toT))
+    )
+
   od.size := req.size
   od.way := meta.way
   od.off := req.off
