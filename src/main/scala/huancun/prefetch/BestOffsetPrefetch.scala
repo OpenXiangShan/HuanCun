@@ -55,30 +55,6 @@ class TestOffsetBundle(implicit p: Parameters) extends PrefetchBundle {
   val resp = Flipped(DecoupledIO(new TestOffsetResp))
 }
 
-class BestOffsetPrefetchReq(implicit p: Parameters) extends PrefetchBundle {
-  val addr = UInt(addressBits.W)
-  val needT = Bool()
-  val id = UInt(prefetchIdWidth.W)
-}
-
-class BestOffsetPrefetchResp(implicit p: Parameters) extends PrefetchBundle {
-  val id = UInt(prefetchIdWidth.W)
-}
-
-class BestOffsetPrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
-  val addr = UInt(addressBits.W)
-  val needT = Bool()
-  // prefetch only when L2 receives a miss or prefetched hit req
-  // val miss = Bool()
-  // val prefetched = Bool()
-}
-
-class BestOffsetPrefetchIO(implicit p: Parameters) extends PrefetchBundle {
-  val train = Flipped(DecoupledIO(new BestOffsetPrefetchTrain))
-  val req = DecoupledIO(new BestOffsetPrefetchReq)
-  val resp = Flipped(DecoupledIO(new BestOffsetPrefetchResp))
-}
-
 class RecentRequestTable(implicit p: Parameters) extends PrefetchModule {
   val io = IO(new Bundle {
     val w = Flipped(DecoupledIO(UInt(addressBits.W)))
@@ -177,6 +153,7 @@ class OffsetScoreTable(implicit p: Parameters) extends PrefetchModule {
       round := Mux(roundFinish, round + 1.U, round)
     }
 
+    // (2) the number of rounds equals ROUNDMAX.
     when (round >= roundMax.U) {
       state := s_idle
     }
