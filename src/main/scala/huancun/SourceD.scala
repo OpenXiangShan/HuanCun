@@ -127,7 +127,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s3_ready := d.ready
   s3_valid := s3_full
 
-  io.sourceD_r_hazard.valid := !busy && s1_needData
+  io.sourceD_r_hazard.valid := busy && s1_needData
   io.sourceD_r_hazard.bits.set := s1_req.set
   io.sourceD_r_hazard.bits.way := s1_req.way
 }

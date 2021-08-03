@@ -20,7 +20,9 @@ class SourceB(implicit p: Parameters) extends HuanCunModule with DontCareInnerLo
   val busy = workVec.orR
   io.task.ready := !busy
   val pendingClient = Mux(busy, workVec, io.task.bits.clients)
-  val chosenClient = ParallelPriorityMux(pendingClient.asBools().zipWithIndex.map(a => (a._1, a._2.U)))
+  val chosenClient = ParallelPriorityMux(pendingClient.asBools().zipWithIndex.map{
+    case (sel, i) => sel -> UIntToOH(i.U, width = clientBits)
+  })
   when(io.b.fire()) {
     workVec := workVec & ~chosenClient
   }
