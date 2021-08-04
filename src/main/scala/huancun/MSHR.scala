@@ -250,7 +250,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       // A channel requests
       // TODO: consider parameterized write-through policy for put/atomics
       // Since prefetch uses inner interface, Hint does not need a HintAck
-      s_execute := req.opcode =/= Hint
+      s_execute := req.opcode === Hint
       // need replacement
       when(!meta.hit && meta.state =/= INVALID) {
         s_release := false.B
