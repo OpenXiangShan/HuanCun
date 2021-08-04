@@ -88,7 +88,9 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
     pft.io.train <> io.train
     pft.io.resp <> io.resp
     pftQueue.io.enq <> pft.io.req
+    pftQueue.io.deq.ready := io.req.ready
     io.req.valid := pftQueue.io.deq.valid
+    io.req.bits := DontCare
     io.req.bits.opcode := TLMessages.Hint
     io.req.bits.param := Mux(pftQueue.io.deq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
     io.req.bits.size := log2Up(blockBytes).U
@@ -96,7 +98,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
     io.req.bits.set := pftQueue.io.deq.bits.set
     io.req.bits.tag := pftQueue.io.deq.bits.tag
     io.req.bits.off := 0.U
-    io.req.bits.bufIdx := DontCare
+    io.req.bits.channel := "b001".U
   } else {
     io.train.ready := true.B
 

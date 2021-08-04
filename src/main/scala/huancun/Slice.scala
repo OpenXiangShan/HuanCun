@@ -152,6 +152,11 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
     arbTasks(pft.io.train, abc_mshr.map(_.io.tasks.prefetch_train.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchTrain)))), Some("prefetchTrain"))
     arbTasks(pft.io.resp, abc_mshr.map(_.io.tasks.prefetch_resp.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchResp)))), Some("prefetchResp"))
+
+    for (mshr <- Seq(bc_mshr, c_mshr)) {
+      mshr.io.tasks.prefetch_train.map(_.ready := true.B)
+      mshr.io.tasks.prefetch_resp.map(_.ready := true.B)
+    }
   }
 
   // Resps to MSHRs

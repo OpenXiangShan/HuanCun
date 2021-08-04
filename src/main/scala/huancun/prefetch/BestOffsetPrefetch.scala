@@ -6,7 +6,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 
-case object BOPParamsKey extends Field[BOPParameters]
+case object BOPParamsKey extends Field[BOPParameters](BOPParameters())
 
 case class BOPParameters (
   rrTableEntries: Int  = 256,

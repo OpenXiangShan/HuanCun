@@ -68,6 +68,7 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     result.bits.dirty := meta.dirty
     result.bits.state := meta.state
     result.bits.clients := meta.clients
+    result.bits.prefetch.map(_ := meta.prefetch.getOrElse(false.B))
     result.bits.tag := tags(result.bits.way)
   }
 
