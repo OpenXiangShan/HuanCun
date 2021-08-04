@@ -12,6 +12,7 @@ trait HasHuanCunParameters {
   val cacheParams = p(CacheParamsKey)
   val blockBytes = cacheParams.blockBytes
   val beatBytes = cacheParams.channelBytes.d.get
+  val beatSize = blockBytes / beatBytes
 
   val mshrs = cacheParams.mshrs
   val mshrsAll = cacheParams.mshrs + 2
