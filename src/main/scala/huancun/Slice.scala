@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import huancun.utils.ParallelMux
+import huancun.prefetch._
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
@@ -114,21 +115,43 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"))
   arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"))
   arbTasks(directory.io.tagWReq, ms.map(_.io.tasks.tag_write), Some("tagWrite"))
+  
+  // arbTasks(pft.io.train, abc_mshr.map(_.io.tasks.prefetch_train), Some("prefetchTrain"))
 
   def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
-    val abc = in.init.init
-    val bc = in.init.last
-    val c = in.last
-    val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), abc.size))
-    if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
-    for ((arb, req) <- arbiter.io.in.zip(abc)) {
-      arb <> req
+    if (in.size == mshrsAll) {
+      val abc = in.init.init
+      val bc = in.init.last
+      val c = in.last
+      val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), abc.size))
+      if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
+      for ((arb, req) <- arbiter.io.in.zip(abc)) {
+        arb <> req
+      }
+      out.valid := c.valid || bc.valid || arbiter.io.out.valid
+      out.bits := Mux(c.valid, c.bits, Mux(bc.valid, bc.bits, arbiter.io.out.bits))
+      c.ready := out.ready
+      bc.ready := out.ready && !c.valid
+      arbiter.io.out.ready := out.ready && !c.valid && !bc.valid
+    } else {
+      val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), in.size))
+      for ((arb, req) <- arbiter.io.in.zip(in)) {
+        arb <> req
+      }
+      out <> arbiter.io.out
     }
-    out.valid := c.valid || bc.valid || arbiter.io.out.valid
-    out.bits := Mux(c.valid, c.bits, Mux(bc.valid, bc.bits, arbiter.io.out.bits))
-    c.ready := out.ready
-    bc.ready := out.ready && !c.valid
-    arbiter.io.out.ready := out.ready && !c.valid && !bc.valid
+  }
+
+  if (enablePrefetch) {
+    val pft = Module(new Prefetcher)
+
+    val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
+    alloc_A_arb.io.in(0) <> sinkA.io.alloc
+    alloc_A_arb.io.in(1) <> pft.io.req
+    mshrAlloc.io.a_req <> alloc_A_arb.io.out
+
+    arbTasks(pft.io.train, abc_mshr.map(_.io.tasks.prefetch_train.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchTrain)))), Some("prefetchTrain"))
+    arbTasks(pft.io.resp, abc_mshr.map(_.io.tasks.prefetch_resp.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchResp)))), Some("prefetchResp"))
   }
 
   // Resps to MSHRs
