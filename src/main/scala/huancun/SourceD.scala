@@ -6,7 +6,7 @@ import chisel3.util._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.UIntToOH1
 import freechips.rocketchip.rocket.DecodeLogic
-import freechips.rocketchip.tilelink.TLMessages.{AcquireBlock, AcquirePerm}
+import freechips.rocketchip.tilelink.TLMessages.{AcquireBlock, AcquirePerm, ReleaseAck}
 
 class SourceD(implicit p: Parameters) extends HuanCunModule {
   /*
@@ -83,7 +83,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s2_req = RegEnable(s1_req, s2_latch)
   val s2_needData = RegEnable(s1_needData, s2_latch)
   val s2_full = RegInit(false.B)
-  val s2_acquire = s2_req.opcode === AcquireBlock || s2_req.opcode === AcquirePerm
+  val s2_releaseAck = s2_req.opcode === ReleaseAck
 
   when(s2_valid && s3_ready) { s2_full := false.B }
   when(s2_latch) { s2_full := true.B }
@@ -96,7 +96,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s3_full = RegInit(false.B)
   val s3_needData = RegInit(false.B)
   val s3_req = RegEnable(s2_req, s3_latch)
-  val s3_acquire = RegEnable(s2_acquire, s3_latch)
+  val s3_releaseAck = RegEnable(s2_releaseAck, s3_latch)
 
   val queue = Module(new Queue(new DSData, 3, flow = true))
   queue.io.enq.valid := RegNext(RegNext(io.bs_raddr.fire(), false.B), false.B)
@@ -116,7 +116,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s3_rdata = queue.io.deq.bits.data
   d.valid := s3_valid
   d.bits.opcode := s3_req.opcode
-  d.bits.param := Mux(s3_req.fromA && s3_acquire, s3_req.param, 0.U)
+  d.bits.param := Mux(s3_releaseAck, 0.U, s3_req.param)
   d.bits.sink := s3_req.sinkId
   d.bits.size := s3_req.size
   d.bits.source := s3_req.sourceId
