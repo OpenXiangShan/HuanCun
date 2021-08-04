@@ -22,7 +22,7 @@ case class BOPParameters (
     150, 160, 162, 180, 192, 200, 216, 225, 240, 243,
     250, 256*/
   ),
-  inflightEntries: Int = 4 // max num of inflight prefetch reqs
+  inflightEntries: Int = 16 // max num of inflight prefetch reqs
 )
 
 class ScoreTableEntry(implicit p: Parameters) extends PrefetchBundle {
@@ -172,12 +172,47 @@ class OffsetScoreTable(implicit p: Parameters) extends PrefetchModule {
     }
   }
 
-  io.req.ready := true.B
+  io.req.ready := state === s_learn
   io.prefetchOffset := prefetchOffset
-  io.test.req.valid := state === s_learn && io.req.fire()
+  io.test.req.valid := state === s_learn && io.req.valid
   io.test.req.bits.addr := io.req.bits
   io.test.req.bits.testOffset := testOffset
   io.test.req.bits.ptr := ptr
   io.test.resp.ready := true.B
 
+}
+
+class BestOffsetPrefetch(implicit p: Parameters) extends PrefetchModule {
+  val io = IO(new PrefetchIO)
+
+  val rrTable = Module(new RecentRequestTable)
+  val scoreTable = Module(new OffsetScoreTable)
+
+  val prefetchOffset = scoreTable.io.prefetchOffset
+  val oldAddr = io.train.bits.addr
+  val newAddr = oldAddr + (prefetchOffset << offsetBits)
+
+  rrTable.io.r <> scoreTable.io.test
+  rrTable.io.w.valid := io.resp.valid
+  rrTable.io.w.bits := Cat(Cat(io.resp.bits.tag, io.resp.bits.set) - prefetchOffset, 0.U(offsetBits.W))
+  scoreTable.io.req.valid := io.train.valid
+  scoreTable.io.req.bits := oldAddr
+
+  val req = Reg(new PrefetchReq)
+  val req_valid = RegInit(false.B)
+  val crossPage = parseAddress(newAddr)._1 =/= parseAddress(oldAddr)._1 // unequal tags
+  when (io.req.fire()) {
+    req_valid := false.B
+  }
+  when (scoreTable.io.req.fire()) {
+    req.tag := parseAddress(newAddr)._1
+    req.set := parseAddress(newAddr)._2
+    req.needT := io.train.bits.needT
+    req_valid := !crossPage // stop prefetch when prefetch req crosses pages
+  }
+
+  io.req.valid := req_valid
+  io.req.bits := req
+  io.train.ready := scoreTable.io.req.ready && (!req_valid || io.req.ready)
+  io.resp.ready := rrTable.io.w.ready
 }
