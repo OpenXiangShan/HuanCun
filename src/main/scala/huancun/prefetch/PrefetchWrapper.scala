@@ -3,6 +3,8 @@ package huancun.prefetch
 import chipsalliance.rocketchip.config.{Parameters}
 import chisel3._
 import chisel3.util._
+import freechips.rocketchip.tilelink._
+import huancun._
 
 class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   // val addr = UInt(addressBits.W)
@@ -41,9 +43,9 @@ class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
     val enq = Flipped(DecoupledIO(new PrefetchReq))
     val deq = DecoupledIO(new PrefetchReq)
   })
-  /*  Here we implement a queue that is
-   *  1. pipelined  2. flow
-   *  3. always has the latest reqs, which means the queue always ready for enq and deserting the eldest ones
+  /*  Here we implement a queue that
+   *  1. is pipelined  2. flows
+   *  3. always has the latest reqs, which means the queue is always ready for enq and deserting the eldest ones
    */
   val queue = RegInit(VecInit(Seq.fill(inflightEntries)(0.U.asTypeOf(new PrefetchReq))))
   val valids = RegInit(VecInit(Seq.fill(inflightEntries)(false.B)))
@@ -73,7 +75,11 @@ class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
 }
 
 class Prefetcher(implicit p: Parameters) extends PrefetchModule {
-  val io = IO(new PrefetchIO)
+  val io = IO(new Bundle {
+    val train = Flipped(DecoupledIO(new PrefetchTrain))
+    val req = DecoupledIO(new MSHRRequest)
+    val resp = Flipped(DecoupledIO(new PrefetchResp))
+  })
 
   if (enablePrefetch && prefetchType == "bop") { // Best offset
     val pft = Module(new BestOffsetPrefetch)
@@ -82,8 +88,15 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
     pft.io.train <> io.train
     pft.io.resp <> io.resp
     pftQueue.io.enq <> pft.io.req
-    io.req <> pftQueue.io.deq
-
+    io.req.valid := pftQueue.io.deq.valid
+    io.req.bits.opcode := TLMessages.Hint
+    io.req.bits.param := Mux(pftQueue.io.deq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
+    io.req.bits.size := log2Up(blockBytes).U
+    io.req.bits.source := 0.U // DontCare
+    io.req.bits.set := pftQueue.io.deq.bits.set
+    io.req.bits.tag := pftQueue.io.deq.bits.tag
+    io.req.bits.off := 0.U
+    io.req.bits.bufIdx := DontCare
   } else {
     io.train.ready := true.B
 
