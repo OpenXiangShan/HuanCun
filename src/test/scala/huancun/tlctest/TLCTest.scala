@@ -2,7 +2,7 @@ package huancun.tlctest
 
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
-import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
+import freechips.rocketchip.diplomacy.{AddressSet, DisableMonitors, LazyModule, LazyModuleImp}
 import freechips.rocketchip.tilelink.{TLBuffer, TLCacheCork, TLDelayer, TLFragmenter, TLRAM, TLXbar}
 import huancun._
 import tltest.{ScoreboardData, TLCTrans, TLMessagesBigInt}
@@ -61,5 +61,7 @@ class TestTop
 abstract class TLCTest extends L2Tester {
   val serialList = ArrayBuffer[(Int, TLCTrans)]()
   val scoreboard = mutable.Map[BigInt, ScoreboardData]()
-  val testTop = LazyModule(new TestTop(serialList, scoreboard))
+  val testTop = DisableMonitors { p =>
+    LazyModule(new TestTop(serialList, scoreboard)(p))
+  }
 }
