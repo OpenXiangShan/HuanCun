@@ -98,7 +98,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
       sourceC_req,
       sinkD_wreq,
       sourceD_wreq,
-      sourceD_rreq,
+      sourceD_rreq
     ) // TODO: add more requests with priority carefully
   reqs.foldLeft(0.U(nrBanks.W)) {
     case (sum, req) =>

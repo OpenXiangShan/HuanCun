@@ -20,7 +20,6 @@ trait HasHuanCunParameters {
   val blocks = cacheParams.ways * cacheParams.sets
   val sizeBytes = blocks * blockBytes
   val dirReadPorts = cacheParams.dirReadPorts
-  val dirWritePorts = cacheParams.dirWritePorts
 
   val wayBits = log2Ceil(cacheParams.ways)
   val setBits = log2Ceil(cacheParams.sets)

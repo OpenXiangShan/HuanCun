@@ -264,11 +264,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       when(
         meta.hit && (req_needT || meta.state === TRUNK) &&
           (
-            meta.clients & (~Mux(skipProbeN(req.opcode),
-              getClientBitOH(req.source),
-              0.U
-            )).asUInt()
-            ).orR()
+            meta.clients & (~Mux(skipProbeN(req.opcode), getClientBitOH(req.source), 0.U)).asUInt()
+          ).orR()
       ) {
         s_pprobe := false.B
         w_pprobeackfirst := false.B
@@ -389,7 +386,9 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
   od.opcode := odOpGen(req)
   od.param :=
-    Mux(!req_acquire, req.param,
+    Mux(
+      !req_acquire,
+      req.param,
       MuxLookup(req.param, req.param, Seq(NtoB -> Mux(req_promoteT, toT, toB), BtoT -> toT, NtoT -> toT))
     )
 
