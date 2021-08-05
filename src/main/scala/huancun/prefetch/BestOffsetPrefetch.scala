@@ -94,7 +94,7 @@ class RecentRequestTable(implicit p: Parameters) extends PrefetchModule {
 
   assert(!RegNext(io.w.fire() && io.r.req.fire()), "single port SRAM should not read and write at the same time")
 
-  io.w.ready := rrTable.io.w.req.ready && io.r.req.valid
+  io.w.ready := rrTable.io.w.req.ready && !io.r.req.valid
   io.r.req.ready := true.B
   io.r.resp.valid := RegNext(rrTable.io.r.req.fire())
   io.r.resp.bits.ptr := RegNext(io.r.req.bits.ptr)
