@@ -17,6 +17,7 @@ class SinkB(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule with 
 
   io.alloc.bits.opcode := io.b.bits.opcode
   io.alloc.bits.param := io.b.bits.param
+  io.alloc.bits.channel := "b010".U
   io.alloc.bits.size := io.b.bits.size
   io.alloc.bits.source := io.b.bits.source
   io.alloc.bits.set := set
