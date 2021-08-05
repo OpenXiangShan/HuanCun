@@ -113,7 +113,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         supports = TLSlaveToMasterTransferSizes(
           probe = xfer
         ),
-        sourceId = IdRange(0, cacheParams.mshrs)
+        sourceId = IdRange(0, mshrsAll)
       )
     ),
     channelBytes = cacheParams.channelBytes,
