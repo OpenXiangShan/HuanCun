@@ -7,8 +7,12 @@ import huancun._
 
 trait HasPrefetchParameters extends HasHuanCunParameters {
   // Best offset
-  val rrTableEntries = bopParams.rrTableEntries
-  val rrTagBits = bopParams.rrTagBits
+  val defaultMinAddrBits = offsetBits + log2Up(bopParams.rrTableEntries) + bopParams.rrTagBits
+  val defaultConfig = addressBits >= defaultMinAddrBits
+
+  val rrTableEntries = if (defaultConfig) bopParams.rrTableEntries else 2
+  val rrIdxBits = log2Up(rrTableEntries)
+  val rrTagBits = if (defaultConfig) bopParams.rrTagBits else (addressBits - offsetBits - rrIdxBits)
   val scoreBits = bopParams.scoreBits
   val roundMax = bopParams.roundMax
   val badScore = bopParams.badScore
@@ -17,7 +21,6 @@ trait HasPrefetchParameters extends HasHuanCunParameters {
 
   val scores = offsetList.length
   val offsetWidth = log2Up(offsetList(scores - 1)) + 1
-  val rrIdxBits = log2Up(rrTableEntries)
   val roundBits = log2Up(roundMax)
   val scoreMax = (1 << scoreBits) - 1
   val scoreTableIdxBits = log2Up(scores)
