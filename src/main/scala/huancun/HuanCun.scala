@@ -24,12 +24,14 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
+import freechips.rocketchip.util.UIntToOH1
 
 trait HasHuanCunParameters {
   val p: Parameters
   val cacheParams = p(CacheParamsKey)
   val blockBytes = cacheParams.blockBytes
   val beatBytes = cacheParams.channelBytes.d.get
+  val beatSize = blockBytes / beatBytes
 
   val mshrs = cacheParams.mshrs
   val mshrsAll = cacheParams.mshrs + 2
@@ -37,7 +39,6 @@ trait HasHuanCunParameters {
   val blocks = cacheParams.ways * cacheParams.sets
   val sizeBytes = blocks * blockBytes
   val dirReadPorts = cacheParams.dirReadPorts
-  val dirWritePorts = cacheParams.dirWritePorts
 
   val wayBits = log2Ceil(cacheParams.ways)
   val setBits = log2Ceil(cacheParams.sets)
@@ -95,6 +96,15 @@ trait HasHuanCunParameters {
     val tag = set >> setBits
     (tag(tagBits - 1, 0), set(setBits - 1, 0), offset(offsetBits - 1, 0))
   }
+
+  def startBeat(offset: UInt): UInt = {
+    (offset >> log2Up(beatBytes)).asUInt()
+  }
+
+  def totalBeats(size: UInt): UInt = {
+    (UIntToOH1(size, log2Up(blockBytes)) >> log2Ceil(beatBytes)).asUInt()
+  }
+
 }
 
 trait DontCareInnerLogic { this: Module =>
@@ -122,7 +132,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         supports = TLSlaveToMasterTransferSizes(
           probe = xfer
         ),
-        sourceId = IdRange(0, cacheParams.mshrs)
+        sourceId = IdRange(0, mshrsAll)
       )
     ),
     channelBytes = cacheParams.channelBytes,
@@ -162,9 +172,16 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   )
 
   lazy val module = new LazyModuleImp(this) {
-    println(s"====== ${cacheParams.name} ======")
+    val sizeBytes = cacheParams.sets * cacheParams.ways * cacheParams.blockBytes
+    val sizeStr = sizeBytes match {
+      case _ if sizeBytes > 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
+      case _ if sizeBytes > 1024        => (sizeBytes / 1024) + "KB"
+      case _                            => "B"
+    }
+    println(s"====== ${cacheParams.name} ($sizeStr) ======")
     node.in.zip(node.out).foreach {
       case ((in, edgeIn), (out, edgeOut)) =>
+        require(in.params.dataBits == out.params.dataBits)
         val slice = Module(new Slice()(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut

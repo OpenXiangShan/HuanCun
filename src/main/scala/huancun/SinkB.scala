@@ -29,5 +29,19 @@ class SinkB(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule with 
     val b = Flipped(DecoupledIO(new TLBundleB(edge.bundle)))
     val alloc = DecoupledIO(new MSHRRequest)
   })
-  io.b.ready := true.B
+
+  io.b.ready := io.alloc.ready
+  io.alloc.valid := io.b.valid
+
+  val (tag, set, off) = parseAddress(io.b.bits.address)
+
+  io.alloc.bits.opcode := io.b.bits.opcode
+  io.alloc.bits.param := io.b.bits.param
+  io.alloc.bits.channel := "b010".U
+  io.alloc.bits.size := io.b.bits.size
+  io.alloc.bits.source := io.b.bits.source
+  io.alloc.bits.set := set
+  io.alloc.bits.tag := tag
+  io.alloc.bits.off := off
+  io.alloc.bits.bufIdx := 0.U
 }

@@ -55,15 +55,13 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   val (first, last, done, count) = edgeIn.count(c)
   val hasData = edgeIn.hasData(c.bits)
 
-  val isRespLatch = Mux(c.valid, isResp, RegEnable(isResp, c.valid))
-
   // bankedstore w counter
   val w_counter = RegInit(0.U(beatBits.W))
   val w_done = (w_counter === ((blockBytes / beatBytes) - 1).U) && (io.bs_waddr.ready && !io.bs_waddr.bits.noop)
 
   val task_r = RegEnable(io.task.bits, io.task.fire())
   val busy_r = RegInit(false.B)
-  val do_release = io.task.valid || busy_r
+  val do_release = io.task.fire() || busy_r
 
   when(w_done) {
     busy_r := false.B
@@ -79,6 +77,8 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   c.ready := Mux(isResp, can_recv_resp, can_recv_req)
 
   val (tag, set, off) = parseAddress(c.bits.address)
+
+  assert(!c.valid || (c.bits.size === log2Up(blockBytes).U && off === 0.U), "SinkC must receive aligned message!")
 
   io.alloc.valid := c.valid && can_recv_req && isReq && first
   io.alloc.bits.channel := "b100".U
@@ -132,9 +132,9 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
     io.sourceD_r_hazard.bits.safe(io.task.bits.set, io.task.bits.way))
 
   val req_w_valid = io.task.fire() || busy_r // ReleaseData
-  val resp_w_valid = isRespLatch && (!first || (c.valid && hasData)) // ProbeAckData
+  val resp_w_valid = io.c.valid && can_recv_resp && isProbeAckData // ProbeAckData
 
-  io.task.ready := !busy_r && task_w_safe // TODO: flow here
+  io.task.ready := !(isProbeAckData && !first) && !busy_r && task_w_safe // TODO: flow here
 
   io.bs_waddr.valid := req_w_valid || resp_w_valid
   io.bs_waddr.bits.way := Mux(req_w_valid, bs_w_task.way, io.way)

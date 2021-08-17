@@ -22,6 +22,7 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import freechips.rocketchip.util.{ReplacementPolicy, SetAssocLRU}
 import huancun.utils.{ParallelMux, ParallelPriorityMux, SRAMTemplate}
 
 class Directory(implicit p: Parameters) extends HuanCunModule {
@@ -35,6 +36,8 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((cacheParams.sets - 1).U)
   val metaArray = Mem(cacheParams.sets, Vec(cacheParams.ways, new DirectoryEntry))
+
+  val replacer = new SetAssocLRU(cacheParams.sets, cacheParams.ways, cacheParams.replacement)
 
   when(!resetFinish) {
     metaArray(resetIdx).foreach(w => w.state := MetaData.INVALID)
@@ -77,7 +80,7 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     val metaValidVec = metas.map(_.state =/= MetaData.INVALID)
     hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
     val hitWay = OHToUInt(hitVec(i))
-    val replaceWay = 0.U // TODO: implement replace way
+    val replaceWay = replacer.way(rreqSets(i))
     val invalidWay = ParallelPriorityMux(metaValidVec.zipWithIndex.map(a => (!a._1, a._2.U)))
     val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
 
@@ -88,6 +91,10 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     result.bits.state := meta.state
     result.bits.clients := meta.clients
     result.bits.tag := tags(result.bits.way)
+  }
+  // TODO: should we update replacer when cache hit?
+  when(io.tagWReq.fire()) {
+    replacer.access(io.tagWReq.bits.set, io.tagWReq.bits.way)
   }
 
   for (dirWReq <- io.dirWReqs) {

@@ -113,11 +113,11 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   val reqs =
     Seq(
+      sinkC_req,
       sourceC_req,
-      sourceD_wreq,
       sinkD_wreq,
-      sourceD_rreq,
-      sinkC_req
+      sourceD_wreq,
+      sourceD_rreq
     ) // TODO: add more requests with priority carefully
   reqs.foldLeft(0.U(nrBanks.W)) {
     case (sum, req) =>

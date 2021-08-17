@@ -163,7 +163,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   assert(RegNext(!meta_valid || !req.fromC || meta.hit, true.B)) // Release should always hit
 
   val change_meta = meta_valid && meta_reg.state =/= INVALID &&
-    (io.nestedwb.set === req.set && io.nestedwb.tag === req.tag)
+    (io.nestedwb.set === req.set && io.nestedwb.tag === meta.tag)
 
   when(change_meta) {
     when(io.nestedwb.b_clr_dirty) { meta_reg.dirty := false.B }
@@ -281,9 +281,10 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       }
       // need pprobe
       when(
-        meta.hit && (req_needT || meta.state === TRUNK) && (meta.clients & ~getClientBitOH(req.source) & ~skipProbeN(
-          req.opcode
-        )) =/= 0.U
+        meta.hit && (req_needT || meta.state === TRUNK) &&
+          (
+            meta.clients & (~Mux(skipProbeN(req.opcode), getClientBitOH(req.source), 0.U)).asUInt()
+          ).orR()
       ) {
         s_pprobe := false.B
         w_pprobeackfirst := false.B
@@ -355,7 +356,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   oa.tag := req.tag
   oa.set := req.set
   oa.opcode := TLMessages.AcquireBlock // TODO: change this
-  oa.param := Mux(req_needT, Mux(meta.state === BRANCH, BtoT, NtoT), NtoB)
+  oa.param := Mux(req_needT, Mux(meta.hit, BtoT, NtoT), NtoB)
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U
 
@@ -396,17 +397,20 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   od.tag := req.tag
   od.channel := Cat(req.fromC.asUInt, 0.U(1.W), req.fromA.asUInt)
   def odOpGen(r: MSHRRequest) = {
-    val grantOp = Mux(r.param === BtoT && req_realBtoT, Grant, GrantData)
+//    val grantOp = Mux(r.param === BtoT && req_realBtoT, Grant, GrantData)
+    val grantOp = GrantData
     val opSeq = Seq(AccessAck, AccessAck, AccessAckData, AccessAckData, AccessAckData, HintAck, grantOp, Grant)
     val opToA = VecInit(opSeq)(r.opcode)
     Mux(r.fromA, opToA, ReleaseAck)
   }
   od.opcode := odOpGen(req)
-  od.param := Mux(
-    !req_acquire,
-    req.param,
-    MuxLookup(req.param, req.param, Seq(NtoB -> Mux(req_promoteT, toT, toB), BtoT -> toT, NtoT -> toT))
-  )
+  od.param :=
+    Mux(
+      !req_acquire,
+      req.param,
+      MuxLookup(req.param, req.param, Seq(NtoB -> Mux(req_promoteT, toT, toB), BtoT -> toT, NtoT -> toT))
+    )
+
   od.size := req.size
   od.way := meta.way
   od.off := req.off
@@ -454,7 +458,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   when(io.tasks.source_e.fire()) {
     s_grantack := true.B
   }
-  when(io.tasks.dir_write.fire()) {
+  when(no_wait && !s_writebackdir && io.tasks.dir_write.ready) {
     s_writebackdir := true.B
   }
   when(io.tasks.tag_write.fire()) {
@@ -509,7 +513,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // Release MSHR
-  when(no_wait && s_execute && s_probeack && meta_valid && s_writebacktag && s_writerelease) {
+  when(no_wait && s_execute && s_probeack && meta_valid && s_writebacktag && s_writebackdir && s_writerelease) { // TODO: remove s_writebackdir to improve perf
     req_valid := false.B
     meta_valid := false.B
   }
