@@ -134,7 +134,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"))
   arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"))
   arbTasks(directory.io.tagWReq, ms.map(_.io.tasks.tag_write), Some("tagWrite"))
-  
+
   // arbTasks(pft.io.train, abc_mshr.map(_.io.tasks.prefetch_train), Some("prefetchTrain"))
 
   def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
@@ -169,8 +169,16 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     alloc_A_arb.io.in(1) <> pft.io.req
     mshrAlloc.io.a_req <> alloc_A_arb.io.out
 
-    arbTasks(pft.io.train, abc_mshr.map(_.io.tasks.prefetch_train.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchTrain)))), Some("prefetchTrain"))
-    arbTasks(pft.io.resp, abc_mshr.map(_.io.tasks.prefetch_resp.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchResp)))), Some("prefetchResp"))
+    arbTasks(
+      pft.io.train,
+      abc_mshr.map(_.io.tasks.prefetch_train.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchTrain)))),
+      Some("prefetchTrain")
+    )
+    arbTasks(
+      pft.io.resp,
+      abc_mshr.map(_.io.tasks.prefetch_resp.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchResp)))),
+      Some("prefetchResp")
+    )
 
     for (mshr <- Seq(bc_mshr, c_mshr)) {
       mshr.io.tasks.prefetch_train.map(_.ready := true.B)

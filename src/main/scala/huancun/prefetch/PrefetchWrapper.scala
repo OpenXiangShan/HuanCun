@@ -55,16 +55,16 @@ class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
   val empty = head === tail && !valids.last
   val full = head === tail && valids.last
 
-  when (!empty && io.deq.ready) {
+  when(!empty && io.deq.ready) {
     valids(head) := false.B
     head := head + 1.U
   }
 
-  when (io.enq.valid) {
+  when(io.enq.valid) {
     queue(tail) := io.enq.bits
-    valids(tail) := !empty// true.B
+    valids(tail) := !empty // true.B
     tail := tail + (!empty).asUInt
-    when (full && !io.deq.ready) {
+    when(full && !io.deq.ready) {
       head := head + 1.U
     }
   }
@@ -104,7 +104,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
 
     io.req.valid := false.B
     io.req.bits := DontCare
-    
+
     io.resp.ready := true.B
   }
 }

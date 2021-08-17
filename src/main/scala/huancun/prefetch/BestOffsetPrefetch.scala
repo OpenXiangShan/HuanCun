@@ -1,22 +1,20 @@
 package huancun.prefetch
 
 import huancun.utils.{SRAMTemplate}
-import chipsalliance.rocketchip.config.{Parameters, Field}
+import chipsalliance.rocketchip.config.{Field, Parameters}
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 
 case object BOPParamsKey extends Field[BOPParameters](BOPParameters())
 
-case class BOPParameters (
-  rrTableEntries: Int  = 256,
-  rrTagBits: Int       = 12,
-  scoreBits: Int       = 5,
-  roundMax: Int        = 50,
-  badScore: Int        = 1,
-  offsetList: Seq[Int] = Seq(
-      1,   2,   3,   4,   5,   6,   8,   9,  10,  12,
-     15,  16/*,  18,  20,  24,  25,  27,  30,  32,  36,
+case class BOPParameters(
+  rrTableEntries: Int = 256,
+  rrTagBits:      Int = 12,
+  scoreBits:      Int = 5,
+  roundMax:       Int = 50,
+  badScore:       Int = 1,
+  offsetList: Seq[Int] = Seq(1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16 /*,  18,  20,  24,  25,  27,  30,  32,  36,
      40,  45,  48,  50,  54,  60,  64,  72,  75,  80,
      81,  90,  96, 100, 108, 120, 125, 128, 135, 144,
     150, 160, 162, 180, 192, 200, 216, 225, 240, 243,
@@ -69,16 +67,18 @@ class RecentRequestTable(implicit p: Parameters) extends PrefetchModule {
   //    or: |  ...  |    12-bit tag    |  8-bit hash1  |  6-bit cache offset  |
   //        +-------+------------------+---------------+----------------------+
   def lineAddr(addr: UInt) = addr(addressBits - 1, offsetBits)
-  def hash1(addr: UInt) = lineAddr(addr)(rrIdxBits - 1, 0)
-  def hash2(addr: UInt) = lineAddr(addr)(2 * rrIdxBits - 1, rrIdxBits)
-  def idx(addr: UInt) = hash1(addr) ^ hash2(addr)
-  def tag(addr: UInt) = lineAddr(addr)(rrTagBits + rrIdxBits - 1, rrIdxBits)
+  def hash1(addr:    UInt) = lineAddr(addr)(rrIdxBits - 1, 0)
+  def hash2(addr:    UInt) = lineAddr(addr)(2 * rrIdxBits - 1, rrIdxBits)
+  def idx(addr:      UInt) = hash1(addr) ^ hash2(addr)
+  def tag(addr:      UInt) = lineAddr(addr)(rrTagBits + rrIdxBits - 1, rrIdxBits)
   def rrTableEntry() = new Bundle {
     val valid = Bool()
     val tag = UInt(rrTagBits.W)
   }
 
-  val rrTable = Module(new SRAMTemplate(rrTableEntry(), set = rrTableEntries, way = 1, shouldReset = true, singlePort = true))
+  val rrTable = Module(
+    new SRAMTemplate(rrTableEntry(), set = rrTableEntries, way = 1, shouldReset = true, singlePort = true)
+  )
 
   val wAddr = io.w.bits
   rrTable.io.w.req.valid := io.w.valid && !io.r.req.valid
@@ -129,7 +129,7 @@ class OffsetScoreTable(implicit p: Parameters) extends PrefetchModule {
   // 1. At the start of a learning phase
   // All the scores are reset to 0.
   // At the end of every learning phase, the prefetch offset is updated as the one with the highest score.
-  when (state === s_idle) {
+  when(state === s_idle) {
     st.foreach(_.score := 0.U)
     ptr := 0.U
     round := 0.U
@@ -146,19 +146,19 @@ class OffsetScoreTable(implicit p: Parameters) extends PrefetchModule {
   // The current learning phase finishes at the end of a round when:
   // (1) one of the score equals SCOREMAX, or
   // (2) the number of rounds equals ROUNDMAX.
-  when (state === s_learn) {
-    when (io.test.req.fire()) {
+  when(state === s_learn) {
+    when(io.test.req.fire()) {
       val roundFinish = ptr === (scores - 1).U
       ptr := Mux(roundFinish, 0.U, ptr + 1.U)
       round := Mux(roundFinish, round + 1.U, round)
     }
 
     // (2) the number of rounds equals ROUNDMAX.
-    when (round >= roundMax.U) {
+    when(round >= roundMax.U) {
       state := s_idle
     }
 
-    when (io.test.resp.fire() && io.test.resp.bits.hit) {
+    when(io.test.resp.fire() && io.test.resp.bits.hit) {
       val oldEntry = st(io.test.resp.bits.ptr)
       val oldScore = oldEntry.score
       val newScore = oldScore + 1.U
@@ -166,7 +166,7 @@ class OffsetScoreTable(implicit p: Parameters) extends PrefetchModule {
       st(io.test.resp.bits.ptr).score := newScore
       bestOffset := winner((new ScoreTableEntry).apply(offset, newScore), bestOffset)
       // (1) one of the score equals SCOREMAX
-      when (newScore >= scoreMax.U) {
+      when(newScore >= scoreMax.U) {
         state := s_idle
       }
     }
@@ -201,10 +201,10 @@ class BestOffsetPrefetch(implicit p: Parameters) extends PrefetchModule {
   val req = Reg(new PrefetchReq)
   val req_valid = RegInit(false.B)
   val crossPage = parseAddress(newAddr)._1 =/= parseAddress(oldAddr)._1 // unequal tags
-  when (io.req.fire()) {
+  when(io.req.fire()) {
     req_valid := false.B
   }
-  when (scoreTable.io.req.fire()) {
+  when(scoreTable.io.req.fire()) {
     req.tag := parseAddress(newAddr)._1
     req.set := parseAddress(newAddr)._2
     req.needT := io.train.bits.needT
