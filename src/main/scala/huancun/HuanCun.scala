@@ -20,7 +20,6 @@ trait HasHuanCunParameters {
   val blocks = cacheParams.ways * cacheParams.sets
   val sizeBytes = blocks * blockBytes
   val dirReadPorts = cacheParams.dirReadPorts
-  val dirWritePorts = cacheParams.dirWritePorts
 
   val wayBits = log2Ceil(cacheParams.ways)
   val setBits = log2Ceil(cacheParams.sets)
@@ -114,7 +113,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         supports = TLSlaveToMasterTransferSizes(
           probe = xfer
         ),
-        sourceId = IdRange(0, cacheParams.mshrs)
+        sourceId = IdRange(0, mshrsAll)
       )
     ),
     channelBytes = cacheParams.channelBytes,
@@ -154,7 +153,13 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   )
 
   lazy val module = new LazyModuleImp(this) {
-    println(s"====== ${cacheParams.name} ======")
+    val sizeBytes = cacheParams.sets * cacheParams.ways * cacheParams.blockBytes
+    val sizeStr = sizeBytes match {
+      case _ if sizeBytes > 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
+      case _ if sizeBytes > 1024 => (sizeBytes / 1024) + "KB"
+      case _ => "B"
+    }
+    println(s"====== ${cacheParams.name} ($sizeStr) ======")
     node.in.zip(node.out).foreach {
       case ((in, edgeIn), (out, edgeOut)) =>
         val slice = Module(new Slice()(p.alterPartial {
