@@ -181,6 +181,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     println(s"====== ${cacheParams.name} ($sizeStr) ======")
     node.in.zip(node.out).foreach {
       case ((in, edgeIn), (out, edgeOut)) =>
+        require(in.params.dataBits == out.params.dataBits)
         val slice = Module(new Slice()(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut
