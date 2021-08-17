@@ -144,6 +144,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     nestB_valid,
     Mux(nestC_valid || nestB_valid, 0.U(mshrs.W), selectedMSHROH)
   )
+  dirRead.bits.replaceInfo.channel := request.bits.channel
 
   io.dirReads.drop(1).foreach { d =>
     d.valid := false.B
