@@ -23,7 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.{ReplacementPolicy, SetAssocLRU}
-import huancun.utils.{ParallelMux, ParallelPriorityMux, SRAMTemplate}
+import huancun.utils._
 
 class Directory(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
@@ -85,6 +85,7 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
 
     result.bits.hit := Cat(hitVec(i)).orR()
+    XSPerfAccumulate(cacheParams, "nrmiss", !result.bits.hit && result.valid)
     result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
     val meta = metas(result.bits.way)
     result.bits.dirty := meta.dirty
