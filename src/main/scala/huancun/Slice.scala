@@ -143,11 +143,23 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // Directory read results to MSHRs
+  def regFn[T <: Data](x: Valid[T]): Valid[T] = {
+    if(cacheParams.dirReg){
+      val v = RegNext(x.valid, false.B)
+      val bits = RegEnable(x.bits, x.valid)
+      val ret = Wire(x.cloneType)
+      ret.valid := v
+      ret.bits := bits
+      ret
+    } else x
+  }
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
       val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.idOH(i))
-      mshr.io.dirResult.valid := Cat(dirResultMatch).orR()
-      mshr.io.dirResult.bits := Mux1H(dirResultMatch.zip(directory.io.results.map(_.bits)))
+      val dirResult = Wire(Valid(new DirResult))
+      dirResult.valid := Cat(dirResultMatch).orR()
+      dirResult.bits := Mux1H(dirResultMatch.zip(directory.io.results.map(_.bits)))
+      mshr.io.dirResult := regFn(dirResult)
   }
 
   // Provide MSHR info for sinkC, sinkD

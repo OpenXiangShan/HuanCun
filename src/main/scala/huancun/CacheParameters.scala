@@ -15,6 +15,7 @@ case class CacheParameters(
   replacement:  String = "plru",
   mshrs:        Int = 16,
   dirReadPorts: Int = 1,
+  dirReg: Boolean = true,
   enableDebug:  Boolean = false,
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   echoField:    Seq[BundleFieldBase] = Nil,
