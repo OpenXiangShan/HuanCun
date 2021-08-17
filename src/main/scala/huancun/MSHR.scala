@@ -1,3 +1,22 @@
+/** *************************************************************************************
+  * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+  * Copyright (c) 2020-2021 Peng Cheng Laboratory
+  *
+  * XiangShan is licensed under Mulan PSL v2.
+  * You can use this software according to the terms and conditions of the Mulan PSL v2.
+  * You may obtain a copy of Mulan PSL v2 at:
+  *          http://license.coscl.org.cn/MulanPSL2
+  *
+  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+  *
+  * See the Mulan PSL v2 for more details.
+  * *************************************************************************************
+  */
+
+// See LICENSE.SiFive for license details.
+
 package huancun
 
 import chipsalliance.rocketchip.config.Parameters
@@ -275,11 +294,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       when(
         meta.hit && (req_needT || meta.state === TRUNK) && req.opcode =/= Hint &&
           (
-            meta.clients & (~Mux(skipProbeN(req.opcode),
-              getClientBitOH(req.source),
-              0.U
-            )).asUInt()
-            ).orR()
+            meta.clients & (~Mux(skipProbeN(req.opcode), getClientBitOH(req.source), 0.U)).asUInt()
+          ).orR()
       ) {
         s_pprobe := false.B
         w_pprobeackfirst := false.B
@@ -412,7 +428,9 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
   od.opcode := odOpGen(req)
   od.param :=
-    Mux(!req_acquire, req.param,
+    Mux(
+      !req_acquire,
+      req.param,
       MuxLookup(req.param, req.param, Seq(NtoB -> Mux(req_promoteT, toT, toB), BtoT -> toT, NtoT -> toT))
     )
 

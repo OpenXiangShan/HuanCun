@@ -1,6 +1,7 @@
-/** ************************************************************************************
+/** *************************************************************************************
   * Copyright (c) 2020 Institute of Computing Technology, CAS
   * Copyright (c) 2020 University of Chinese Academy of Sciences
+  * Copyright (c) 2020-2021 Peng Cheng Laboratory
   *
   * NutShell is licensed under Mulan PSL v2.
   * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -14,6 +15,8 @@
   * See the Mulan PSL v2 for more details.
   * *************************************************************************************
   */
+
+// See LICENSE.SiFive for license details.
 
 package huancun.utils
 

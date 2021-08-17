@@ -1,3 +1,22 @@
+/** *************************************************************************************
+  * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+  * Copyright (c) 2020-2021 Peng Cheng Laboratory
+  *
+  * XiangShan is licensed under Mulan PSL v2.
+  * You can use this software according to the terms and conditions of the Mulan PSL v2.
+  * You may obtain a copy of Mulan PSL v2 at:
+  *          http://license.coscl.org.cn/MulanPSL2
+  *
+  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+  *
+  * See the Mulan PSL v2 for more details.
+  * *************************************************************************************
+  */
+
+// See LICENSE.SiFive for license details.
+
 package huancun
 
 import chipsalliance.rocketchip.config.Parameters
@@ -20,7 +39,7 @@ class SourceB(implicit p: Parameters) extends HuanCunModule with DontCareInnerLo
   val busy = workVec.orR
   io.task.ready := !busy
   val pendingClient = Mux(busy, workVec, io.task.bits.clients)
-  val chosenClient = ParallelPriorityMux(pendingClient.asBools().zipWithIndex.map{
+  val chosenClient = ParallelPriorityMux(pendingClient.asBools().zipWithIndex.map {
     case (sel, i) => sel -> UIntToOH(i.U, width = clientBits)
   })
   when(io.b.fire()) {

@@ -1,3 +1,22 @@
+/** *************************************************************************************
+  * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+  * Copyright (c) 2020-2021 Peng Cheng Laboratory
+  *
+  * XiangShan is licensed under Mulan PSL v2.
+  * You can use this software according to the terms and conditions of the Mulan PSL v2.
+  * You may obtain a copy of Mulan PSL v2 at:
+  *          http://license.coscl.org.cn/MulanPSL2
+  *
+  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+  *
+  * See the Mulan PSL v2 for more details.
+  * *************************************************************************************
+  */
+
+// See LICENSE.SiFive for license details.
+
 package huancun
 
 import chipsalliance.rocketchip.config.Parameters
@@ -26,7 +45,6 @@ trait HasHuanCunParameters {
   val blocks = cacheParams.ways * cacheParams.sets
   val sizeBytes = blocks * blockBytes
   val dirReadPorts = cacheParams.dirReadPorts
-  val dirWritePorts = cacheParams.dirWritePorts
 
   val wayBits = log2Ceil(cacheParams.ways)
   val setBits = log2Ceil(cacheParams.sets)
@@ -120,7 +138,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         supports = TLSlaveToMasterTransferSizes(
           probe = xfer
         ),
-        sourceId = IdRange(0, cacheParams.mshrs)
+        sourceId = IdRange(0, mshrsAll)
       )
     ),
     channelBytes = cacheParams.channelBytes,
@@ -160,9 +178,16 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   )
 
   lazy val module = new LazyModuleImp(this) {
-    println(s"====== ${cacheParams.name} ======")
+    val sizeBytes = cacheParams.sets * cacheParams.ways * cacheParams.blockBytes
+    val sizeStr = sizeBytes match {
+      case _ if sizeBytes > 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
+      case _ if sizeBytes > 1024        => (sizeBytes / 1024) + "KB"
+      case _                            => "B"
+    }
+    println(s"====== ${cacheParams.name} ($sizeStr) ======")
     node.in.zip(node.out).foreach {
       case ((in, edgeIn), (out, edgeOut)) =>
+        require(in.params.dataBits == out.params.dataBits)
         val slice = Module(new Slice()(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut

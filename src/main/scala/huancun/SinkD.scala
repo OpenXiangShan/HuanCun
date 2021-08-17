@@ -1,3 +1,22 @@
+/** *************************************************************************************
+  * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+  * Copyright (c) 2020-2021 Peng Cheng Laboratory
+  *
+  * XiangShan is licensed under Mulan PSL v2.
+  * You can use this software according to the terms and conditions of the Mulan PSL v2.
+  * You may obtain a copy of Mulan PSL v2 at:
+  *          http://license.coscl.org.cn/MulanPSL2
+  *
+  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+  *
+  * See the Mulan PSL v2 for more details.
+  * *************************************************************************************
+  */
+
+// See LICENSE.SiFive for license details.
+
 package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
@@ -31,7 +50,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.resp.bits.last := last
   io.resp.bits.opcode := io.d.bits.opcode
   io.resp.bits.param := io.d.bits.param
-  io.resp.bits.source := io.d.bits.source
+  io.resp.bits.source := Mux(io.d.valid, io.d.bits.source, RegEnable(io.d.bits.source, io.d.valid))
   io.resp.bits.sink := io.d.bits.sink
   io.resp.bits.denied := io.d.bits.denied
 
