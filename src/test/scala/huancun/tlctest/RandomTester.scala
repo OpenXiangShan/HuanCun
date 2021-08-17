@@ -32,7 +32,7 @@ trait RandomSampleUtil {
 class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVerilatorBackend {
   it should "random run" in {
 
-    val totalTick = 150000
+    val totalTick = 50000
     val pendingThreshold = 6
     val nrAddingTrans = 16
     val rand = new Random(0xbeef)
@@ -89,6 +89,7 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
 
       println(s"total acquire: $total_acquire")
       println(s"total release: $total_release")
+      println(s"total get: $total_get")
     }
   }
 }
