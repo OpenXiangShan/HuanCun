@@ -18,7 +18,7 @@ object XSPerfAccumulate {
       val next_counter = counter + perfCnt
       counter := Mux(perfClean, 0.U, next_counter)
 
-      when (perfDump) {
+      when(perfDump) {
         XSPerfPrint(p"$perfName, $next_counter\n")
       }
     }
@@ -28,7 +28,15 @@ object XSPerfAccumulate {
 object XSPerfHistogram {
   // instead of simply accumulating counters
   // this function draws a histogram
-  def apply(params: CacheParameters, perfName: String, perfCnt: UInt, enable: Bool, start: Int, stop: Int, step: Int) = {
+  def apply(
+    params:   CacheParameters,
+    perfName: String,
+    perfCnt:  UInt,
+    enable:   Bool,
+    start:    Int,
+    stop:     Int,
+    step:     Int
+  ) = {
     if (params.enablePerf) {
       val logTimestamp = WireInit(0.U(64.W))
       val perfClean = WireInit(false.B)
@@ -43,7 +51,7 @@ object XSPerfHistogram {
       require(stop > start)
       require(nBins > 0)
 
-      (0 until nBins) map { i =>
+      (0 until nBins).map { i =>
         val binRangeStart = start + i * step
         val binRangeStop = start + (i + 1) * step
         val inRange = perfCnt >= binRangeStart.U && perfCnt < binRangeStop.U
@@ -55,13 +63,13 @@ object XSPerfHistogram {
         val inc = inRange || leftOutOfRange || rightOutOfRange
 
         val counter = RegInit(0.U(64.W))
-        when (perfClean) {
+        when(perfClean) {
           counter := 0.U
-        } .elsewhen(enable && inc) {
+        }.elsewhen(enable && inc) {
           counter := counter + 1.U
         }
 
-        when (perfDump) {
+        when(perfDump) {
           XSPerfPrint(p"${perfName}_${binRangeStart}_${binRangeStop}, $counter\n")
         }
       }
@@ -83,19 +91,18 @@ object XSPerfMax {
       val next_max = Mux(enable && (perfCnt > max), perfCnt, max)
       max := Mux(perfClean, 0.U, next_max)
 
-      when (perfDump) {
+      when(perfDump) {
         XSPerfPrint(p"${perfName}_max, $next_max\n")
       }
     }
   }
 }
 
-object TransactionLatencyCounter
-{
+object TransactionLatencyCounter {
   // count the latency between start signal and stop signal
   // whenever stop signals comes, we create a latency sample
   def apply(start: Bool, stop: Bool): (Bool, UInt) = {
-    assert (!(start && stop))
+    assert(!(start && stop))
     val counter = RegInit(0.U(64.W))
     val next_counter = counter + 1.U
     counter := Mux(start || stop, 0.U, next_counter)
@@ -105,7 +112,7 @@ object TransactionLatencyCounter
 
 object XSPerfPrint {
   def apply(fmt: String, data: Bits*): Any =
-    apply(Printable.pack(fmt, data:_*))
+    apply(Printable.pack(fmt, data: _*))
 
   def apply(pable: Printable): Any = {
     val commonInfo = p"[PERF ][time=${GTimer()}] 9527: "
