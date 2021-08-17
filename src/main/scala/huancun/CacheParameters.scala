@@ -36,6 +36,7 @@ case class CacheParameters(
   dirReadPorts: Int = 1,
   dirReg:       Boolean = true,
   enableDebug:  Boolean = false,
+  enablePerf:   Boolean = false,
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   echoField:    Seq[BundleFieldBase] = Nil,
   reqField:     Seq[BundleFieldBase] = Nil, // master

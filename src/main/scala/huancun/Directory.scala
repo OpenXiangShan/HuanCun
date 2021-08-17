@@ -23,7 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.{ReplacementPolicy, SetAssocLRU}
-import huancun.utils.{ParallelMux, ParallelPriorityMux, SRAMTemplate}
+import huancun.utils._
 
 class Directory(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
@@ -69,6 +69,7 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
   val rreqTags = io.reads.map(r => RegEnable(r.bits.tag, enable = r.fire()))
   val rreqSets = io.reads.map(r => RegEnable(r.bits.set, enable = r.fire()))
   val rreqValids = io.reads.map(r => RegNext(r.fire(), false.B))
+  val rreqReplacerInfo = io.reads.map(r => RegEnable(r.bits.replaceInfo, enable = r.fire()))
 
   val hitVec = Seq.fill(dirReadPorts)(Wire(Vec(cacheParams.ways, Bool())))
   for ((result, i) <- io.results.zipWithIndex) {
@@ -85,17 +86,23 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
 
     result.bits.hit := Cat(hitVec(i)).orR()
+    XSPerfAccumulate(cacheParams, "nrmiss", !result.bits.hit && result.valid)
     result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
     val meta = metas(result.bits.way)
     result.bits.dirty := meta.dirty
     result.bits.state := meta.state
     result.bits.clients := meta.clients
     result.bits.tag := tags(result.bits.way)
+
+    // update replacer for req from channel A
+    when(result.valid && rreqReplacerInfo(i).channel(0)) {
+      replacer.access(rreqSets(i), result.bits.way)
+    }
   }
-  // TODO: should we update replacer when cache hit?
-  when(io.tagWReq.fire()) {
-    replacer.access(io.tagWReq.bits.set, io.tagWReq.bits.way)
-  }
+
+  //  when(io.tagWReq.fire()) {
+  //    replacer.access(io.tagWReq.bits.set, io.tagWReq.bits.way)
+  //  }
 
   for (dirWReq <- io.dirWReqs) {
     when(dirWReq.fire()) {

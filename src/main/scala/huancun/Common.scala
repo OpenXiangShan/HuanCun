@@ -154,6 +154,9 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val idOH = UInt(mshrsAll.W)
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
+  val replaceInfo = new Bundle() {
+    val channel = UInt(3.W)
+  }
 }
 
 class DirResult(implicit p: Parameters) extends DirectoryEntry {
