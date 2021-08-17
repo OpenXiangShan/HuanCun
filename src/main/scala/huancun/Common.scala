@@ -109,7 +109,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val opcode = UInt(3.W)
   val param = UInt(3.W)
   val size = UInt(msgSizeBits.W)
-  val source = UInt(sourceIdBits.W)
+  val source = UInt(sourceIdBits.W) // 0 when this req is a Hint
   val set = UInt(setBits.W)
   val tag = UInt(tagBits.W)
   val off = UInt(offsetBits.W)
@@ -142,6 +142,7 @@ class DirectoryEntry(implicit p: Parameters) extends HuanCunBundle {
   val dirty = Bool()
   val state = UInt(stateBits.W)
   val clients = UInt(clientBits.W)
+  val prefetch = if (hasPrefetchBit) Some(Bool()) else None // whether the block is prefetched
 }
 
 class DirWrite(implicit p: Parameters) extends HuanCunBundle {

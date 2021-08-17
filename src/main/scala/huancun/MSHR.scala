@@ -23,6 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
+import huancun.prefetch._
 import TLMessages._
 import TLPermissions._
 import MetaData._
@@ -40,6 +41,9 @@ class MSHRTasks(implicit p: Parameters) extends HuanCunBundle {
   // direcotry & tag write
   val dir_write = DecoupledIO(new DirWrite)
   val tag_write = DecoupledIO(new TagWrite)
+  // prefetcher
+  val prefetch_train = if (enablePrefetch) Some(DecoupledIO(new PrefetchTrain)) else None
+  val prefetch_resp = if (enablePrefetch) Some(DecoupledIO(new PrefetchResp)) else None
 }
 
 class MSHRResps(implicit p: Parameters) extends HuanCunBundle {
@@ -87,6 +91,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   val meta_no_client = !meta.clients.orR
   val req_promoteT = req_acquire && Mux(meta.hit, meta_no_client && meta.state === TIP, gotT)
   val req_realBtoT = meta.hit && (meta.clients & getClientBitOH(req.source)).orR
+  val prefetch_miss = hintMiss(meta.state, req.param)
   val probes_toN = RegInit(0.U(clientBits.W))
   val probes_done = RegInit(0.U(clientBits.W))
   val probe_exclude =
@@ -118,10 +123,10 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     new_meta.state := Mux(
       req_needT,
       Mux(
-        req_acquire,
-        TRUNK, // Acquire (NtoT/BtoT)
+        req_acquire || req.opcode === Hint && meta.state === TRUNK,
+        TRUNK, // Acquire (NtoT/BtoT) / Intent (PrefetchWrite) on a TRUNK
         TIP
-      ), // Intent (PrefetchWrite) / Put / Atomics
+      ), // Intent (PrefetchWrite) on un-TRUNK / Put / Atomics
       Mux(
         !meta.hit, // The rest are Acquire (NtoB) / Intent (PrefetchRead) / Get
         // If tag miss, new state depends on what L3 grants
@@ -132,7 +137,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
           Seq(
             INVALID -> BRANCH,
             BRANCH -> BRANCH,
-            TRUNK -> TIP,
+            TRUNK -> Mux(req.opcode === Hint, TRUNK, TIP),
             TIP -> Mux(meta_no_client && req_acquire, TRUNK, TIP)
           )
         )
@@ -149,6 +154,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   new_dir.dirty := new_meta.dirty
   new_dir.state := new_meta.state
   new_dir.clients := new_meta.clients
+  new_dir.prefetch.map(_ := prefetch_miss && req.opcode === Hint || meta.prefetch.getOrElse(false.B))
 
   val sink = Reg(UInt(edgeOut.bundle.sinkBits.W))
 
@@ -184,6 +190,9 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   val s_writebackdir = RegInit(true.B) // dir_write
   val s_writeput = RegInit(true.B) // sink_a
   val s_writerelease = RegInit(true.B) // sink_c
+  val s_triggerprefetch =
+    if (enablePrefetch) Some(RegInit(true.B)) else None // trigger a prefetch training to prefetcher
+  val s_prefetchack = if (enablePrefetch) Some(RegInit(true.B)) else None // resp to prefetcher
 
   val w_rprobeackfirst = RegInit(true.B)
   val w_rprobeacklast = RegInit(true.B)
@@ -209,6 +218,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     s_writebackdir := true.B
     s_writeput := true.B
     s_writerelease := true.B
+    s_triggerprefetch.map(_ := true.B)
+    s_prefetchack.map(_ := true.B)
 
     w_rprobeackfirst := true.B
     w_rprobeacklast := true.B
@@ -258,7 +269,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     }.otherwise {
       // A channel requests
       // TODO: consider parameterized write-through policy for put/atomics
-      s_execute := false.B
+      // Since prefetch uses inner interface, Hint does not need a HintAck
+      s_execute := req.opcode === Hint
       // need replacement
       when(!meta.hit && meta.state =/= INVALID) {
         s_release := false.B
@@ -281,7 +293,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       }
       // need pprobe
       when(
-        meta.hit && (req_needT || meta.state === TRUNK) &&
+        meta.hit && (req_needT || meta.state === TRUNK) && req.opcode =/= Hint &&
           (
             meta.clients & (~Mux(skipProbeN(req.opcode), getClientBitOH(req.source), 0.U)).asUInt()
           ).orR()
@@ -309,6 +321,15 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
       when(req.opcode(2, 1) === 0.U) { // Put[Full/Partial]Data
         s_writeput := false.B
       }
+      // trigger a prefetch when req is from DCache, and miss / prefetched hit in L2
+      if (enablePrefetch) {
+        when(req.opcode =/= Hint && getClientBitOH(req.source).orR && (!meta.hit || meta.prefetch.getOrElse(false.B))) {
+          s_triggerprefetch.map(_ := false.B)
+        }
+        when(req.opcode === Hint) {
+          s_prefetchack.map(_ := false.B)
+        }
+      }
     }
   }
 
@@ -325,6 +346,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
    *                   /     |     \
    *                  /      |      \
    *      s_grantack(E) s_execute(D) s_writeput
+   *                   or s_prefetchack
    *
    * The edges between s_* state regs from top to bottom indicate the scheduling priority.
    * For example, s_release > s_acquire and s_pprobe > s_acquire mean that before
@@ -344,6 +366,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.tag_write.valid := !s_writebacktag && no_wait
   io.tasks.sink_a.valid := !s_writeput && w_grant && w_pprobeack
   io.tasks.sink_c.valid := !s_writerelease // && w_grant && w_pprobeack
+  io.tasks.prefetch_train.map(_.valid := !s_triggerprefetch.getOrElse(true.B))
+  io.tasks.prefetch_resp.map(_.valid := !s_prefetchack.getOrElse(true.B) && w_grantfirst)
 
   val oa = io.tasks.source_a.bits
   val ob = io.tasks.source_b.bits
@@ -440,6 +464,19 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.tag_write.bits.way := meta.way
   io.tasks.tag_write.bits.tag := req.tag
 
+  io.tasks.prefetch_train.foreach {
+    case train =>
+      train.bits.tag := req.tag
+      train.bits.set := req.set
+      train.bits.needT := req_needT
+  }
+
+  io.tasks.prefetch_resp.foreach {
+    case resp =>
+      resp.bits.tag := req.tag
+      resp.bits.set := req.set
+  }
+
   dontTouch(io.tasks)
   when(io.tasks.source_a.fire()) {
     s_acquire := true.B
@@ -469,6 +506,12 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
   when(io.tasks.sink_c.fire()) {
     s_writerelease := true.B
+  }
+  when(io.tasks.prefetch_train.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchTrain))).fire()) {
+    s_triggerprefetch.map(_ := true.B)
+  }
+  when(io.tasks.prefetch_resp.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchResp))).fire()) {
+    s_prefetchack.map(_ := true.B)
   }
 
   // Monitor resps and mark the w_* state regs
@@ -513,7 +556,10 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // Release MSHR
-  when(no_wait && s_execute && s_probeack && meta_valid && s_writebacktag && s_writebackdir && s_writerelease) { // TODO: remove s_writebackdir to improve perf
+  val no_schedule = s_execute && s_probeack && meta_valid && s_writebacktag && s_writebackdir && s_writerelease &&
+    s_triggerprefetch.getOrElse(true.B) &&
+    s_prefetchack.getOrElse(true.B)
+  when(no_wait && no_schedule) { // TODO: remove s_writebackdir to improve perf
     req_valid := false.B
     meta_valid := false.B
   }

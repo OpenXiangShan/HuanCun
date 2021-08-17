@@ -51,4 +51,8 @@ object MetaData {
     param === TLPermissions.TtoB || param === TLPermissions.BtoB
   }
   def isT(state: UInt): Bool = state(1)
+  def hintMiss(state: UInt, param: UInt): Bool = {
+    param === TLHints.PREFETCH_WRITE && !isT(state) ||
+    param === TLHints.PREFETCH_READ && state === INVALID
+  }
 }
