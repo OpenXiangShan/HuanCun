@@ -96,7 +96,7 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     result.bits.tag := tags(result.bits.way)
 
     // update replacer for req from channel A
-    when(result.valid && rreqReplacerInfo(i).channel(0)) {
+    when(result.valid && rreqReplacerInfo(i).channel(0) && !rreqReplacerInfo(i).isHint) {
       replacer.access(rreqSets(i), result.bits.way)
     }
   }

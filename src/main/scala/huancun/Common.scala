@@ -157,6 +157,7 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val set = UInt(setBits.W)
   val replaceInfo = new Bundle() {
     val channel = UInt(3.W)
+    val isHint = Bool()
   }
 }
 

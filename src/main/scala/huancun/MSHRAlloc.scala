@@ -23,6 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import utils._
+import freechips.rocketchip.tilelink._
 
 class MSHRSelector(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
@@ -145,6 +146,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     Mux(nestC_valid || nestB_valid, 0.U(mshrs.W), selectedMSHROH)
   )
   dirRead.bits.replaceInfo.channel := request.bits.channel
+  dirRead.bits.replaceInfo.isHint := request.bits.opcode === TLMessages.Hint
 
   io.dirReads.drop(1).foreach { d =>
     d.valid := false.B
