@@ -62,7 +62,5 @@ class TestTop
 abstract class TLCTest extends L2Tester {
   val serialList = ArrayBuffer[(Int, TLCTrans)]()
   val scoreboard = mutable.Map[BigInt, ScoreboardData]()
-  val testTop = DisableMonitors { p =>
-    LazyModule(new TestTop(serialList, scoreboard)(p))
-  }
+  val testTop = LazyModule(new TestTop(serialList, scoreboard))
 }
