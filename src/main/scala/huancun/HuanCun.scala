@@ -25,15 +25,12 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.UIntToOH1
-import huancun.prefetch.{BOPParamsKey}
 
 trait HasHuanCunParameters {
   val p: Parameters
   val cacheParams = p(CacheParamsKey)
-  val enablePrefetch = true
-  val prefetchType = "bop"
-  val bopParams = p(BOPParamsKey)
-  val hasPrefetchBit = enablePrefetch && prefetchType == "bop"
+  val prefetchOpt = cacheParams.prefetch
+  val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
 
   val blockBytes = cacheParams.blockBytes
   val beatBytes = cacheParams.channelBytes.d.get

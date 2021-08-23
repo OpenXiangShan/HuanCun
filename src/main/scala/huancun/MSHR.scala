@@ -42,8 +42,8 @@ class MSHRTasks(implicit p: Parameters) extends HuanCunBundle {
   val dir_write = DecoupledIO(new DirWrite)
   val tag_write = DecoupledIO(new TagWrite)
   // prefetcher
-  val prefetch_train = if (enablePrefetch) Some(DecoupledIO(new PrefetchTrain)) else None
-  val prefetch_resp = if (enablePrefetch) Some(DecoupledIO(new PrefetchResp)) else None
+  val prefetch_train = prefetchOpt.map(_ => DecoupledIO(new PrefetchTrain))
+  val prefetch_resp = prefetchOpt.map(_ => DecoupledIO(new PrefetchResp))
 }
 
 class MSHRResps(implicit p: Parameters) extends HuanCunBundle {
@@ -154,7 +154,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   new_dir.dirty := new_meta.dirty
   new_dir.state := new_meta.state
   new_dir.clients := new_meta.clients
-  new_dir.prefetch.map(_ := prefetch_miss && req.opcode === Hint || meta.prefetch.getOrElse(false.B))
+  new_dir.prefetch.foreach(_ := prefetch_miss && req.opcode === Hint || meta.prefetch.get)
 
   val sink = Reg(UInt(edgeOut.bundle.sinkBits.W))
 
@@ -191,8 +191,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   val s_writeput = RegInit(true.B) // sink_a
   val s_writerelease = RegInit(true.B) // sink_c
   val s_triggerprefetch =
-    if (enablePrefetch) Some(RegInit(true.B)) else None // trigger a prefetch training to prefetcher
-  val s_prefetchack = if (enablePrefetch) Some(RegInit(true.B)) else None // resp to prefetcher
+    prefetchOpt.map(_ => RegInit(true.B)) // trigger a prefetch training to prefetcher
+  val s_prefetchack = prefetchOpt.map(_ => RegInit(true.B)) // resp to prefetcher
 
   val w_rprobeackfirst = RegInit(true.B)
   val w_rprobeacklast = RegInit(true.B)
@@ -218,8 +218,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
     s_writebackdir := true.B
     s_writeput := true.B
     s_writerelease := true.B
-    s_triggerprefetch.map(_ := true.B)
-    s_prefetchack.map(_ := true.B)
+    s_triggerprefetch.foreach(_ := true.B)
+    s_prefetchack.foreach(_ := true.B)
 
     w_rprobeackfirst := true.B
     w_rprobeacklast := true.B
@@ -322,14 +322,14 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
         s_writeput := false.B
       }
       // trigger a prefetch when req is from DCache, and miss / prefetched hit in L2
-      if (enablePrefetch) {
-        when(req.opcode =/= Hint && getClientBitOH(req.source).orR && (!meta.hit || meta.prefetch.getOrElse(false.B))) {
+      prefetchOpt.map(_ => {
+        when(req.opcode =/= Hint && getClientBitOH(req.source).orR && (!meta.hit || meta.prefetch.get)) {
           s_triggerprefetch.map(_ := false.B)
         }
         when(req.opcode === Hint) {
           s_prefetchack.map(_ := false.B)
         }
-      }
+      })
     }
   }
 
@@ -366,8 +366,8 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.tag_write.valid := !s_writebacktag && no_wait
   io.tasks.sink_a.valid := !s_writeput && w_grant && w_pprobeack
   io.tasks.sink_c.valid := !s_writerelease // && w_grant && w_pprobeack
-  io.tasks.prefetch_train.map(_.valid := !s_triggerprefetch.getOrElse(true.B))
-  io.tasks.prefetch_resp.map(_.valid := !s_prefetchack.getOrElse(true.B) && w_grantfirst)
+  io.tasks.prefetch_train.foreach(_.valid := !s_triggerprefetch.get)
+  io.tasks.prefetch_resp.foreach(_.valid := !s_prefetchack.get && w_grantfirst)
 
   val oa = io.tasks.source_a.bits
   val ob = io.tasks.source_b.bits
@@ -464,17 +464,15 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   io.tasks.tag_write.bits.way := meta.way
   io.tasks.tag_write.bits.tag := req.tag
 
-  io.tasks.prefetch_train.foreach {
-    case train =>
-      train.bits.tag := req.tag
-      train.bits.set := req.set
-      train.bits.needT := req_needT
+  io.tasks.prefetch_train.foreach { train =>
+    train.bits.tag := req.tag
+    train.bits.set := req.set
+    train.bits.needT := req_needT
   }
 
-  io.tasks.prefetch_resp.foreach {
-    case resp =>
-      resp.bits.tag := req.tag
-      resp.bits.set := req.set
+  io.tasks.prefetch_resp.foreach { resp =>
+    resp.bits.tag := req.tag
+    resp.bits.set := req.set
   }
 
   dontTouch(io.tasks)
@@ -507,11 +505,13 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
   when(io.tasks.sink_c.fire()) {
     s_writerelease := true.B
   }
-  when(io.tasks.prefetch_train.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchTrain))).fire()) {
-    s_triggerprefetch.map(_ := true.B)
-  }
-  when(io.tasks.prefetch_resp.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchResp))).fire()) {
-    s_prefetchack.map(_ := true.B)
+  if (prefetchOpt.nonEmpty) {
+    when(io.tasks.prefetch_train.get.fire()) {
+      s_triggerprefetch.get := true.B
+    }
+    when(io.tasks.prefetch_resp.get.fire()) {
+      s_prefetchack.get := true.B
+    }
   }
 
   // Monitor resps and mark the w_* state regs

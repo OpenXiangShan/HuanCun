@@ -5,7 +5,7 @@
   * XiangShan is licensed under Mulan PSL v2.
   * You can use this software according to the terms and conditions of the Mulan PSL v2.
   * You may obtain a copy of Mulan PSL v2 at:
-  *          http://license.coscl.org.cn/MulanPSL2
+  * http://license.coscl.org.cn/MulanPSL2
   *
   * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
   * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
@@ -59,7 +59,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   io.out.e <> sourceE.io.e
 
   // MSHRs
-  val ms = Seq.fill(mshrsAll) { Module(new MSHR()) }
+  val ms = Seq.fill(mshrsAll) {
+    Module(new MSHR())
+  }
   require(mshrsAll == mshrs + 2)
   val ms_abc = ms.init.init
   val ms_bc = ms.init.last
@@ -79,6 +81,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   dataStorage.io.sinkC_wdata <> sinkC.io.bs_wdata
 
   val mshrAlloc = Module(new MSHRAlloc)
+  val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher))
 
   mshrAlloc.io.a_req <> sinkA.io.alloc
   mshrAlloc.io.b_req <> sinkB.io.alloc
@@ -161,28 +164,26 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
-  if (enablePrefetch) {
-    val pft = Module(new Prefetcher)
-
+  prefetcher.foreach { pft =>
+    // override mshrAlloc.io.a_req
     val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
     alloc_A_arb.io.in(0) <> sinkA.io.alloc
     alloc_A_arb.io.in(1) <> pft.io.req
     mshrAlloc.io.a_req <> alloc_A_arb.io.out
-
+    // connect abc mshrs to prefetcher
     arbTasks(
       pft.io.train,
-      abc_mshr.map(_.io.tasks.prefetch_train.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchTrain)))),
+      abc_mshr.map(_.io.tasks.prefetch_train.get),
       Some("prefetchTrain")
     )
     arbTasks(
       pft.io.resp,
-      abc_mshr.map(_.io.tasks.prefetch_resp.getOrElse(0.U.asTypeOf(DecoupledIO(new PrefetchResp)))),
+      abc_mshr.map(_.io.tasks.prefetch_resp.get),
       Some("prefetchResp")
     )
-
     for (mshr <- Seq(bc_mshr, c_mshr)) {
-      mshr.io.tasks.prefetch_train.map(_.ready := true.B)
-      mshr.io.tasks.prefetch_resp.map(_.ready := true.B)
+      mshr.io.tasks.prefetch_train.foreach(_.ready := true.B)
+      mshr.io.tasks.prefetch_resp.foreach(_.ready := true.B)
     }
   }
 
@@ -208,6 +209,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       ret
     } else x
   }
+
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
       val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.idOH(i))

@@ -1,12 +1,10 @@
 package huancun.prefetch
 
-import huancun.utils.{SRAMTemplate}
-import chipsalliance.rocketchip.config.{Field, Parameters}
+import huancun.utils.SRAMTemplate
+import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.tilelink._
-
-case object BOPParamsKey extends Field[BOPParameters](BOPParameters())
+import huancun.HasHuanCunParameters
 
 case class BOPParameters(
   rrTableEntries: Int = 256,
@@ -19,11 +17,39 @@ case class BOPParameters(
      81,  90,  96, 100, 108, 120, 125, 128, 135, 144,
     150, 160, 162, 180, 192, 200, 216, 225, 240, 243,
     250, 256*/
-  ),
-  inflightEntries: Int = 16 // max num of inflight prefetch reqs
-)
+  ))
+    extends PrefetchParameters {
+  override val hasPrefetchBit:  Boolean = true
+  override val inflightEntries: Int = 16
+}
 
-class ScoreTableEntry(implicit p: Parameters) extends PrefetchBundle {
+trait HasBOPParams extends HasHuanCunParameters {
+  val bopParams = prefetchOpt.get.asInstanceOf[BOPParameters]
+  // Best offset
+  val defaultMinAddrBits = offsetBits + log2Up(bopParams.rrTableEntries) + bopParams.rrTagBits
+  val defaultConfig = addressBits >= defaultMinAddrBits
+
+  val rrTableEntries = if (defaultConfig) bopParams.rrTableEntries else 2
+  val rrIdxBits = log2Up(rrTableEntries)
+  val rrTagBits = if (defaultConfig) bopParams.rrTagBits else (addressBits - offsetBits - rrIdxBits)
+  val scoreBits = bopParams.scoreBits
+  val roundMax = bopParams.roundMax
+  val badScore = bopParams.badScore
+  val offsetList = bopParams.offsetList
+  val inflightEntries = bopParams.inflightEntries
+
+  val scores = offsetList.length
+  val offsetWidth = log2Up(offsetList(scores - 1)) + 1
+  val roundBits = log2Up(roundMax)
+  val scoreMax = (1 << scoreBits) - 1
+  val scoreTableIdxBits = log2Up(scores)
+  // val prefetchIdWidth = log2Up(inflightEntries)
+}
+
+abstract class BOPBundle(implicit val p: Parameters) extends Bundle with HasBOPParams
+abstract class BOPModule(implicit val p: Parameters) extends Module with HasBOPParams
+
+class ScoreTableEntry(implicit p: Parameters) extends BOPBundle {
   val offset = UInt(offsetWidth.W)
   val score = UInt(scoreBits.W)
 
@@ -35,25 +61,25 @@ class ScoreTableEntry(implicit p: Parameters) extends PrefetchBundle {
   }
 }
 
-class TestOffsetReq(implicit p: Parameters) extends PrefetchBundle {
+class TestOffsetReq(implicit p: Parameters) extends BOPBundle {
   // find whether (X-d) is in recent request table
   val addr = UInt(addressBits.W)
   val testOffset = UInt(offsetWidth.W)
   val ptr = UInt(scoreTableIdxBits.W)
 }
 
-class TestOffsetResp(implicit p: Parameters) extends PrefetchBundle {
+class TestOffsetResp(implicit p: Parameters) extends BOPBundle {
   // val testOffset = UInt(offsetWidth.W)
   val ptr = UInt(scoreTableIdxBits.W)
   val hit = Bool()
 }
 
-class TestOffsetBundle(implicit p: Parameters) extends PrefetchBundle {
+class TestOffsetBundle(implicit p: Parameters) extends BOPBundle {
   val req = DecoupledIO(new TestOffsetReq)
   val resp = Flipped(DecoupledIO(new TestOffsetResp))
 }
 
-class RecentRequestTable(implicit p: Parameters) extends PrefetchModule {
+class RecentRequestTable(implicit p: Parameters) extends BOPModule {
   val io = IO(new Bundle {
     val w = Flipped(DecoupledIO(UInt(addressBits.W)))
     val r = Flipped(new TestOffsetBundle)
@@ -102,7 +128,7 @@ class RecentRequestTable(implicit p: Parameters) extends PrefetchModule {
 
 }
 
-class OffsetScoreTable(implicit p: Parameters) extends PrefetchModule {
+class OffsetScoreTable(implicit p: Parameters) extends BOPModule {
   val io = IO(new Bundle {
     val req = Flipped(DecoupledIO(UInt(addressBits.W)))
     val prefetchOffset = Output(UInt(offsetWidth.W))
@@ -182,7 +208,7 @@ class OffsetScoreTable(implicit p: Parameters) extends PrefetchModule {
 
 }
 
-class BestOffsetPrefetch(implicit p: Parameters) extends PrefetchModule {
+class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
   val io = IO(new PrefetchIO)
 
   val rrTable = Module(new RecentRequestTable)

@@ -1,6 +1,6 @@
 package huancun.prefetch
 
-import chipsalliance.rocketchip.config.{Parameters}
+import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
@@ -81,30 +81,24 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
     val resp = Flipped(DecoupledIO(new PrefetchResp))
   })
 
-  if (enablePrefetch && prefetchType == "bop") { // Best offset
-    val pft = Module(new BestOffsetPrefetch)
-    val pftQueue = Module(new PrefetchQueue)
-
-    pft.io.train <> io.train
-    pft.io.resp <> io.resp
-    pftQueue.io.enq <> pft.io.req
-    pftQueue.io.deq.ready := io.req.ready
-    io.req.valid := pftQueue.io.deq.valid
-    io.req.bits := DontCare
-    io.req.bits.opcode := TLMessages.Hint
-    io.req.bits.param := Mux(pftQueue.io.deq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
-    io.req.bits.size := log2Up(blockBytes).U
-    io.req.bits.source := 0.U // DontCare
-    io.req.bits.set := pftQueue.io.deq.bits.set
-    io.req.bits.tag := pftQueue.io.deq.bits.tag
-    io.req.bits.off := 0.U
-    io.req.bits.channel := "b001".U
-  } else {
-    io.train.ready := true.B
-
-    io.req.valid := false.B
-    io.req.bits := DontCare
-
-    io.resp.ready := true.B
+  prefetchOpt.get match {
+    case bop: BOPParameters =>
+      val pft = Module(new BestOffsetPrefetch)
+      val pftQueue = Module(new PrefetchQueue)
+      pft.io.train <> io.train
+      pft.io.resp <> io.resp
+      pftQueue.io.enq <> pft.io.req
+      pftQueue.io.deq.ready := io.req.ready
+      io.req.valid := pftQueue.io.deq.valid
+      io.req.bits := DontCare
+      io.req.bits.opcode := TLMessages.Hint
+      io.req.bits.param := Mux(pftQueue.io.deq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
+      io.req.bits.size := log2Up(blockBytes).U
+      io.req.bits.source := 0.U // DontCare
+      io.req.bits.set := pftQueue.io.deq.bits.set
+      io.req.bits.tag := pftQueue.io.deq.bits.tag
+      io.req.bits.off := 0.U
+      io.req.bits.channel := "b001".U
+    case _ => assert(cond = false, "Unknown prefetcher")
   }
 }
