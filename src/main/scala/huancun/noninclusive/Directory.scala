@@ -3,7 +3,9 @@ package huancun.noninclusive
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import chisel3.util.random.LFSR
 import huancun._
+import huancun.utils.{ParallelPriorityMux, SRAMTemplate}
 
 trait HasClientInfo { this: HasHuanCunParameters =>
   val clientCacheParams = cacheParams.clientCache.get
@@ -75,8 +77,227 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Sel
   val clientTagWreq = Vec(clientBits, Flipped(DecoupledIO(new ClientTagWrite)))
 }
 
+class SubDirectory[T <: Data](
+  rports:      Int,
+  wports:      Int,
+  sets:        Int,
+  ways:        Int,
+  tagBits:     Int,
+  dir_init_fn: () => T,
+  dir_hit_fn:  T => Bool)
+    extends Module {
+
+  val setBits = log2Ceil(sets)
+  val wayBits = log2Ceil(ways)
+  val dir_init = dir_init_fn()
+
+  val io = IO(new Bundle() {
+    val reads = Vec(
+      rports,
+      Flipped(DecoupledIO(new Bundle() {
+        val tag = UInt(tagBits.W)
+        val set = UInt(setBits.W)
+      }))
+    )
+    val resps = Vec(
+      rports,
+      ValidIO(new Bundle() {
+        val hit = Bool()
+        val way = UInt(wayBits.W)
+        val tag = UInt(tagBits.W)
+        val dir = dir_init.cloneType
+      })
+    )
+    val tag_w = Flipped(DecoupledIO(new Bundle() {
+      val tag = UInt(tagBits.W)
+      val set = UInt(setBits.W)
+      val way = UInt(wayBits.W)
+    }))
+    val dir_w = Vec(
+      wports,
+      Flipped(DecoupledIO(new Bundle() {
+        val set = UInt(setBits.W)
+        val way = UInt(wayBits.W)
+        val dir = dir_init.cloneType
+      }))
+    )
+  })
+
+  val resetFinish = RegInit(false.B)
+  val resetIdx = RegInit((sets - 1).U)
+  val metaArray = Mem(sets, Vec(ways, dir_init.cloneType))
+
+  when(!resetFinish) {
+    metaArray(resetIdx).foreach(w => w := dir_init)
+    resetIdx := resetIdx - 1.U
+  }
+  when(resetIdx === 0.U) {
+    resetFinish := true.B
+  }
+
+  io.tag_w.ready := true.B
+  io.reads.foreach(_.ready := !io.tag_w.valid && resetFinish)
+
+  val tagArray = Array.fill(rports) {
+    Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true))
+  }
+
+  val tagRead = Seq.fill(rports) {
+    Wire(Vec(ways, UInt(tagBits.W)))
+  }
+  tagArray
+    .zip(io.reads)
+    .zip(tagRead)
+    .foreach({
+      case ((sram, rreq), rdata) =>
+        val wen = io.tag_w.fire()
+        sram.io.w(wen, io.tag_w.bits.tag, io.tag_w.bits.set, UIntToOH(io.tag_w.bits.way))
+        assert(!wen || (wen && sram.io.w.req.ready))
+        rdata := sram.io.r(!wen, rreq.bits.set).resp.data
+        assert(wen || (!wen && sram.io.r.req.ready))
+    })
+
+  val reqTags = io.reads.map(r => RegEnable(r.bits.tag, enable = r.fire()))
+  val reqSets = io.reads.map(r => RegEnable(r.bits.set, enable = r.fire()))
+  val reqValids = io.reads.map(r => RegNext(r.fire(), false.B))
+
+  val hitVec = Seq.fill(rports)(Wire(Vec(ways, Bool())))
+  for ((result, i) <- io.resps.zipWithIndex) {
+    result.valid := reqValids(i)
+    val tags = tagRead(i)
+    val metas = metaArray(reqSets(i))
+    val tagMatchVec = tags.map(_ === reqTags(i))
+    val metaValidVec = metas.map(dir_hit_fn)
+    hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
+    val hitWay = OHToUInt(hitVec(i))
+    val replaceWay = LFSR(wayBits) // TODO: improve this
+    val invalidWay = ParallelPriorityMux(metaValidVec.zipWithIndex.map(a => (!a._1, a._2.U)))
+    val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
+
+    result.bits.hit := Cat(hitVec(i)).orR()
+    result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
+    val meta = metas(result.bits.way)
+    result.bits.dir := meta
+    result.bits.tag := tags(result.bits.way)
+  }
+
+  for (req <- io.dir_w) {
+    when(req.fire()) {
+      metaArray(req.bits.set)(req.bits.way) := req.bits.dir
+    }
+    req.ready := true.B
+  }
+
+}
+
 class Directory(implicit p: Parameters)
     extends BaseDirectory[DirResult, SelfDirWrite, SelfTagWrite]
-    with DontCareInnerLogic {
+    with HasClientInfo {
   val io = IO(new DirectoryIO())
+
+  def clientHitFn(dir: ClientDirEntry): Bool = dir.state =/= MetaData.INVALID
+  val clientDirs = (0 until clientBits).map { _ =>
+    val clientDir = Module(
+      new SubDirectory[ClientDirEntry](
+        rports = dirReadPorts,
+        wports = mshrsAll,
+        sets = clientSets,
+        ways = clientWays,
+        tagBits = clientTagBits,
+        dir_init_fn = () => {
+          val init = Wire(new ClientDirEntry)
+          init.state := MetaData.INVALID
+          init
+        },
+        dir_hit_fn = clientHitFn
+      )
+    )
+    clientDir
+  }
+
+  def selfHitFn(dir: SelfDirEntry): Bool = dir.state =/= MetaData.INVALID
+  val selfDir = Module(
+    new SubDirectory[SelfDirEntry](
+      rports = dirReadPorts,
+      wports = mshrsAll,
+      sets = cacheParams.sets,
+      ways = cacheParams.ways,
+      tagBits = tagBits,
+      dir_init_fn = () => {
+        val init = Wire(new SelfDirEntry())
+        init := DontCare
+        init.state := MetaData.INVALID
+        init
+      },
+      dir_hit_fn = selfHitFn
+    )
+  )
+
+  for (i <- 0 until dirReadPorts) {
+    val rports = clientDirs.map(_.io.reads(i)) :+ selfDir.io.reads(i)
+    val req = io.reads(i)
+    rports.foreach { p =>
+      p.valid := req.valid
+      p.bits.set := req.bits.set
+      p.bits.tag := req.bits.tag
+    }
+    req.ready := Cat(rports.map(_.ready)).andR()
+    val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
+    val resp = io.results(i)
+    val clientResps = clientDirs.map(_.io.resps(i))
+    val selfResp = selfDir.io.resps(i)
+    resp.valid := selfResp.valid
+    val valids = Cat(clientResps.map(_.valid) :+ selfResp.valid)
+    assert(valids.andR() || !valids.orR(), "valids must be all 1s or 0s")
+    resp.bits.idOH := reqIdOHReg
+    resp.bits.self.hit := selfResp.bits.hit
+    resp.bits.self.way := selfResp.bits.way
+    resp.bits.self.tag := selfResp.bits.tag
+    resp.bits.self.dirty := selfResp.bits.dir.dirty
+    resp.bits.self.state := selfResp.bits.dir.state
+    resp.bits.self.clientStates := selfResp.bits.dir.clientStates
+    resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
+    resp.bits.clients.zip(clientResps).foreach {
+      case (resp, clientResp) =>
+        resp.hit := clientResp.bits.hit
+        resp.way := clientResp.bits.way
+        resp.tag := clientResp.bits.tag
+        resp.state := clientResp.bits.dir.state
+    }
+  }
+
+  // Self Tag Write
+  selfDir.io.tag_w.valid := io.tagWReq.valid
+  selfDir.io.tag_w.bits.tag := io.tagWReq.bits.tag
+  selfDir.io.tag_w.bits.set := io.tagWReq.bits.set
+  selfDir.io.tag_w.bits.way := io.tagWReq.bits.way
+  io.tagWReq.ready := selfDir.io.tag_w.ready
+  // Clients Tag Write
+  for ((req, wport) <- io.clientTagWreq.zip(clientDirs.map(_.io.tag_w))) {
+    wport.valid := req.valid
+    wport.bits.tag := req.bits.tag
+    wport.bits.set := req.bits.set
+    wport.bits.way := req.bits.way
+    req.ready := wport.ready
+  }
+
+  // Self Dir Write
+  for ((req, wport) <- io.dirWReqs.zip(selfDir.io.dir_w)) {
+    wport.valid := req.valid
+    wport.bits.set := req.bits.set
+    wport.bits.way := req.bits.way
+    wport.bits.dir := req.bits.data
+    req.ready := wport.ready
+  }
+  // Clients Dir Write
+  for ((reqs, client) <- io.clientDirWReqs.zip(clientDirs)) {
+    for ((req, wport) <- reqs.zip(client.io.dir_w)) {
+      wport.valid := req.valid
+      wport.bits.set := req.bits.set
+      wport.bits.way := req.bits.way
+      wport.bits.dir := req.bits.data
+      req.ready := wport.ready
+    }
+  }
+
 }
