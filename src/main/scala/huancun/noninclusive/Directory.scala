@@ -39,7 +39,7 @@ class ClientDirResult(implicit p: Parameters) extends ClientDirEntry with HasCli
 
 class DirResult(implicit p: Parameters) extends BaseDirResult {
   val self = new SelfDirResult
-  val client = new ClientDirResult
+  val clients = Vec(clientBits, new ClientDirResult)
 }
 
 class SelfTagWrite(implicit p: Parameters) extends BaseTagWrite {
@@ -71,8 +71,8 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Sel
   val results = Vec(dirReadPorts, ValidIO(new DirResult))
   val dirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new SelfDirWrite)))
   val tagWReq = Flipped(DecoupledIO(new SelfTagWrite))
-  val clientDirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new ClientDirWrite)))
-  val clientTagWreq = Flipped(DecoupledIO(new ClientTagWrite))
+  val clientDirWReqs = Vec(clientBits, Vec(mshrsAll, Flipped(DecoupledIO(new ClientDirWrite))))
+  val clientTagWreq = Vec(clientBits, Flipped(DecoupledIO(new ClientTagWrite)))
 }
 
 class Directory(implicit p: Parameters)

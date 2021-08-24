@@ -10,8 +10,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     override val tasks = new MSHRTasks[SelfDirWrite, SelfTagWrite] {
       override val dir_write: DecoupledIO[SelfDirWrite] = DecoupledIO(new SelfDirWrite())
       override val tag_write: DecoupledIO[SelfTagWrite] = DecoupledIO(new SelfTagWrite())
-      val client_dir_write = DecoupledIO(new ClientDirWrite())
-      val client_tag_write = DecoupledIO(new ClientTagWrite())
+      val client_dir_write = Vec(clientBits, DecoupledIO(new ClientDirWrite()))
+      val client_tag_write = Vec(clientBits, DecoupledIO(new ClientTagWrite()))
     }
     override val dirResult = Flipped(ValidIO(new DirResult()))
   })

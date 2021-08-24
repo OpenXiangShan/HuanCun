@@ -157,8 +157,12 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(directory.io.tagWReq, ms.map(_.io.tasks.tag_write), Some("tagWrite"))
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
-      dir.io.clientDirWReqs <> VecInit(ms.map(_.io.tasks.client_dir_write))
-      arbTasks(dir.io.clientTagWreq, ms.map(_.io.tasks.client_tag_write), Some("clientTagWrite"))
+      for ((dirW, idx) <- dir.io.clientDirWReqs.zipWithIndex) {
+        dirW <> ms.map(_.io.tasks.client_dir_write(idx))
+      }
+      for ((tagW, idx) <- dir.io.clientTagWreq.zipWithIndex) {
+        arbTasks(tagW, ms.map(_.io.tasks.client_tag_write(idx)), Some(s"client_${idx}_tagWrite"))
+      }
     case (_: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
     // skip
     case _ =>
