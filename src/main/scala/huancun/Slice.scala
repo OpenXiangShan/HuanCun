@@ -23,7 +23,6 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
-import huancun.utils.ParallelMux
 import huancun.prefetch._
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
@@ -60,7 +59,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   // MSHRs
   val ms = Seq.fill(mshrsAll) {
-    Module(new MSHR())
+    Module(new inclusive.MSHR())
   }
   require(mshrsAll == mshrs + 2)
   val ms_abc = ms.init.init
@@ -124,7 +123,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   c_mshr.io.nestedwb := 0.U.asTypeOf(nestedWb)
 
-  val directory = Module(new Directory)
+  val directory = Module(new inclusive.Directory)
   directory.io.reads <> mshrAlloc.io.dirReads
 
   // Send tasks
@@ -213,7 +212,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
       val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.idOH(i))
-      val dirResult = Wire(Valid(new DirResult))
+      val dirResult = Wire(Valid(directory.io.results.head.bits.cloneType))
       dirResult.valid := Cat(dirResultMatch).orR()
       dirResult.bits := Mux1H(dirResultMatch.zip(directory.io.results.map(_.bits)))
       mshr.io.dirResult := regFn(dirResult)

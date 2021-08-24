@@ -17,50 +17,25 @@
 
 // See LICENSE.SiFive for license details.
 
-package huancun
+package huancun.inclusive
 
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import freechips.rocketchip.tilelink.TLMessages._
+import freechips.rocketchip.tilelink.TLPermissions._
 import freechips.rocketchip.tilelink._
+import huancun._
+import huancun.MetaData._
 import huancun.prefetch._
-import TLMessages._
-import TLPermissions._
-import MetaData._
 
-class MSHRTasks(implicit p: Parameters) extends HuanCunBundle {
-  // inner
-  val sink_a = DecoupledIO(new SinkAReq) // put
-  val source_b = DecoupledIO(new SourceBReq) // probe
-  val sink_c = DecoupledIO(new SinkCReq) // inner release
-  val source_d = DecoupledIO(new SourceDReq) // grant & atomics
-  // outer
-  val source_a = DecoupledIO(new SourceAReq) // acquire
-  val source_c = DecoupledIO(new SourceCReq) // outer release & probe ack
-  val source_e = DecoupledIO(new SourceEReq) // grant ack
-  // direcotry & tag write
-  val dir_write = DecoupledIO(new DirWrite)
-  val tag_write = DecoupledIO(new TagWrite)
-  // prefetcher
-  val prefetch_train = prefetchOpt.map(_ => DecoupledIO(new PrefetchTrain))
-  val prefetch_resp = prefetchOpt.map(_ => DecoupledIO(new PrefetchResp))
-}
-
-class MSHRResps(implicit p: Parameters) extends HuanCunBundle {
-  val sink_c = ValidIO(new SinkCResp)
-  val sink_d = ValidIO(new SinkDResp)
-  val sink_e = ValidIO(new SinkEResp)
-}
-
-class MSHR()(implicit p: Parameters) extends HuanCunModule {
-  val io = IO(new Bundle() {
-    val id = Input(UInt(mshrBits.W))
-    val alloc = Flipped(ValidIO(new MSHRRequest))
-    val status = ValidIO(new MSHRStatus)
-    val tasks = new MSHRTasks
-    val dirResult = Flipped(ValidIO(new DirResult))
-    val resps = Flipped(new MSHRResps)
-    val nestedwb = Input(new NestedWriteback)
+class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWrite] {
+  val io = IO(new BaseMSHRIO[DirResult, DirWrite, TagWrite] {
+    override val tasks = new MSHRTasks[DirWrite, TagWrite] {
+      override val dir_write: DecoupledIO[DirWrite] = DecoupledIO(new DirWrite())
+      override val tag_write: DecoupledIO[TagWrite] = DecoupledIO(new TagWrite())
+    }
+    override val dirResult = Flipped(ValidIO(new DirResult()))
   })
 
   val req = Reg(new MSHRRequest)

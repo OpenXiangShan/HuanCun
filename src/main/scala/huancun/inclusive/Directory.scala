@@ -1,37 +1,48 @@
-/** *************************************************************************************
-  * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
-  * Copyright (c) 2020-2021 Peng Cheng Laboratory
-  *
-  * XiangShan is licensed under Mulan PSL v2.
-  * You can use this software according to the terms and conditions of the Mulan PSL v2.
-  * You may obtain a copy of Mulan PSL v2 at:
-  *          http://license.coscl.org.cn/MulanPSL2
-  *
-  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-  *
-  * See the Mulan PSL v2 for more details.
-  * *************************************************************************************
-  */
-
-// See LICENSE.SiFive for license details.
-
-package huancun
+package huancun.inclusive
 
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.util.{ReplacementPolicy, SetAssocLRU}
+import freechips.rocketchip.util.SetAssocLRU
+import huancun._
 import huancun.utils._
 
-class Directory(implicit p: Parameters) extends HuanCunModule {
-  val io = IO(new Bundle() {
-    val reads = Vec(dirReadPorts, Flipped(DecoupledIO(new DirRead)))
-    val results = Vec(dirReadPorts, ValidIO(new DirResult))
-    val dirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new DirWrite)))
-    val tagWReq = Flipped(DecoupledIO(new TagWrite))
-  })
+class TagWrite(implicit p: Parameters) extends BaseTagWrite {
+  val set = UInt(setBits.W)
+  val way = UInt(wayBits.W)
+  val tag = UInt(tagBits.W)
+}
+
+class DirectoryEntry(implicit p: Parameters) extends HuanCunBundle {
+  val dirty = Bool()
+  val state = UInt(stateBits.W)
+  val clients = UInt(clientBits.W)
+  val prefetch = if (hasPrefetchBit) Some(Bool()) else None // whether the block is prefetched
+}
+
+class DirWrite(implicit p: Parameters) extends BaseDirWrite {
+  val set = UInt(setBits.W)
+  val way = UInt(wayBits.W)
+  val data = new DirectoryEntry
+}
+
+class DirResult(implicit p: Parameters) extends DirectoryEntry with BaseDirResult {
+  val idOH = UInt(mshrsAll.W)
+  val hit = Bool()
+  val way = UInt(wayBits.W)
+  val tag = UInt(tagBits.W)
+}
+
+class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, DirWrite, TagWrite] {
+  val reads = Vec(dirReadPorts, Flipped(DecoupledIO(new DirRead)))
+  val results = Vec(dirReadPorts, ValidIO(new DirResult))
+  val dirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new DirWrite)))
+  val tagWReq = Flipped(DecoupledIO(new TagWrite))
+}
+
+class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite] {
+
+  val io = IO(new DirectoryIO())
 
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((cacheParams.sets - 1).U)
@@ -43,7 +54,9 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     metaArray(resetIdx).foreach(w => w.state := MetaData.INVALID)
     resetIdx := resetIdx - 1.U
   }
-  when(resetIdx === 0.U) { resetFinish := true.B }
+  when(resetIdx === 0.U) {
+    resetFinish := true.B
+  }
 
   io.tagWReq.ready := true.B // let tag write block tag read
   io.reads.foreach(_.ready := !io.tagWReq.valid && resetFinish)
@@ -52,7 +65,9 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     Module(new SRAMTemplate(UInt(tagBits.W), cacheParams.sets, cacheParams.ways, singlePort = true))
   }
 
-  val tagRead = Seq.fill(dirReadPorts) { Wire(Vec(cacheParams.ways, UInt(tagBits.W))) }
+  val tagRead = Seq.fill(dirReadPorts) {
+    Wire(Vec(cacheParams.ways, UInt(tagBits.W)))
+  }
   tagArray
     .zip(io.reads)
     .zip(tagRead)
@@ -92,7 +107,7 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
     result.bits.dirty := meta.dirty
     result.bits.state := meta.state
     result.bits.clients := meta.clients
-    result.bits.prefetch.map(_ := meta.prefetch.getOrElse(false.B))
+    result.bits.prefetch.foreach(_ := meta.prefetch.get)
     result.bits.tag := tags(result.bits.way)
 
     // update replacer for req from channel A
@@ -100,10 +115,6 @@ class Directory(implicit p: Parameters) extends HuanCunModule {
       replacer.access(rreqSets(i), result.bits.way)
     }
   }
-
-  //  when(io.tagWReq.fire()) {
-  //    replacer.access(io.tagWReq.bits.set, io.tagWReq.bits.way)
-  //  }
 
   for (dirWReq <- io.dirWReqs) {
     when(dirWReq.fire()) {

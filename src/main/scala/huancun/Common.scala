@@ -132,42 +132,6 @@ class NestedWriteback(implicit p: Parameters) extends HuanCunBundle {
   val c_set_dirty = Bool()
 }
 
-class TagWrite(implicit p: Parameters) extends HuanCunBundle {
-  val set = UInt(setBits.W)
-  val way = UInt(wayBits.W)
-  val tag = UInt(tagBits.W)
-}
-
-class DirectoryEntry(implicit p: Parameters) extends HuanCunBundle {
-  val dirty = Bool()
-  val state = UInt(stateBits.W)
-  val clients = UInt(clientBits.W)
-  val prefetch = if (hasPrefetchBit) Some(Bool()) else None // whether the block is prefetched
-}
-
-class DirWrite(implicit p: Parameters) extends HuanCunBundle {
-  val set = UInt(setBits.W)
-  val way = UInt(wayBits.W)
-  val data = new DirectoryEntry
-}
-
-class DirRead(implicit p: Parameters) extends HuanCunBundle {
-  val idOH = UInt(mshrsAll.W)
-  val tag = UInt(tagBits.W)
-  val set = UInt(setBits.W)
-  val replaceInfo = new Bundle() {
-    val channel = UInt(3.W)
-    val isHint = Bool()
-  }
-}
-
-class DirResult(implicit p: Parameters) extends DirectoryEntry {
-  val idOH = UInt(mshrsAll.W)
-  val hit = Bool()
-  val way = UInt(wayBits.W)
-  val tag = UInt(tagBits.W)
-}
-
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
   val way = UInt(width = wayBits.W)
   val set = UInt(width = setBits.W)
