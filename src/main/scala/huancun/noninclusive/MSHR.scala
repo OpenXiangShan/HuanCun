@@ -5,11 +5,13 @@ import chisel3._
 import chisel3.util._
 import huancun._
 
-class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWrite] with DontCareInnerLogic {
-  val io = IO(new BaseMSHRIO[DirResult, DirWrite, TagWrite] {
-    override val tasks = new MSHRTasks[DirWrite, TagWrite] {
-      override val dir_write: DecoupledIO[DirWrite] = DecoupledIO(new DirWrite())
-      override val tag_write: DecoupledIO[TagWrite] = DecoupledIO(new TagWrite())
+class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, SelfTagWrite] with DontCareInnerLogic {
+  val io = IO(new BaseMSHRIO[DirResult, SelfDirWrite, SelfTagWrite] {
+    override val tasks = new MSHRTasks[SelfDirWrite, SelfTagWrite] {
+      override val dir_write: DecoupledIO[SelfDirWrite] = DecoupledIO(new SelfDirWrite())
+      override val tag_write: DecoupledIO[SelfTagWrite] = DecoupledIO(new SelfTagWrite())
+      val client_dir_write = DecoupledIO(new ClientDirWrite())
+      val client_tag_write = DecoupledIO(new ClientTagWrite())
     }
     override val dirResult = Flipped(ValidIO(new DirResult()))
   })

@@ -106,18 +106,18 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   nestedWb.set := Mux(select_c, c_mshr.io.status.bits.set, bc_mshr.io.status.bits.set)
   nestedWb.tag := Mux(select_c, c_mshr.io.status.bits.tag, bc_mshr.io.status.bits.tag)
 
-  // TODO:
+  // TODO: consider nested client dir write
   val bc_wb_state = bc_mshr match {
     case mshr: inclusive.MSHR =>
       mshr.io.tasks.dir_write.bits.data.state
     case mshr: noninclusive.MSHR =>
-      mshr.io.tasks.dir_write.bits.self.data.state
+      mshr.io.tasks.dir_write.bits.data.state
   }
   val c_wb_dirty = c_mshr match {
     case mshr: inclusive.MSHR =>
       mshr.io.tasks.dir_write.bits.data.dirty
     case mshr: noninclusive.MSHR =>
-      mshr.io.tasks.dir_write.bits.self.data.dirty
+      mshr.io.tasks.dir_write.bits.data.dirty
   }
   nestedWb.b_toN := select_bc &&
     bc_mshr.io.tasks.dir_write.valid &&
@@ -155,8 +155,15 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"))
   arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"))
   arbTasks(directory.io.tagWReq, ms.map(_.io.tasks.tag_write), Some("tagWrite"))
-
-  // arbTasks(pft.io.train, abc_mshr.map(_.io.tasks.prefetch_train), Some("prefetchTrain"))
+  (directory, ms) match {
+    case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
+      dir.io.clientDirWReqs <> VecInit(ms.map(_.io.tasks.client_dir_write))
+      arbTasks(dir.io.clientTagWreq, ms.map(_.io.tasks.client_tag_write), Some("clientTagWrite"))
+    case (_: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
+    // skip
+    case _ =>
+      assert(false)
+  }
 
   def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
     if (in.size == mshrsAll) {

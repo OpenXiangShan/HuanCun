@@ -42,18 +42,19 @@ class DirResult(implicit p: Parameters) extends BaseDirResult {
   val client = new ClientDirResult
 }
 
-class TagWriteBundle(val setBits: Int, val wayBits: Int, val tagBits: Int) extends Bundle {
+class SelfTagWrite(implicit p: Parameters) extends BaseTagWrite {
   val set = UInt(setBits.W)
   val way = UInt(wayBits.W)
   val tag = UInt(tagBits.W)
 }
 
-class TagWrite(implicit p: Parameters) extends BaseTagWrite with HasClientInfo {
-  val self = new TagWriteBundle(setBits, wayBits, tagBits)
-  val client = new TagWriteBundle(clientSetBits, clientWayBits, clientTagBits)
+class ClientTagWrite(implicit p: Parameters) extends HuanCunBundle with HasClientInfo {
+  val set = UInt(clientSetBits.W)
+  val way = UInt(clientWayBits.W)
+  val tag = UInt(clientTagBits.W)
 }
 
-class SelfDirWrite(implicit p: Parameters) extends HuanCunBundle {
+class SelfDirWrite(implicit p: Parameters) extends BaseDirWrite {
   val set = UInt(setBits.W)
   val way = UInt(wayBits.W)
   val data = new SelfDirEntry
@@ -65,18 +66,17 @@ class ClientDirWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
   val data = new ClientDirEntry()
 }
 
-class DirWrite(implicit p: Parameters) extends BaseDirWrite {
-  val self = new SelfDirWrite
-  val client = new ClientDirWrite
-}
-
-class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, DirWrite, TagWrite] {
+class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, SelfDirWrite, SelfTagWrite] {
   val reads = Vec(dirReadPorts, Flipped(DecoupledIO(new DirRead)))
   val results = Vec(dirReadPorts, ValidIO(new DirResult))
-  val dirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new DirWrite)))
-  val tagWReq = Flipped(DecoupledIO(new TagWrite))
+  val dirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new SelfDirWrite)))
+  val tagWReq = Flipped(DecoupledIO(new SelfTagWrite))
+  val clientDirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new ClientDirWrite)))
+  val clientTagWreq = Flipped(DecoupledIO(new ClientTagWrite))
 }
 
-class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite] with DontCareInnerLogic {
+class Directory(implicit p: Parameters)
+    extends BaseDirectory[DirResult, SelfDirWrite, SelfTagWrite]
+    with DontCareInnerLogic {
   val io = IO(new DirectoryIO())
 }
