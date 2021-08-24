@@ -59,7 +59,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   // MSHRs
   val ms = Seq.fill(mshrsAll) {
-    Module(new inclusive.MSHR())
+    if (cacheParams.inclusive)
+      Module(new inclusive.MSHR())
+    else Module(new noninclusive.MSHR())
   }
   require(mshrsAll == mshrs + 2)
   val ms_abc = ms.init.init
@@ -103,16 +105,30 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val nestedWb = Wire(new NestedWriteback)
   nestedWb.set := Mux(select_c, c_mshr.io.status.bits.set, bc_mshr.io.status.bits.set)
   nestedWb.tag := Mux(select_c, c_mshr.io.status.bits.tag, bc_mshr.io.status.bits.tag)
+
+  // TODO:
+  val bc_wb_state = bc_mshr match {
+    case mshr: inclusive.MSHR =>
+      mshr.io.tasks.dir_write.bits.data.state
+    case mshr: noninclusive.MSHR =>
+      mshr.io.tasks.dir_write.bits.self.data.state
+  }
+  val c_wb_dirty = c_mshr match {
+    case mshr: inclusive.MSHR =>
+      mshr.io.tasks.dir_write.bits.data.dirty
+    case mshr: noninclusive.MSHR =>
+      mshr.io.tasks.dir_write.bits.self.data.dirty
+  }
   nestedWb.b_toN := select_bc &&
     bc_mshr.io.tasks.dir_write.valid &&
-    bc_mshr.io.tasks.dir_write.bits.data.state === MetaData.INVALID
+    bc_wb_state === MetaData.INVALID
   nestedWb.b_toB := select_bc &&
     bc_mshr.io.tasks.dir_write.valid &&
-    bc_mshr.io.tasks.dir_write.bits.data.state === MetaData.BRANCH
+    bc_wb_state === MetaData.BRANCH
   nestedWb.b_clr_dirty := select_bc && bc_mshr.io.tasks.dir_write.valid
   nestedWb.c_set_dirty := select_c &&
     c_mshr.io.tasks.dir_write.valid &&
-    c_mshr.io.tasks.dir_write.bits.data.dirty
+    c_wb_dirty
 
   abc_mshr.foreach(_.io.nestedwb := nestedWb)
 
@@ -123,11 +139,14 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   c_mshr.io.nestedwb := 0.U.asTypeOf(nestedWb)
 
-  val directory = Module(new inclusive.Directory)
+  val directory = Module({
+    if (cacheParams.inclusive) new inclusive.Directory()
+    else new noninclusive.Directory()
+  })
   directory.io.reads <> mshrAlloc.io.dirReads
 
   // Send tasks
-  directory.io.dirWReqs <> ms.map(_.io.tasks.dir_write)
+  directory.io.dirWReqs <> VecInit(ms.map(_.io.tasks.dir_write))
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))

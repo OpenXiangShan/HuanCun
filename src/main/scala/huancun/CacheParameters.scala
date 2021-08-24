@@ -26,6 +26,11 @@ import huancun.prefetch.PrefetchParameters
 
 case object CacheParamsKey extends Field[CacheParameters](CacheParameters())
 
+case class ClientCacheParameters(
+  sets:       Int,
+  ways:       Int,
+  blockBytes: Int)
+
 case class CacheParameters(
   name:         String = "L2",
   level:        Int = 2,
@@ -40,6 +45,8 @@ case class CacheParameters(
   enablePerf:   Boolean = false,
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   prefetch:     Option[PrefetchParameters] = None,
+  clientCache:  Option[ClientCacheParameters] = None,
+  inclusive:    Boolean = true,
   echoField:    Seq[BundleFieldBase] = Nil,
   reqField:     Seq[BundleFieldBase] = Nil, // master
   respKey:      Seq[BundleKeyBase] = Nil,
@@ -49,6 +56,9 @@ case class CacheParameters(
   require(sets > 0)
   require(channelBytes.d.get >= 8)
   require(dirReadPorts == 1, "now we only use 1 read port")
+  if (!inclusive) {
+    require(clientCache.nonEmpty, "Non-inclusive cache need to know client cache information")
+  }
 }
 
 case object EdgeInKey extends Field[TLEdgeIn]

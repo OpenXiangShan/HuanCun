@@ -23,7 +23,9 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 
-trait BaseDirResult extends HuanCunBundle
+trait BaseDirResult extends HuanCunBundle {
+  val idOH = UInt(mshrsAll.W) // which mshr the result should be sent to
+}
 trait BaseDirWrite extends HuanCunBundle
 trait BaseTagWrite extends HuanCunBundle
 

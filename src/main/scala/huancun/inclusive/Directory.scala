@@ -27,7 +27,6 @@ class DirWrite(implicit p: Parameters) extends BaseDirWrite {
 }
 
 class DirResult(implicit p: Parameters) extends DirectoryEntry with BaseDirResult {
-  val idOH = UInt(mshrsAll.W)
   val hit = Bool()
   val way = UInt(wayBits.W)
   val tag = UInt(tagBits.W)

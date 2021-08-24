@@ -14,7 +14,9 @@ abstract class L2Tester extends AnyFlatSpec with ChiselScalatestTester with Matc
   behavior of "L2"
   implicit val defaultConfig = new Config((_, _, _) => {
     case CacheParamsKey => CacheParameters(
-      prefetch = Some(BOPParameters())
+      prefetch = Some(BOPParameters()),
+      inclusive = false,
+      clientCache = Some(ClientCacheParameters(sets = 32, ways = 8, blockBytes = 64))
     )
   })
 }
