@@ -22,6 +22,7 @@ package huancun
 import chipsalliance.rocketchip.config.Field
 import freechips.rocketchip.tilelink.{TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
 import freechips.rocketchip.util.{BundleFieldBase, BundleKeyBase}
+import huancun.prefetch.PrefetchParameters
 
 case object CacheParamsKey extends Field[CacheParameters](CacheParameters())
 
@@ -38,6 +39,7 @@ case class CacheParameters(
   enableDebug:  Boolean = false,
   enablePerf:   Boolean = false,
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
+  prefetch:     Option[PrefetchParameters] = None,
   echoField:    Seq[BundleFieldBase] = Nil,
   reqField:     Seq[BundleFieldBase] = Nil, // master
   respKey:      Seq[BundleKeyBase] = Nil,

@@ -13,8 +13,9 @@ import huancun.prefetch._
 abstract class L2Tester extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
   behavior of "L2"
   implicit val defaultConfig = new Config((_, _, _) => {
-    case CacheParamsKey => CacheParameters()
-    case BOPParamsKey   => BOPParameters()
+    case CacheParamsKey => CacheParameters(
+      prefetch = Some(BOPParameters())
+    )
   })
 }
 
