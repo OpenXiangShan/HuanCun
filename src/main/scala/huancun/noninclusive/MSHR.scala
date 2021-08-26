@@ -9,7 +9,7 @@ import huancun._
 import huancun.utils.{ParallelMax}
 import huancun.MetaData._
 
-class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, SelfTagWrite] with DontCareInnerLogic {
+class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, SelfTagWrite] {
   val io = IO(new BaseMSHRIO[DirResult, SelfDirWrite, SelfTagWrite] {
     override val tasks = new MSHRTasks[SelfDirWrite, SelfTagWrite] {
       override val dir_write: DecoupledIO[SelfDirWrite] = DecoupledIO(new SelfDirWrite())
@@ -80,34 +80,36 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
   def probe_shrink_perm(state: UInt, perm: UInt): Bool = state =/= INVALID && perm === toN || isT(state) && perm === toB
 
-  when (req.fromC) {
+  def onCReq(): Unit = {
     // Release / ReleaseData
     new_self_meta.dirty := self_meta.hit && self_meta.dirty || req.opcode(0) && isParamFromT(req.param)
     new_self_meta.state := MuxLookup(
-                              req.param,
-                              self_meta.state,
-                              Seq(
-                                TtoT -> TRUNK,
-                                TtoB -> TIP,
-                                TtoN -> TIP,
-                                // BtoB -> self_meta.state,
-                                BtoN -> Mux(self_meta.hit && self_meta.state === TIP, TIP, BRANCH)//,
-                                // NtoN -> self_meta.state
-                              )
-                           )
+      req.param,
+      self_meta.state,
+      Seq(
+        TtoT -> TRUNK,
+        TtoB -> TIP,
+        TtoN -> TIP,
+        // BtoB -> self_meta.state,
+        BtoN -> Mux(self_meta.hit && self_meta.state === TIP, TIP, BRANCH)//,
+        // NtoN -> self_meta.state
+      )
+    )
     new_self_meta.clientStates.zipWithIndex.foreach {
       case (state, i) =>
         state := Mux(iam === i.U,
-                    Mux(isToN(req.param), INVALID, Mux(isToB(req.param), BRANCH, self_meta.clientStates(i))),
-                    self_meta.clientStates(i))
+          Mux(isToN(req.param), INVALID, Mux(isToB(req.param), BRANCH, self_meta.clientStates(i))),
+          self_meta.clientStates(i))
     }
     new_clients_meta.zipWithIndex.foreach {
-      case (m, i) => 
+      case (m, i) =>
         m.state := Mux(iam === i.U,
-                      Mux(isToN(req.param), INVALID, Mux(isToB(req.param), BRANCH, clients_meta(i).state)),
-                      clients_meta(i).state)
+          Mux(isToN(req.param), INVALID, Mux(isToB(req.param), BRANCH, clients_meta(i).state)),
+          clients_meta(i).state)
     }
-  }.elsewhen (req.fromB) {
+  }
+
+  def onBReq(): Unit = {
     // Probe
     new_self_meta.dirty := req.param === toT && self_meta.dirty || probe_dirty
     new_self_meta.state := probe_next_state(self_meta.state, req.param)
@@ -116,13 +118,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         state := probe_next_state(self_meta.clientStates(i), req.param)
     }
     new_clients_meta.zipWithIndex.foreach {
-      case (m, i) => 
+      case (m, i) =>
         m.state := probe_next_state(clients_meta(i).state, req.param)
     }
-  }.otherwise {
+  }
+
+  def onAReq(): Unit = {
     // Acquire / Intent / Put / Get / Atomics
     new_self_meta.dirty := self_meta.hit && self_meta.dirty || probe_dirty || !req.opcode(2) // Put / Atomics
-    // AcqurieB / Intent / Put / Atomics allocate a block in self dir, 
+    // AcqurieB / Intent / Put / Atomics allocate a block in self dir,
     // while AcquireT / Get do not.
     // TODO: consider Hint
     new_self_meta.state := Mux(
@@ -153,18 +157,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           state := Mux(req_acquire, Mux(req_needT || gotT, TIP, BRANCH), self_meta.clientStates(i))
         }.otherwise {
           state := Mux(
-                      req_acquire,
-                      Mux(
-                        self_meta.clientStates(i) =/= INVALID && req.param =/= NtoB,
-                        INVALID,
-                        Mux(
-                          self_meta.clientStates(i) === TIP && req.param === NtoB,
-                          BRANCH,
-                          self_meta.clientStates(i)
-                        )
-                      ),
-                      self_meta.clientStates(i)
-                   )
+            req_acquire,
+            Mux(
+              self_meta.clientStates(i) =/= INVALID && req.param =/= NtoB,
+              INVALID,
+              Mux(
+                self_meta.clientStates(i) === TIP && req.param === NtoB,
+                BRANCH,
+                self_meta.clientStates(i)
+              )
+            ),
+            self_meta.clientStates(i)
+          )
         }
     }
     new_clients_meta.zipWithIndex.foreach {
@@ -173,20 +177,28 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           m.state := Mux(req_acquire, Mux(req_needT || gotT, TIP, BRANCH), clients_meta(i).state)
         }.otherwise {
           m.state := Mux(
-                        req_acquire,
-                        Mux(
-                          clients_meta(i).state =/= INVALID && req.param =/= NtoB,
-                          INVALID,
-                          Mux(
-                            clients_meta(i).state === TIP && req.param === NtoB,
-                            BRANCH,
-                            clients_meta(i).state
-                          )
-                        ),
-                        clients_meta(i).state
-                     )
+            req_acquire,
+            Mux(
+              clients_meta(i).state =/= INVALID && req.param =/= NtoB,
+              INVALID,
+              Mux(
+                clients_meta(i).state === TIP && req.param === NtoB,
+                BRANCH,
+                clients_meta(i).state
+              )
+            ),
+            clients_meta(i).state
+          )
         }
     }
+  }
+
+  when (req.fromC) {
+    onCReq()
+  }.elsewhen (req.fromB) {
+    onBReq()
+  }.otherwise {
+    onAReq()
   }
 
   val new_clients_dir = Wire(Vec(clientBits, new ClientDirEntry))
@@ -272,7 +284,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_releaseack = RegInit(true.B)
   val w_grantack = RegInit(true.B)
 
-  when (io.dirResult.valid) {
+
+  def reset_all_flags(): Unit = {
     // Default value
     s_acquire := true.B
     s_probe := true.B
@@ -302,102 +315,119 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probe_dirty := false.B
     probes_done := 0.U
     bad_grant := false.B
+  }
 
-    when (req.fromC) {
-      // Release
-      s_execute := false.B
-      // When the req shrinks the perm in clients indeed, write client dir.
-      when (client_shrink_perm) {
-        s_wbclientsdir(iam) := false.B
-      }
-      // When miss in self dir, allocate a new block in self dir.
-      when (!self_meta.hit) {
-        s_wbselftag := false.B
-      }
-      // When miss in self dir or , write self dir.
-      when (!self_meta.hit || req.opcode(0) || client_shrink_perm) {
-        s_wbselfdir := false.B
-      }
-      // When miss in self dir or Release dirty block, write data array.
-      when (req.opcode(0) || !self_meta.hit) {
-        s_writerelease := false.B
-      }
-      when (!self_meta.hit && self_meta.state =/= INVALID && replace_need_release) {
-        s_release := false.B
-        w_releaseack := false.B
-      }
-    }.elsewhen (req.fromB) {
-      // Probe
-      s_probeack := false.B
-      // When probe hits in self dir and needs to shrink perm, write self dir.
-      when (self_meta.hit && probe_shrink_perm(self_meta.state, req.param)) {
-        s_wbselfdir := false.B
-        // When probe hits in some client dir and needs to shrink perm, write corresponding client dir.
-        clients_meta.zipWithIndex.foreach {
-          case (meta, i) =>
-            when (meta.hit && probe_shrink_perm(meta.state, req.param)) {
-              s_wbclientsdir(i) := false.B
-              s_probe := false.B
-              w_probeackfirst := false.B
-              w_probeacklast := false.B
-              w_probeack :=  false.B
-            }
-        }
-      }
-    }.otherwise {
-      // A channel requests
-      // TODO: consider parameterized write-through policy for put/atomics
-      // TODO: consider prefetch
-      s_execute := req.opcode === Hint
-      // need replacement when:
-      // (1) some other client owns the block, probe this block and allocate a block in self cache (transmit_from_other_client),
-      // (2) other clients and self dir both miss, allocate a block only when this req acquires a BRANCH (!req_needT).
-      when (!self_meta.hit && self_meta.state =/= INVALID && replace_need_release && (transmit_from_other_client || req_acquire/*!req_needT*/)) {
-        s_release := false.B
-        w_releaseack := false.B
-      }
-      // need Acquire downwards
-      when (!self_meta.hit || self_meta.state === BRANCH && req_needT) {
-        s_acquire := false.B
-        w_grantfirst := false.B
-        w_grantlast := false.B
-        w_grant := false.B
-        s_grantack := false.B
-        s_wbselfdir := false.B
-      }
-      // need probe
+  def c_schedule(): Unit = {
+    // Release
+    s_execute := false.B
+    // When the req shrinks the perm in clients indeed, write client dir.
+    when (client_shrink_perm) {
+      s_wbclientsdir(iam) := false.B
+    }
+    // When miss in self dir, allocate a new block in self dir.
+    when (!self_meta.hit) {
+      s_wbselftag := false.B
+    }
+    // When miss in self dir or , write self dir.
+    when (!self_meta.hit || req.opcode(0) || client_shrink_perm) {
+      s_wbselfdir := false.B
+    }
+    // When miss in self dir or Release dirty block, write data array.
+    when (req.opcode(0) || !self_meta.hit) {
+      s_writerelease := false.B
+    }
+    when (!self_meta.hit && self_meta.state =/= INVALID && replace_need_release) {
+      s_release := false.B
+      w_releaseack := false.B
+    }
+  }
+
+  def b_schedule(): Unit = {
+    // Probe
+    s_probeack := false.B
+    // When probe hits in self dir and needs to shrink perm, write self dir.
+    when (self_meta.hit && probe_shrink_perm(self_meta.state, req.param)) {
+      s_wbselfdir := false.B
+      // When probe hits in some client dir and needs to shrink perm, write corresponding client dir.
       clients_meta.zipWithIndex.foreach {
         case (meta, i) =>
-          when (i.U =/= iam && meta.hit && (req_needT && meta.state =/= INVALID || req_acquire && isT(meta.state))) {
+          when (meta.hit && probe_shrink_perm(meta.state, req.param)) {
+            s_wbclientsdir(i) := false.B
             s_probe := false.B
             w_probeackfirst := false.B
             w_probeacklast := false.B
-            w_probeack := false.B
-            s_wbclientsdir(i) := false.B
+            w_probeack :=  false.B
           }
       }
-      // need grantack
-      when (req_acquire) {
-        w_grantack := false.B
-        s_wbselfdir := false.B
-        s_wbclientsdir(iam) := false.B
-        when (!clients_meta(iam).hit) {
-          s_wbclientstag(iam) := false.B
+    }
+  }
+
+  def a_schedule(): Unit = {
+    // A channel requests
+    // TODO: consider parameterized write-through policy for put/atomics
+    // TODO: consider prefetch
+    s_execute := req.opcode === Hint
+    // need replacement when:
+    // (1) some other client owns the block, probe this block and allocate a block in self cache (transmit_from_other_client),
+    // (2) other clients and self dir both miss, allocate a block only when this req acquires a BRANCH (!req_needT).
+    when (!self_meta.hit && self_meta.state =/= INVALID && replace_need_release && (transmit_from_other_client || req_acquire/*!req_needT*/)) {
+      s_release := false.B
+      w_releaseack := false.B
+    }
+    // need Acquire downwards
+    when (!self_meta.hit || self_meta.state === BRANCH && req_needT) {
+      s_acquire := false.B
+      w_grantfirst := false.B
+      w_grantlast := false.B
+      w_grant := false.B
+      s_grantack := false.B
+      s_wbselfdir := false.B
+    }
+    // need probe
+    clients_meta.zipWithIndex.foreach {
+      case (meta, i) =>
+        when (i.U =/= iam && meta.hit && (req_needT && meta.state =/= INVALID || req_acquire && isT(meta.state))) {
+          s_probe := false.B
+          w_probeackfirst := false.B
+          w_probeacklast := false.B
+          w_probeack := false.B
+          s_wbclientsdir(i) := false.B
         }
+    }
+    // need grantack
+    when (req_acquire) {
+      w_grantack := false.B
+      s_wbselfdir := false.B
+      s_wbclientsdir(iam) := false.B
+      when (!clients_meta(iam).hit) {
+        s_wbclientstag(iam) := false.B
       }
-      // Put and Atomics need to write
-      when (!req.opcode(2) && !self_meta.dirty) {
-        s_wbselfdir := false.B
-      }
-      // need write self tag
-      when (!self_meta.hit) {
-        s_wbselftag := false.B
-      }
-      // need write putbuffer in Sink A into data array
-      when (req.opcode(2, 1) === 0.U) {
-        s_writeput := false.B
-      }
-      // TODO: trigger a prefetch when req is from DCache, and miss / prefetched hit in L2
+    }
+    // Put and Atomics need to write
+    when (!req.opcode(2) && !self_meta.dirty) {
+      s_wbselfdir := false.B
+    }
+    // need write self tag
+    when (!self_meta.hit) {
+      s_wbselftag := false.B
+    }
+    // need write putbuffer in Sink A into data array
+    when (req.opcode(2, 1) === 0.U) {
+      s_writeput := false.B
+    }
+    // TODO: trigger a prefetch when req is from DCache, and miss / prefetched hit in L2
+  }
+
+  when (io.dirResult.valid) {
+
+    reset_all_flags()
+
+    when (req.fromC) {
+      c_schedule()
+    }.elsewhen (req.fromB) {
+      b_schedule()
+    }.otherwise {
+      a_schedule()
     }
   }
 
