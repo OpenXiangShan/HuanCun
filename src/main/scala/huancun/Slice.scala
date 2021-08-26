@@ -106,12 +106,17 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   nestedWb.set := Mux(select_c, c_mshr.io.status.bits.set, bc_mshr.io.status.bits.set)
   nestedWb.tag := Mux(select_c, c_mshr.io.status.bits.tag, bc_mshr.io.status.bits.tag)
 
-  // TODO: consider nested client dir write
   val bc_wb_state = bc_mshr match {
     case mshr: inclusive.MSHR =>
       mshr.io.tasks.dir_write.bits.data.state
     case mshr: noninclusive.MSHR =>
       mshr.io.tasks.dir_write.bits.data.state
+  }
+  val bc_wb_dirty = bc_mshr match {
+    case mshr: inclusive.MSHR =>
+      mshr.io.tasks.dir_write.bits.data.dirty
+    case mshr: noninclusive.MSHR =>
+      mshr.io.tasks.dir_write.bits.data.dirty
   }
   val c_wb_dirty = c_mshr match {
     case mshr: inclusive.MSHR =>
@@ -125,10 +130,34 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   nestedWb.b_toB := select_bc &&
     bc_mshr.io.tasks.dir_write.valid &&
     bc_wb_state === MetaData.BRANCH
-  nestedWb.b_clr_dirty := select_bc && bc_mshr.io.tasks.dir_write.valid
+  nestedWb.b_clr_dirty := select_bc &&
+    bc_mshr.io.tasks.dir_write.valid &&
+    !MetaData.isT(bc_wb_state)
   nestedWb.c_set_dirty := select_c &&
     c_mshr.io.tasks.dir_write.valid &&
     c_wb_dirty
+
+  // nested client dir write
+  (bc_mshr, c_mshr) match {
+    case (bc_mshr: noninclusive.MSHR, c_mshr: noninclusive.MSHR) =>
+      nestedWb.clients.get.zipWithIndex.foreach {
+      case (n, i) =>
+        n.isToN := Mux(
+          select_c,
+          c_mshr.io.tasks.client_dir_write(i).valid && 
+            c_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.INVALID,
+          bc_mshr.io.tasks.client_dir_write(i).valid &&
+            bc_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.INVALID
+        )
+        n.isToB := Mux(
+          select_c,
+          c_mshr.io.tasks.client_dir_write(i).valid && 
+            c_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.BRANCH,
+          bc_mshr.io.tasks.client_dir_write(i).valid &&
+            bc_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.BRANCH
+        )
+    }
+  }
 
   abc_mshr.foreach(_.io.nestedwb := nestedWb)
 
@@ -136,6 +165,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   bc_mshr.io.nestedwb.set := c_mshr.io.status.bits.set
   bc_mshr.io.nestedwb.tag := c_mshr.io.status.bits.tag
   bc_mshr.io.nestedwb.c_set_dirty := nestedWb.c_set_dirty
+  when (select_c) { bc_mshr.io.nestedwb.clients.get := nestedWb.clients.get }
 
   c_mshr.io.nestedwb := 0.U.asTypeOf(nestedWb)
 

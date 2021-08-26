@@ -125,13 +125,6 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val nestB, nestC = Bool()
 }
 
-class NestedWriteback(implicit p: Parameters) extends HuanCunBundle {
-  val set = UInt(setBits.W)
-  val tag = UInt(tagBits.W)
-  val b_toN, b_toB, b_clr_dirty = Bool()
-  val c_set_dirty = Bool()
-}
-
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
   val way = UInt(width = wayBits.W)
   val set = UInt(width = setBits.W)
