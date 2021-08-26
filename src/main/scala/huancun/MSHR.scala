@@ -326,7 +326,7 @@ class MSHR()(implicit p: Parameters) extends HuanCunModule {
         when(req.opcode =/= Hint && getClientBitOH(req.source).orR && (!meta.hit || meta.prefetch.get)) {
           s_triggerprefetch.map(_ := false.B)
         }
-        when(req.opcode === Hint) {
+        when(req.opcode === Hint && !meta.hit) {
           s_prefetchack.map(_ := false.B)
         }
       })
