@@ -141,22 +141,26 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   (bc_mshr, c_mshr) match {
     case (bc_mshr: noninclusive.MSHR, c_mshr: noninclusive.MSHR) =>
       nestedWb.clients.get.zipWithIndex.foreach {
-      case (n, i) =>
-        n.isToN := Mux(
-          select_c,
-          c_mshr.io.tasks.client_dir_write(i).valid && 
-            c_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.INVALID,
-          bc_mshr.io.tasks.client_dir_write(i).valid &&
-            bc_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.INVALID
-        )
-        n.isToB := Mux(
-          select_c,
-          c_mshr.io.tasks.client_dir_write(i).valid && 
-            c_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.BRANCH,
-          bc_mshr.io.tasks.client_dir_write(i).valid &&
-            bc_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.BRANCH
-        )
-    }
+        case (n, i) =>
+          n.isToN := Mux(
+            select_c,
+            c_mshr.io.tasks.client_dir_write(i).valid &&
+              c_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.INVALID,
+            bc_mshr.io.tasks.client_dir_write(i).valid &&
+              bc_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.INVALID
+          )
+          n.isToB := Mux(
+            select_c,
+            c_mshr.io.tasks.client_dir_write(i).valid &&
+              c_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.BRANCH,
+            bc_mshr.io.tasks.client_dir_write(i).valid &&
+              bc_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.BRANCH
+          )
+      }
+    case (bc_mshr: inclusive.MSHR, c_mshr: inclusive.MSHR) =>
+    // skip
+    case _ =>
+      assert(false)
   }
 
   abc_mshr.foreach(_.io.nestedwb := nestedWb)
@@ -165,7 +169,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   bc_mshr.io.nestedwb.set := c_mshr.io.status.bits.set
   bc_mshr.io.nestedwb.tag := c_mshr.io.status.bits.tag
   bc_mshr.io.nestedwb.c_set_dirty := nestedWb.c_set_dirty
-  when (select_c) { bc_mshr.io.nestedwb.clients.get := nestedWb.clients.get }
+
+  when(select_c) {
+    bc_mshr.io.nestedwb.clients.zip(nestedWb.clients).map {
+      case (m, n) =>
+        m := n
+    }
+  }
 
   c_mshr.io.nestedwb := 0.U.asTypeOf(nestedWb)
 
