@@ -66,7 +66,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   /* Whether selected request can be accepted */
 
-  val block_granularity = if(!cacheParams.inclusive && cacheParams.clientCache.nonEmpty) {
+  val block_granularity = if (!cacheParams.inclusive && cacheParams.clientCache.nonEmpty) {
     log2Ceil(cacheParams.clientCache.get.sets)
   } else setBits
 
