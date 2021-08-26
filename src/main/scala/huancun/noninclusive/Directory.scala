@@ -37,6 +37,10 @@ class ClientDirResult(implicit p: Parameters) extends ClientDirEntry with HasCli
   val hit = Bool()
   val way = UInt(clientWays.W)
   val tag = UInt(clientTagBits.W)
+
+  def parseTag(lineAddr: UInt): UInt = {
+    lineAddr(clientSetBits + clientTagBits - 1, clientSetBits)
+  }
 }
 
 class DirResult(implicit p: Parameters) extends BaseDirResult {

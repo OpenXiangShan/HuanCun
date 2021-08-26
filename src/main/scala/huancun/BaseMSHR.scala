@@ -30,6 +30,18 @@ class MSHRResps(implicit p: Parameters) extends HuanCunBundle {
   val sink_e = ValidIO(new SinkEResp)
 }
 
+class NestedWriteback(implicit p: Parameters) extends HuanCunBundle {
+  val set = UInt(setBits.W)
+  val tag = UInt(tagBits.W)
+  val b_toN, b_toB, b_clr_dirty = Bool()
+  val c_set_dirty = Bool()
+  val clients = if (!cacheParams.inclusive) Some(
+    Vec(clientBits, new Bundle {
+      val isToN, isToB = Bool()
+    })
+  ) else None
+}
+
 abstract class BaseMSHRIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
   implicit p: Parameters)
     extends HuanCunBundle {

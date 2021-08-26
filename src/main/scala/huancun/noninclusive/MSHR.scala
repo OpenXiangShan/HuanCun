@@ -212,7 +212,40 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   assert(RegNext(!meta_valid || !req.fromC || self_meta.hit || clients_meta(iam).hit)) // Release should always hit
 
-  // TODO: nested writeback to meta_reg
+  // nested writeback to meta_reg
+  val change_self_meta = meta_valid && self_meta.state =/= INVALID &&
+    io.nestedwb.set === req.set && io.nestedwb.tag === self_meta.tag
+  val change_clients_meta = clients_meta.zipWithIndex.map {
+    case (meta, i) =>
+      meta_valid && meta.state =/= INVALID &&
+      io.nestedwb.set === req.set && 
+      meta.parseTag(Cat(io.nestedwb.tag, io.nestedwb.set)) === meta.tag
+  }
+  when (change_self_meta) {
+    when (io.nestedwb.b_clr_dirty) { meta_reg.self.dirty := false.B }
+    when (io.nestedwb.c_set_dirty) { meta_reg.self.dirty := true.B }
+    when (io.nestedwb.b_toB) {
+      meta_reg.self.state := BRANCH
+      meta_reg.self.clientStates.foreach { s => s := Mux(isT(s), BRANCH, s) }
+    }
+    when (io.nestedwb.b_toN) {
+      meta_reg.self.state := INVALID
+      meta_reg.self.hit := false.B
+      meta_reg.self.clientStates.foreach(_ := INVALID)
+    }
+  }
+  meta_reg.clients.zipWithIndex.foreach {
+    case (reg, i) =>
+      when (change_clients_meta(i)) {
+        when ((io.nestedwb.clients.get)(i).isToB) {
+          reg.state := BRANCH
+        }
+        when ((io.nestedwb.clients.get)(i).isToN) {
+          reg.state := INVALID
+          reg.hit := false.B
+        }
+      }
+  }
 
   // Set tasks to be scheduled and resps to wait for
   val s_acquire = RegInit(true.B) // source_a
@@ -599,9 +632,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.tag := req.tag
   io.status.bits.reload := false.B // TODO
   io.status.bits.way := self_meta.way
-  // TODO:
   io.status.bits.blockB := true.B
-  io.status.bits.nestB := false.B
+  // B nest A
+  io.status.bits.nestB := meta_valid && w_releaseack && w_probeacklast && !w_grantfirst
   io.status.bits.blockC := true.B
-  io.status.bits.nestC := false.B
+  // C nest B | C nest A
+  io.status.bits.nestC := meta_valid && (!w_probeackfirst || !w_grantfirst)
 }
