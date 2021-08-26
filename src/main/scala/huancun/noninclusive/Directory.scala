@@ -35,7 +35,7 @@ class SelfDirResult(implicit p: Parameters) extends SelfDirEntry {
 
 class ClientDirResult(implicit p: Parameters) extends ClientDirEntry with HasClientInfo {
   val hit = Bool()
-  val way = UInt(clientWays.W)
+  val way = UInt(clientWayBits.W)
   val tag = UInt(clientTagBits.W)
 }
 
@@ -55,12 +55,10 @@ class ClientTagWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
   val way = UInt(clientWayBits.W) // log2
   val tag = UInt(clientTagBits.W)
 
-  def apply(lineAddr: UInt, way: UInt) = { // way is in oneHot form
-    val w = Wire(this.cloneType)
-    w.set := lineAddr(clientSetBits - 1, 0)
-    w.way := OHToUInt(way)
-    w.tag := lineAddr(clientSetBits + clientTagBits - 1, clientSetBits)
-    w
+  def apply(lineAddr: UInt, way: UInt) = {
+    this.set := lineAddr(clientSetBits - 1, 0)
+    this.way := way
+    this.tag := lineAddr(clientSetBits + clientTagBits - 1, clientSetBits)
   }
 }
 
@@ -75,12 +73,10 @@ class ClientDirWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
   val way = UInt(clientWayBits.W)
   val data = new ClientDirEntry()
 
-  def apply(lineAddr: UInt, way: UInt, data: UInt) = { // way is in oneHot form
-    val w = Wire(this.cloneType)
-    w.set := lineAddr(clientSetBits - 1, 0)
-    w.way := OHToUInt(way)
-    w.data.state := data
-    w
+  def apply(lineAddr: UInt, way: UInt, data: UInt) = {
+    this.set := lineAddr(clientSetBits - 1, 0)
+    this.way := way
+    this.data.state := data
   }
 }
 
@@ -136,13 +132,19 @@ class Directory(implicit p: Parameters)
     )
   )
 
+  def addrConnect(lset: UInt, ltag: UInt, rset: UInt, rtag: UInt) = {
+    assert(lset.getWidth + ltag.getWidth == rset.getWidth + rtag.getWidth)
+    val addr = Cat(rtag, rset)
+    lset := addr.tail(ltag.getWidth)
+    ltag := addr.head(ltag.getWidth)
+  }
+
   for (i <- 0 until dirReadPorts) {
     val rports = clientDirs.map(_.io.reads(i)) :+ selfDir.io.reads(i)
     val req = io.reads(i)
     rports.foreach { p =>
       p.valid := req.valid
-      p.bits.set := req.bits.set
-      p.bits.tag := req.bits.tag
+      addrConnect(p.bits.set, p.bits.tag, req.bits.set, req.bits.tag)
     }
     req.ready := Cat(rports.map(_.ready)).andR()
     val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
