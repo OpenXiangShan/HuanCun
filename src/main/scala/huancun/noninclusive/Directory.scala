@@ -56,7 +56,7 @@ class ClientTagWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
   val tag = UInt(clientTagBits.W)
 
   def apply(lineAddr: UInt, way: UInt) = { // way is in oneHot form
-    val w = Wire(this)
+    val w = Wire(this.cloneType)
     w.set := lineAddr(clientSetBits - 1, 0)
     w.way := OHToUInt(way)
     w.tag := lineAddr(clientSetBits + clientTagBits - 1, clientSetBits)
@@ -76,7 +76,7 @@ class ClientDirWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
   val data = new ClientDirEntry()
 
   def apply(lineAddr: UInt, way: UInt, data: UInt) = { // way is in oneHot form
-    val w = Wire(this)
+    val w = Wire(this.cloneType)
     w.set := lineAddr(clientSetBits - 1, 0)
     w.way := OHToUInt(way)
     w.data.state := data
