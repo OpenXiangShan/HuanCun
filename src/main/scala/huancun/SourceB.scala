@@ -25,7 +25,7 @@ import chisel3.util._
 import freechips.rocketchip.tilelink._
 import huancun.utils.ParallelPriorityMux
 
-class SourceB(implicit p: Parameters) extends HuanCunModule with DontCareInnerLogic {
+class SourceB(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val b = DecoupledIO(new TLBundleB(edgeIn.bundle))
     val task = Flipped(DecoupledIO(new SourceBReq))
@@ -56,4 +56,5 @@ class SourceB(implicit p: Parameters) extends HuanCunModule with DontCareInnerLo
   io.b.bits.address := Cat(taskLatch.tag, taskLatch.set, 0.U(offsetBits.W))
   io.b.bits.mask := ~0.U(beatBytes.W)
   io.b.bits.data := 0.U
+  io.b.bits.corrupt := 0.U
 }
