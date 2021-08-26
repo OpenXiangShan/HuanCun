@@ -50,8 +50,16 @@ class SelfTagWrite(implicit p: Parameters) extends BaseTagWrite {
 
 class ClientTagWrite(implicit p: Parameters) extends HuanCunBundle with HasClientInfo {
   val set = UInt(clientSetBits.W)
-  val way = UInt(clientWayBits.W)
+  val way = UInt(clientWayBits.W) // log2
   val tag = UInt(clientTagBits.W)
+
+  def apply(lineAddr: UInt, way: UInt) = { // way is in oneHot form
+    val w = Wire(this)
+    w.set := lineAddr(clientSetBits - 1, 0)
+    w.way := OHToUInt(way)
+    w.tag := lineAddr(clientSetBits + clientTagBits - 1, clientSetBits)
+    w
+  }
 }
 
 class SelfDirWrite(implicit p: Parameters) extends BaseDirWrite {
@@ -64,6 +72,14 @@ class ClientDirWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
   val set = UInt(clientSetBits.W)
   val way = UInt(clientWayBits.W)
   val data = new ClientDirEntry()
+
+  def apply(lineAddr: UInt, way: UInt, data: UInt) = { // way is in oneHot form
+    val w = Wire(this)
+    w.set := lineAddr(clientSetBits - 1, 0)
+    w.way := OHToUInt(way)
+    w.data.state := data
+    w
+  }
 }
 
 class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, SelfDirWrite, SelfTagWrite] {
