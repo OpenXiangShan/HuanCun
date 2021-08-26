@@ -48,42 +48,52 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
     var total_release = 0
     var total_get = 0
 
+    def l1d_map(func: TLCMasterAgent => Unit) = testTop.l1d_list.map(_.agent).foreach(func)
+    def l1i_map(func: TLULMasterAgent => Unit) = testTop.l1i_list.map(_.agent).foreach(func)
+
     test(testTop.module).withAnnotations(testAnnos) { dut =>
-      val l1d = testTop.l1d.agent
-      val l1i = testTop.l1i.agent
 
       for (_ <- 0 to totalTick) {
 
         // Enqueue pending Acquire
-        if (l1d.outerAcquire.size <= pendingThreshold) {
-          total_acquire += nrAddingTrans
-          for (_ <- 0 until nrAddingTrans) {
-            val addr = getRandomElement(addr_pool, rand)
-            val targetPerm = sample(acquireProbMap, rand)
-            l1d.addAcquire(addr, targetPerm)
+        l1d_map(l1d => {
+          if (l1d.outerAcquire.size <= pendingThreshold) {
+            total_acquire += nrAddingTrans
+            for (_ <- 0 until nrAddingTrans) {
+              val addr = getRandomElement(addr_pool, rand)
+              val targetPerm = sample(acquireProbMap, rand)
+              l1d.addAcquire(addr, targetPerm)
+            }
           }
+
+          // Enqueue pending Release
+          if (l1d.outerRelease.size <= pendingThreshold) {
+            total_release += nrAddingTrans
+            for (_ <- 0 until nrAddingTrans) {
+              val addr = getRandomElement(addr_pool, rand)
+              val targetPerm = sample(releaseProbMap, rand)
+              l1d.addRelease(addr, targetPerm)
+            }
+          }
+        })
+
+        l1i_map(l1i => {
+          if (l1i.outerGet.size <= pendingThreshold) {
+            total_get += nrAddingTrans
+            for (_ <- 0 until nrAddingTrans) {
+              val addr = getRandomElement(addr_pool, rand)
+              l1i.addGet(addr)
+            }
+          }
+        })
+
+        for((l1d, io) <- testTop.l1d_list.zip(dut.l1d_io)){
+          l1d.update(io)
+        }
+        for((l1i, io) <- testTop.l1i_list.zip(dut.l1i_io)){
+          l1i.update(io)
         }
 
-        // Enqueue pending Release
-        if (l1d.outerRelease.size <= pendingThreshold) {
-          total_release += nrAddingTrans
-          for (_ <- 0 until nrAddingTrans) {
-            val addr = getRandomElement(addr_pool, rand)
-            val targetPerm = sample(releaseProbMap, rand)
-            l1d.addRelease(addr, targetPerm)
-          }
-        }
-
-        if (l1i.outerGet.size <= pendingThreshold) {
-          total_get += nrAddingTrans
-          for (_ <- 0 until nrAddingTrans) {
-            val addr = getRandomElement(addr_pool, rand)
-            l1i.addGet(addr)
-          }
-        }
-
-        testTop.l1d.update(dut.l1dio)
-        testTop.l1i.update(dut.l1iio)
         dut.clock.step(1)
       }
 

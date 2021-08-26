@@ -12,26 +12,37 @@ import scala.collection.mutable.ArrayBuffer
 
 class TestTop
 (serialList: ArrayBuffer[(Int, TLCTrans)],
- scoreboard: mutable.Map[BigInt, ScoreboardData]
+ scoreboard: mutable.Map[BigInt, ScoreboardData],
+ dcacheNum: Int = 2,
+ icacheNum: Int = 1
 )(implicit p: Parameters) extends LazyModule {
 
   val delayFactor = 0
 
-  val l1d = LazyModule(new MasterAgent(
-    id = 0,
-    name = "l1d",
-    probe = true,
-    serialList,
-    scoreboard
-  ))
+  var id = 0
+  def get_id_and_inc() = {val ret = id; id = id + 1; ret}
 
-  val l1i = LazyModule(new MasterULAgent(
-    id = 1,
-    name = "l1i",
-    probe = false,
-    serialList,
-    scoreboard
-  ))
+  val l1d_list = List.fill(dcacheNum) {
+    val id = get_id_and_inc()
+    LazyModule(new MasterAgent(
+      id = id,
+      name = s"l1d$id",
+      probe = true,
+      serialList,
+      scoreboard
+    ))
+  }
+
+  val l1i_list = List.fill(icacheNum) {
+    val id = get_id_and_inc()
+    LazyModule(new MasterULAgent(
+      id = id,
+      name = s"l1i$id",
+      probe = false,
+      serialList,
+      scoreboard
+    ))
+  }
 
   val ptw = LazyModule(new FakePTW(nBanks = 1))
   val xbar = TLXbar()
@@ -46,15 +57,20 @@ class TestTop
       TLBuffer() :=*
       l2.node :=* xbar
 
-  xbar := TLBuffer() := TLDelayer(delayFactor) := TLBuffer() := l1d.node
-  xbar := TLBuffer() := TLDelayer(delayFactor) := TLBuffer() := l1i.node
+  for(agent <- l1d_list ++ l1i_list) {
+    xbar := TLBuffer() := TLDelayer(delayFactor) := TLBuffer() := agent.node
+  }
   xbar := TLBuffer() := TLDelayer(delayFactor) := TLBuffer() := ptw.node
 
   lazy val module = new LazyModuleImp(this) {
-    val l1dio = IO(Flipped(l1d.module.tl_master_io.cloneType))
-    l1d.module.tl_master_io <> l1dio
-    val l1iio = IO(Flipped(l1i.module.tl_master_io.cloneType))
-    l1i.module.tl_master_io <> l1iio
+    val l1d_io = IO(Vec(dcacheNum, Flipped(l1d_list.head.module.tl_master_io.cloneType)))
+    l1d_list.zip(l1d_io).foreach{
+      case (agent, tl_master_io) => agent.module.tl_master_io <> tl_master_io
+    }
+    val l1i_io = IO(Vec(icacheNum, Flipped(l1i_list.head.module.tl_master_io.cloneType)))
+    l1i_list.zip(l1i_io).foreach{
+      case (agent, tl_master_io) => agent.module.tl_master_io <> tl_master_io
+    }
   }
 
 }
