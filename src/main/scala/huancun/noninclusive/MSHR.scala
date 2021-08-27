@@ -251,10 +251,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     case (reg, i) =>
       when(change_clients_meta(i)) {
         when((io.nestedwb.clients.get)(i).isToB) {
-          reg.state := BRANCH
+          // reg.state := BRANCH
         }
         when((io.nestedwb.clients.get)(i).isToN) {
-          reg.state := INVALID
+          // reg.state := INVALID
           reg.hit := false.B
         }
       }

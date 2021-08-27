@@ -74,13 +74,13 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     VecInit(io.status.map(s => s.valid && s.bits.set(granularity - 1, 0) === req.set(granularity - 1, 0)))
   }
 
-  val c_block_vec = get_match_vec(io.c_req.bits, block_granularity)
-  val b_block_vec = get_match_vec(io.b_req.bits, block_granularity)
-  val a_block_vec = get_match_vec(io.a_req.bits, block_granularity)
+//  val c_block_vec = get_match_vec(io.c_req.bits, block_granularity)
+//  val b_block_vec = get_match_vec(io.b_req.bits, block_granularity)
+//  val a_block_vec = get_match_vec(io.a_req.bits, block_granularity)
 
-  val c_match_vec = get_match_vec(io.c_req.bits)
-  val b_match_vec = get_match_vec(io.b_req.bits)
-  val a_match_vec = get_match_vec(io.a_req.bits)
+  val c_match_vec = get_match_vec(io.c_req.bits, block_granularity)
+  val b_match_vec = get_match_vec(io.b_req.bits, block_granularity)
+  val a_match_vec = get_match_vec(io.a_req.bits, block_granularity)
 
   val nestC_vec = VecInit(
     io.status.map(s => s.valid && s.bits.nestC).init :+ false.B
@@ -89,9 +89,9 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     io.status.map(s => s.valid && s.bits.nestB).init.init ++ Seq(false.B, false.B)
   )
 
-  val conflict_c = c_block_vec.asUInt().orR()
-  val conflict_b = b_block_vec.asUInt().orR()
-  val conflict_a = a_block_vec.asUInt().orR()
+  val conflict_c = c_match_vec.asUInt().orR()
+  val conflict_b = b_match_vec.asUInt().orR()
+  val conflict_a = a_match_vec.asUInt().orR()
 
   val may_nestC = (c_match_vec.asUInt() & nestC_vec.asUInt()).orR()
   val may_nestB = (b_match_vec.asUInt() & nestB_vec.asUInt()).orR()

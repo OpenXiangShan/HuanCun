@@ -40,7 +40,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val (first, last, _, beat) = edge.count(io.d)
   val uncache = io.d.bits.opcode === AccessAckData
   val cache = !uncache
-  val needData = cache && io.d.bits.opcode =/= ReleaseAck
+  val needData = cache && io.d.bits.opcode(0) // =/= ReleaseAck
   val w_safe = !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(io.set, io.way))
 
   io.d.ready := cache && io.bs_waddr.ready && (!first || w_safe) // TODO: handle uncache access
