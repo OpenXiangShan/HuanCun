@@ -78,10 +78,6 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val b_block_vec = get_match_vec(io.b_req.bits, block_granularity)
   val a_block_vec = get_match_vec(io.a_req.bits, block_granularity)
 
-  val c_match_vec = get_match_vec(io.c_req.bits)
-  val b_match_vec = get_match_vec(io.b_req.bits)
-  val a_match_vec = get_match_vec(io.a_req.bits)
-
   val nestC_vec = VecInit(
     io.status.map(s => s.valid && s.bits.nestC).init :+ false.B
   )
@@ -93,8 +89,8 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val conflict_b = b_block_vec.asUInt().orR()
   val conflict_a = a_block_vec.asUInt().orR()
 
-  val may_nestC = (c_match_vec.asUInt() & nestC_vec.asUInt()).orR()
-  val may_nestB = (b_match_vec.asUInt() & nestB_vec.asUInt()).orR()
+  val may_nestC = (c_block_vec.asUInt() & nestC_vec.asUInt()).orR()
+  val may_nestB = (b_block_vec.asUInt() & nestB_vec.asUInt()).orR()
 
   val abc_mshr_alloc = io.alloc.init.init
   val bc_mshr_alloc = io.alloc.init.last
