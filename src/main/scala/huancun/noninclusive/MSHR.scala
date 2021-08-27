@@ -60,7 +60,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
       clients_meta.map { case m => Mux(m.hit, m.state, INVALID) }
   ) // the highest perm of this whole level, including self and clients
-  val req_promoteT = req_acquire && isT(highest_perm)
+
+  // val req_promoteT = req_acquire && isT(highest_perm)
+  val req_promoteT = req_acquire && gotT
 
   // self cache does not have the acquired block, but some other client owns the block
   val transmit_from_other_client = !self_meta.hit && VecInit(clients_meta.zipWithIndex.map {
