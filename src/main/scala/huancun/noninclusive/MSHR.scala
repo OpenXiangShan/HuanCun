@@ -466,9 +466,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   ob.set := req.set
   ob.param := Mux(req.fromB, req.param, Mux(req_needT, toN, toB))
   // Which clients should be probed?
-  val probe_clients = VecInit(clients_meta.map {
-    case m => Mux(ob.param === toN, m.hit, ob.param === toB && isT(m.state))
-  }).asUInt & ~Mux(req.fromA && skipProbeN(req.opcode), UIntToOH(iam), 0.U)
+  val probe_clients = RegEnable(VecInit(clients_meta.map {
+    case m => Mux(ob.param === toN, m.hit, m.hit && ob.param === toB && isT(m.state))
+  }).asUInt & ~Mux(req.fromA && skipProbeN(req.opcode), UIntToOH(iam), 0.U), io.dirResult.valid)
   ob.clients := probe_clients
 
   oc.opcode := Mux(
