@@ -132,14 +132,16 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
     io.sourceD_r_hazard.bits.safe(io.task.bits.set, io.task.bits.way))
 
   val isProbeAckDataReg = RegEnable(isProbeAckData, io.c.fire())
+  val resp_way = Mux(io.c.valid, io.way, RegEnable(io.way, io.c.fire()))
+  val resp_set = Mux(io.c.valid, set, RegEnable(set, io.c.fire()))
   val req_w_valid = io.task.fire() || busy_r // ReleaseData
   val resp_w_valid = (io.c.valid && can_recv_resp && isProbeAckData) || (!first && isProbeAckDataReg) // ProbeAckData
 
   io.task.ready := first && !busy_r && task_w_safe // TODO: flow here
 
   io.bs_waddr.valid := req_w_valid || resp_w_valid
-  io.bs_waddr.bits.way := Mux(req_w_valid, bs_w_task.way, io.way)
-  io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, set) // TODO: do we need io.set?
+  io.bs_waddr.bits.way := Mux(req_w_valid, bs_w_task.way, resp_way)
+  io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, resp_set) // TODO: do we need io.set?
   io.bs_waddr.bits.beat := w_counter
   io.bs_waddr.bits.write := true.B
   io.bs_waddr.bits.noop := Mux(req_w_valid, !beatValids(bs_w_task.bufIdx)(w_counter), !c.valid)
