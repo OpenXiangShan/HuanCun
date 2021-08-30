@@ -234,6 +234,7 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
     req.tag := parseAddress(newAddr)._1
     req.set := parseAddress(newAddr)._2
     req.needT := io.train.bits.needT
+    req.source := io.train.bits.source
     req_valid := !crossPage // stop prefetch when prefetch req crosses pages
   }
 

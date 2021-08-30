@@ -45,5 +45,4 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a.bits.mask := Fill(edgeOut.manager.beatBytes, 1.U(1.W))
   a.bits.data := DontCare
   a.bits.corrupt := false.B
-
 }

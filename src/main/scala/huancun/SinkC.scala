@@ -90,6 +90,7 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   io.alloc.bits.set := set
   io.alloc.bits.off := off
   io.alloc.bits.bufIdx := insertIdx
+  io.alloc.bits.needHint := false.B
 
   if (cacheParams.enableDebug) {
     when(c.fire()) {

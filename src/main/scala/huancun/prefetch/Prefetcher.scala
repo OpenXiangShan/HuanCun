@@ -11,6 +11,7 @@ class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
   val needT = Bool()
+  val source = UInt(sourceIdBits.W)
   // val id = UInt(sourceIdBits.W)
 }
 
@@ -26,6 +27,7 @@ class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
   val needT = Bool()
+  val source = UInt(sourceIdBits.W)
   // prefetch only when L2 receives a miss or prefetched hit req
   // val miss = Bool()
   // val prefetched = Bool()
@@ -94,11 +96,12 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       io.req.bits.opcode := TLMessages.Hint
       io.req.bits.param := Mux(pftQueue.io.deq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
       io.req.bits.size := log2Up(blockBytes).U
-      io.req.bits.source := 0.U // DontCare
+      io.req.bits.source := pftQueue.io.deq.bits.source
       io.req.bits.set := pftQueue.io.deq.bits.set
       io.req.bits.tag := pftQueue.io.deq.bits.tag
       io.req.bits.off := 0.U
       io.req.bits.channel := "b001".U
+      io.req.bits.needHint := false.B
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }

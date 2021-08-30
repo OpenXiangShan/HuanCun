@@ -44,4 +44,5 @@ class SinkB(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.alloc.bits.tag := tag
   io.alloc.bits.off := off
   io.alloc.bits.bufIdx := 0.U
+  io.alloc.bits.needHint := false.B
 }

@@ -20,8 +20,9 @@
 package huancun
 
 import chipsalliance.rocketchip.config.Field
+import chisel3._
 import freechips.rocketchip.tilelink.{TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
-import freechips.rocketchip.util.{BundleFieldBase, BundleKeyBase}
+import freechips.rocketchip.util.{BundleField, BundleFieldBase, BundleKeyBase, ControlKey}
 import huancun.prefetch.PrefetchParameters
 
 case object CacheParamsKey extends Field[CacheParameters](CacheParameters())
@@ -30,6 +31,14 @@ case class ClientCacheParameters(
   sets:       Int,
   ways:       Int,
   blockBytes: Int)
+
+case object PrefetchKey extends ControlKey[Bool]("needHint")
+
+case class PrefetchField() extends BundleField(PrefetchKey) {
+  override def data: Bool = Bool()
+
+  override def default(x: Bool): Unit = false.B
+}
 
 case class CacheParameters(
   name:         String = "L2",
@@ -50,7 +59,7 @@ case class CacheParameters(
   echoField:    Seq[BundleFieldBase] = Nil,
   reqField:     Seq[BundleFieldBase] = Nil, // master
   respKey:      Seq[BundleKeyBase] = Nil,
-  reqKey:       Seq[BundleKeyBase] = Nil, // slave
+  reqKey:       Seq[BundleKeyBase] = Seq(PrefetchKey), // slave
   respField:    Seq[BundleFieldBase] = Nil) {
   require(ways > 0)
   require(sets > 0)
