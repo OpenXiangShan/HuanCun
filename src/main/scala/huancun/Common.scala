@@ -114,6 +114,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val tag = UInt(tagBits.W)
   val off = UInt(offsetBits.W)
   val bufIdx = UInt(bufIdxBits.W)
+  val needHint = Bool()
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
