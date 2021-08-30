@@ -66,6 +66,7 @@ class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0
           TLPermissions.toT
         )
         out.a.bits := acquire
+        out.a.bits.user.apply(PrefetchKey) := (name == "L1D").B
         out.a.valid := cnt =/= 0.U
       } else {
         val (_, get) = edge.Get(

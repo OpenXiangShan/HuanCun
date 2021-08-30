@@ -32,7 +32,7 @@ case class ClientCacheParameters(
   ways:       Int,
   blockBytes: Int)
 
-case object PrefetchKey extends ControlKey[Bool]("prefetch")
+case object PrefetchKey extends ControlKey[Bool]("needHint")
 
 case class PrefetchField() extends BundleField(PrefetchKey) {
   override def data: Bool = Bool()
