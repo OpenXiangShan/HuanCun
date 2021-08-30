@@ -327,19 +327,19 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when (client_shrink_perm) {
       s_wbclientsdir(iam) := false.B
     }
-    // When miss in self dir, allocate a new block in self dir.
-    when (!self_meta.hit) {
+    // When miss in self dir and has data, allocate a new block in self dir.
+    when (!self_meta.hit && req.opcode(0)) {
       s_wbselftag := false.B
     }
     // When miss in self dir or , write self dir.
-    when (!self_meta.hit || req.opcode(0) || client_shrink_perm) {
+    when (self_meta.hit || req.opcode(0) || client_shrink_perm) {
       s_wbselfdir := false.B
     }
-    // When miss in self dir or Release dirty block, write data array.
-    when (req.opcode(0) || !self_meta.hit) {
+    // When ReleaseData, write data array.
+    when (req.opcode(0) /*|| !self_meta.hit*/) {
       s_writerelease := false.B
     }
-    when (!self_meta.hit && self_meta.state =/= INVALID && replace_need_release) {
+    when (!self_meta.hit && req.opcode(0) && self_meta.state =/= INVALID && replace_need_release) {
       s_release := false.B
       w_releaseack := false.B
     }
