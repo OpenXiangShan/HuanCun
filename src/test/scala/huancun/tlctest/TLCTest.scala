@@ -17,7 +17,7 @@ class TestTop
  icacheNum: Int = 1
 )(implicit p: Parameters) extends LazyModule {
 
-  val delayFactor = 0
+  val delayFactor = 0.2
 
   var id = 0
   def get_id_and_inc() = {val ret = id; id = id + 1; ret}
@@ -78,5 +78,5 @@ class TestTop
 abstract class TLCTest extends L2Tester {
   val serialList = ArrayBuffer[(Int, TLCTrans)]()
   val scoreboard = mutable.Map[BigInt, ScoreboardData]()
-  val testTop = LazyModule(new TestTop(serialList, scoreboard))
+  val testTop = LazyModule(new TestTop(serialList, scoreboard, dcacheNum = 2))
 }

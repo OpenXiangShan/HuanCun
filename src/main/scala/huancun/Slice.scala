@@ -31,6 +31,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val out = TLBundle(edgeOut.bundle)
   })
 
+  dontTouch(io.in.a.bits.user(PrefetchKey))
+
   // Inner channels
   val sinkA = Module(new SinkA)
   val sourceB = Module(new SourceB)
