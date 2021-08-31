@@ -131,10 +131,17 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   val task_w_safe = !(io.sourceD_r_hazard.valid &&
     io.sourceD_r_hazard.bits.safe(io.task.bits.set, io.task.bits.way))
 
-  val req_w_valid = io.task.fire() || busy_r // ReleaseData
-  val resp_w_valid = io.c.valid && can_recv_resp && isProbeAckData // ProbeAckData
+  val isProbeAckDataReg = RegEnable(isProbeAckData, io.c.fire() && first, init = false.B)
 
-  io.task.ready := first && !busy_r && task_w_safe // TODO: flow here
+  when(done)
+  {
+    isProbeAckDataReg := false.B
+  }
+
+  val req_w_valid = io.task.fire() || busy_r // ReleaseData
+  val resp_w_valid = io.c.valid && can_recv_resp && isProbeAckData || isProbeAckDataReg// ProbeAckData
+
+  io.task.ready := !isProbeAckDataReg && !busy_r && task_w_safe // TODO: flow here
 
   io.bs_waddr.valid := req_w_valid || resp_w_valid
   io.bs_waddr.bits.way := Mux(req_w_valid, bs_w_task.way, io.way)
