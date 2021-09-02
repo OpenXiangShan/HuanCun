@@ -394,7 +394,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // need replacement when:
     // (1) some other client owns the block, probe this block and allocate a block in self cache (transmit_from_other_client),
     // (2) other clients and self dir both miss, allocate a block only when this req acquires a BRANCH (!req_needT).
-    when (!self_meta.hit && self_meta.state =/= INVALID && replace_need_release && (transmit_from_other_client || req_acquire || req.opcode === Hint)) {
+    when (!self_meta.hit && self_meta.state =/= INVALID && replace_need_release && (transmit_from_other_client || req.opcode === AcquireBlock || req.opcode === Hint)) {
       s_release := false.B
       w_releaseack := false.B
     }
