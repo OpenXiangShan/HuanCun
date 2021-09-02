@@ -368,20 +368,22 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   def b_schedule(): Unit = {
     // Probe
     s_probeack := false.B
-    // When probe hits in self dir and needs to shrink perm, write self dir.
-    when (self_meta.hit && probe_shrink_perm(self_meta.state, req.param)) {
+
+    assert(self_meta.hit || clients_meta.map(_.hit).reduce(_||_), "Trying to probe a non-existing block")
+    when (self_meta.hit) {
+      assert(probe_shrink_perm(self_meta.state, req.param), "Probe should always shrink perm")
       s_wbselfdir := false.B
-      // When probe hits in some client dir and needs to shrink perm, write corresponding client dir.
-      clients_meta.zipWithIndex.foreach {
-        case (meta, i) =>
-          when (meta.hit && probe_shrink_perm(meta.state, req.param)) {
-            s_wbclientsdir(i) := false.B
-            s_probe := false.B
-            w_probeackfirst := false.B
-            w_probeacklast := false.B
-            w_probeack :=  false.B
-          }
-      }
+    }
+    clients_meta.zipWithIndex.foreach {
+      case (meta, i) =>
+        when (meta.hit) {
+          assert(probe_shrink_perm(meta.state, req.param), "Probe should always shrink perm")
+          s_probe := false.B
+          s_wbclientsdir(i) := false.B
+          w_probeackfirst := false.B
+          w_probeacklast := false.B
+          w_probeack :=  false.B
+        }
     }
   }
 
