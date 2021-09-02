@@ -152,7 +152,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       req_needT || gotT,
       Mux(
         req_acquire,
-        TRUNK,
+        Mux(oa.opcode === AcquirePerm && self_meta.state === INVALID, INVALID, TRUNK),
         Mux(req.opcode === Hint, prefetch_write_self_next_state, TIP)
       ),
       Mux(
@@ -418,6 +418,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           w_probeack := false.B
           s_wbclientsdir(i) := false.B
         }
+        assert(!(req.opcode === AcquirePerm && (i.U =/= iam && meta.hit && isT(meta.state))), "AcquirePerm cannot occur when other client has Tip")
     }
     // need grantack
     when (req_acquire) {
