@@ -584,6 +584,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   ic.off := req.off
   ic.way := self_meta.way
   ic.bufIdx := req.bufIdx
+  ic.opcode := req.opcode
+  ic.param := req.param // FIXME
+  ic.save := true.B
+  ic.drop := false.B
+  ic.release := false.B
 
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := self_meta.way

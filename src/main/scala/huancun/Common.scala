@@ -44,6 +44,11 @@ class SinkCReq(implicit p: Parameters) extends InnerTask {
   val way = UInt(wayBits.W)
   val off = UInt(offsetBits.W)
   val bufIdx = UInt(bufIdxBits.W)
+  val opcode = UInt(3.W)
+  val param = UInt(3.W)
+  val save = Bool() // write into banked store
+  val drop = Bool() // clear write buf (without writing banked store)
+  val release = Bool() // send buffer contents to SourceC
 }
 class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val opcode = UInt(3.W)

@@ -53,7 +53,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   io.out.a <> sourceA.io.a
   sinkB.io.b <> io.out.b
-  io.out.c <> sourceC.io.c
+  TLArbiter.lowest(edgeOut, io.out.c, sinkC.io.release, sourceC.io.c)
   sinkD.io.d <> io.out.d
   io.out.e <> sourceE.io.e
 
