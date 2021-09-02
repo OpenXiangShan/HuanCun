@@ -99,6 +99,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val bc_mshr = ms.init.last
   val abc_mshr = ms.init.init
 
+  val block_bc = c_mshr.io.status.valid
+  val block_abc = block_bc || bc_mshr.io.status.valid
+
   val select_c = c_mshr.io.status.valid
   val select_bc = bc_mshr.io.status.valid
 
@@ -186,7 +189,25 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   directory.io.reads <> mshrAlloc.io.dirReads
 
   // Send tasks
-  directory.io.dirWReqs <> VecInit(ms.map(_.io.tasks.dir_write))
+
+  def is_blocked(idx: Int): Bool = {
+    if(idx < mshrs) block_abc else if (idx < mshrsAll-1) block_bc else false.B
+  }
+
+  def block_decoupled[T <: Data](sink: DecoupledIO[T], source: DecoupledIO[T], block: Bool) = {
+    sink.valid := !block && source.valid
+    sink.bits := source.bits
+    source.ready := !block && sink.ready
+  }
+
+  def block_decoupled[T <: Data](sinks: Seq[DecoupledIO[T]], sources: Seq[DecoupledIO[T]]): Unit = {
+    require(sinks.size == sources.size)
+    for(((x, y), i) <- sinks.zip(sources).zipWithIndex){
+      block_decoupled(x, y, is_blocked(i))
+    }
+  }
+
+  block_decoupled(directory.io.dirWReqs, ms.map(_.io.tasks.dir_write))
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
@@ -198,7 +219,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
       for ((dirW, idx) <- dir.io.clientDirWReqs.zipWithIndex) {
-        dirW <> ms.map(_.io.tasks.client_dir_write(idx))
+        block_decoupled(dirW, ms.map(_.io.tasks.client_dir_write(idx)))
       }
       for ((tagW, idx) <- dir.io.clientTagWreq.zipWithIndex) {
         arbTasks(tagW, ms.map(_.io.tasks.client_tag_write(idx)), Some(s"client_${idx}_tagWrite"))
@@ -219,11 +240,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       for ((arb, req) <- arbiter.io.in.zip(abc)) {
         arb <> req
       }
-      out.valid := c.valid || bc.valid || arbiter.io.out.valid
+      out.valid := c.valid ||
+        !block_bc && bc.valid ||
+        !block_abc && arbiter.io.out.valid
       out.bits := Mux(c.valid, c.bits, Mux(bc.valid, bc.bits, arbiter.io.out.bits))
       c.ready := out.ready
-      bc.ready := out.ready && !c.valid
-      arbiter.io.out.ready := out.ready && !c.valid && !bc.valid
+      bc.ready := out.ready && !block_bc
+      arbiter.io.out.ready := out.ready && !block_abc
     } else {
       val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), in.size))
       for ((arb, req) <- arbiter.io.in.zip(in)) {
