@@ -46,6 +46,7 @@ class SinkCReq(implicit p: Parameters) extends InnerTask {
   val bufIdx = UInt(bufIdxBits.W)
   val opcode = UInt(3.W)
   val param = UInt(3.W)
+  val source = UInt(mshrBits.W)
   val save = Bool() // write into banked store
   val drop = Bool() // clear write buf (without writing banked store)
   val release = Bool() // send buffer contents to SourceC
@@ -88,6 +89,7 @@ class SinkCResp(implicit p: Parameters) extends HuanCunBundle {
   val source = UInt(sourceIdBits.W)
   val last = Bool()
   val set = UInt(setBits.W) // The target address of the transfer, but only set is enough
+  val bufIdx = UInt(bufIdxBits.W)
 }
 class SinkDResp(implicit p: Parameters) extends HuanCunBundle {
   // Grant / AccessAck / ReleaseAck
@@ -129,6 +131,10 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val reload = Bool()
   val blockB, blockC = Bool()
   val nestB, nestC = Bool()
+  // c -> abc: nested C need to write BankedStore
+  val nestedReleaseData = Bool()
+  // b -> abd: nested B need to write BankedStore
+  val nestedProbeAckData = Bool()
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {

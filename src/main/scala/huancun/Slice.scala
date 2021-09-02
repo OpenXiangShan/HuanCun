@@ -105,9 +105,34 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val select_c = c_mshr.io.status.valid
   val select_bc = bc_mshr.io.status.valid
 
+  abc_mshr.foreach {
+    case mshr =>
+      mshr.io.c_status.set := c_mshr.io.status.bits.set
+      mshr.io.c_status.tag := c_mshr.io.status.bits.tag
+      mshr.io.c_status.way := c_mshr.io.status.bits.way
+      mshr.io.c_status.nestedReleaseData := c_mshr.io.status.valid && c_mshr.io.status.bits.nestedReleaseData
+      mshr.io.b_status.set := bc_mshr.io.status.bits.set
+      mshr.io.b_status.tag := bc_mshr.io.status.bits.tag
+      mshr.io.b_status.way := bc_mshr.io.status.bits.way
+      mshr.io.b_status.nestedProbeAckData := bc_mshr.io.status.valid && bc_mshr.io.status.bits.nestedProbeAckData
+  }
+  Seq(bc_mshr, c_mshr).foreach {
+    case mshr =>
+      mshr.io.c_status.set := 0.U
+      mshr.io.c_status.tag := 0.U
+      mshr.io.c_status.way := 0.U
+      mshr.io.c_status.nestedReleaseData := false.B
+      mshr.io.b_status.set := 0.U
+      mshr.io.b_status.tag := 0.U
+      mshr.io.b_status.way := 0.U
+      mshr.io.b_status.nestedProbeAckData := false.B
+  }
+
   val nestedWb = Wire(new NestedWriteback)
   nestedWb.set := Mux(select_c, c_mshr.io.status.bits.set, bc_mshr.io.status.bits.set)
   nestedWb.tag := Mux(select_c, c_mshr.io.status.bits.tag, bc_mshr.io.status.bits.tag)
+  nestedWb.releaseThrough := false.B
+  nestedWb.probeAckDataThrough := false.B
 
   val bc_wb_state = bc_mshr match {
     case mshr: inclusive.MSHR =>
@@ -172,6 +197,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   bc_mshr.io.nestedwb.set := c_mshr.io.status.bits.set
   bc_mshr.io.nestedwb.tag := c_mshr.io.status.bits.tag
   bc_mshr.io.nestedwb.c_set_dirty := nestedWb.c_set_dirty
+  bc_mshr.io.nestedwb.probeAckDataThrough := Cat(abc_mshr.map(_.io.b_status.probeAckDataThrough)).orR
 
   when(select_c) {
     bc_mshr.io.nestedwb.clients.zip(nestedWb.clients).map {
@@ -181,6 +207,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   c_mshr.io.nestedwb := 0.U.asTypeOf(nestedWb)
+  c_mshr.io.nestedwb.releaseThrough := Cat(abc_mshr.map(_.io.c_status.releaseThrough)).orR
 
   val directory = Module({
     if (cacheParams.inclusive) new inclusive.Directory()
@@ -191,7 +218,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   // Send tasks
 
   def is_blocked(idx: Int): Bool = {
-    if(idx < mshrs) block_abc else if (idx < mshrsAll-1) block_bc else false.B
+    if (idx < mshrs) block_abc else if (idx < mshrsAll - 1) block_bc else false.B
   }
 
   def block_decoupled[T <: Data](sink: DecoupledIO[T], source: DecoupledIO[T], block: Bool) = {
@@ -202,7 +229,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   def block_decoupled[T <: Data](sinks: Seq[DecoupledIO[T]], sources: Seq[DecoupledIO[T]]): Unit = {
     require(sinks.size == sources.size)
-    for(((x, y), i) <- sinks.zip(sources).zipWithIndex){
+    for (((x, y), i) <- sinks.zip(sources).zipWithIndex) {
       block_decoupled(x, y, is_blocked(i))
     }
   }
@@ -241,8 +268,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
         arb <> req
       }
       out.valid := c.valid ||
-        !block_bc && bc.valid ||
-        !block_abc && arbiter.io.out.valid
+      !block_bc && bc.valid ||
+      !block_abc && arbiter.io.out.valid
       out.bits := Mux(c.valid, c.bits, Mux(bc.valid, bc.bits, arbiter.io.out.bits))
       c.ready := out.ready
       bc.ready := out.ready && !block_bc
