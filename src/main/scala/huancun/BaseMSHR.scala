@@ -46,25 +46,6 @@ class NestedWriteback(implicit p: Parameters) extends HuanCunBundle {
         )
       )
     else None
-  val releaseThrough = Bool()
-  val probeAckDataThrough = Bool()
-}
-
-class C_Status(implicit p: Parameters) extends HuanCunBundle {
-  // When C nest A, A needs to know the status of C and tells C to release through to next level
-  val set = Input(UInt(setBits.W))
-  val tag = Input(UInt(tagBits.W))
-  val way = Input(UInt(wayBits.W))
-  val nestedReleaseData = Input(Bool())
-  val releaseThrough = Output(Bool())
-}
-
-class B_Status(implicit p: Parameters) extends HuanCunBundle {
-  val set = Input(UInt(setBits.W))
-  val tag = Input(UInt(tagBits.W))
-  val way = Input(UInt(wayBits.W))
-  val nestedProbeAckData = Input(Bool())
-  val probeAckDataThrough = Output(Bool())
 }
 
 abstract class BaseMSHRIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
@@ -77,8 +58,6 @@ abstract class BaseMSHRIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_
   val dirResult: Valid[T_RESULT] // = Flipped(ValidIO(new DirResult))
   val resps = Flipped(new MSHRResps)
   val nestedwb = Input(new NestedWriteback)
-  val c_status = new C_Status
-  val b_status = new B_Status()
 }
 
 abstract class BaseMSHR[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](

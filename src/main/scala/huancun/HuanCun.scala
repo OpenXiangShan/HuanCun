@@ -120,7 +120,7 @@ trait DontCareInnerLogic { this: Module =>
 
 abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with HasHuanCunParameters
 
-abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
+abstract class HuanCunModule(implicit val p: Parameters) extends MultiIOModule with HasHuanCunParameters
 
 class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 

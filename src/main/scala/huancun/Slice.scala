@@ -23,6 +23,8 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
+import huancun.inclusive.MSHR
+import huancun.noninclusive.MSHR
 import huancun.prefetch._
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
@@ -105,34 +107,42 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val select_c = c_mshr.io.status.valid
   val select_bc = bc_mshr.io.status.valid
 
+  def non_inclusive[T <: RawModule](m: T): noninclusive.MSHR = {
+    m.asInstanceOf[noninclusive.MSHR]
+  }
+
   abc_mshr.foreach {
-    case mshr =>
-      mshr.io.c_status.set := c_mshr.io.status.bits.set
-      mshr.io.c_status.tag := c_mshr.io.status.bits.tag
-      mshr.io.c_status.way := c_mshr.io.status.bits.way
-      mshr.io.c_status.nestedReleaseData := c_mshr.io.status.valid && c_mshr.io.status.bits.nestedReleaseData
-      mshr.io.b_status.set := bc_mshr.io.status.bits.set
-      mshr.io.b_status.tag := bc_mshr.io.status.bits.tag
-      mshr.io.b_status.way := bc_mshr.io.status.bits.way
-      mshr.io.b_status.nestedProbeAckData := bc_mshr.io.status.valid && bc_mshr.io.status.bits.nestedProbeAckData
+    case mshr: noninclusive.MSHR =>
+      mshr.io_c_status.set := c_mshr.io.status.bits.set
+      mshr.io_c_status.tag := c_mshr.io.status.bits.tag
+      mshr.io_c_status.way := c_mshr.io.status.bits.way
+      mshr.io_c_status.nestedReleaseData :=
+        c_mshr.io.status.valid && non_inclusive(c_mshr).io_is_nestedReleaseData
+      mshr.io_b_status.set := bc_mshr.io.status.bits.set
+      mshr.io_b_status.tag := bc_mshr.io.status.bits.tag
+      mshr.io_b_status.way := bc_mshr.io.status.bits.way
+      mshr.io_b_status.nestedProbeAckData :=
+        bc_mshr.io.status.valid && non_inclusive(bc_mshr).io_is_nestedProbeAckData
+      mshr.io_releaseThrough := false.B
+      mshr.io_probeAckDataThrough := false.B
+    case _: inclusive.MSHR =>
   }
   Seq(bc_mshr, c_mshr).foreach {
-    case mshr =>
-      mshr.io.c_status.set := 0.U
-      mshr.io.c_status.tag := 0.U
-      mshr.io.c_status.way := 0.U
-      mshr.io.c_status.nestedReleaseData := false.B
-      mshr.io.b_status.set := 0.U
-      mshr.io.b_status.tag := 0.U
-      mshr.io.b_status.way := 0.U
-      mshr.io.b_status.nestedProbeAckData := false.B
+    case mshr: noninclusive.MSHR =>
+      mshr.io_c_status.set := 0.U
+      mshr.io_c_status.tag := 0.U
+      mshr.io_c_status.way := 0.U
+      mshr.io_c_status.nestedReleaseData := false.B
+      mshr.io_b_status.set := 0.U
+      mshr.io_b_status.tag := 0.U
+      mshr.io_b_status.way := 0.U
+      mshr.io_b_status.nestedProbeAckData := false.B
+    case _: inclusive.MSHR =>
   }
 
   val nestedWb = Wire(new NestedWriteback)
   nestedWb.set := Mux(select_c, c_mshr.io.status.bits.set, bc_mshr.io.status.bits.set)
   nestedWb.tag := Mux(select_c, c_mshr.io.status.bits.tag, bc_mshr.io.status.bits.tag)
-  nestedWb.releaseThrough := false.B
-  nestedWb.probeAckDataThrough := false.B
 
   val bc_wb_state = bc_mshr match {
     case mshr: inclusive.MSHR =>
@@ -197,7 +207,15 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   bc_mshr.io.nestedwb.set := c_mshr.io.status.bits.set
   bc_mshr.io.nestedwb.tag := c_mshr.io.status.bits.tag
   bc_mshr.io.nestedwb.c_set_dirty := nestedWb.c_set_dirty
-  bc_mshr.io.nestedwb.probeAckDataThrough := Cat(abc_mshr.map(_.io.b_status.probeAckDataThrough)).orR
+  bc_mshr match {
+    case mshr: noninclusive.MSHR =>
+      mshr.io_releaseThrough := false.B
+      mshr.io_probeAckDataThrough := Cat(
+        abc_mshr
+        .map(_.asInstanceOf[noninclusive.MSHR].io_b_status.probeAckDataThrough)
+      ).orR
+    case _ => // skip
+  }
 
   when(select_c) {
     bc_mshr.io.nestedwb.clients.zip(nestedWb.clients).map {
@@ -207,7 +225,14 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   c_mshr.io.nestedwb := 0.U.asTypeOf(nestedWb)
-  c_mshr.io.nestedwb.releaseThrough := Cat(abc_mshr.map(_.io.c_status.releaseThrough)).orR
+  c_mshr match {
+    case mshr: noninclusive.MSHR =>
+      mshr.io_probeAckDataThrough := false.B
+      mshr.io_releaseThrough := Cat(
+        abc_mshr.map(_.asInstanceOf[noninclusive.MSHR].io_c_status.releaseThrough)
+      ).orR
+    case _: inclusive.MSHR =>
+  }
 
   val directory = Module({
     if (cacheParams.inclusive) new inclusive.Directory()

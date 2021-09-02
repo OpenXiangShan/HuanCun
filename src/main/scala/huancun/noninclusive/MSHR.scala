@@ -10,6 +10,23 @@ import huancun._
 import huancun.utils.{ParallelMax}
 import huancun.MetaData._
 
+class C_Status(implicit p: Parameters) extends HuanCunBundle {
+  // When C nest A, A needs to know the status of C and tells C to release through to next level
+  val set = Input(UInt(setBits.W))
+  val tag = Input(UInt(tagBits.W))
+  val way = Input(UInt(wayBits.W))
+  val nestedReleaseData = Input(Bool())
+  val releaseThrough = Output(Bool())
+}
+
+class B_Status(implicit p: Parameters) extends HuanCunBundle {
+  val set = Input(UInt(setBits.W))
+  val tag = Input(UInt(tagBits.W))
+  val way = Input(UInt(wayBits.W))
+  val nestedProbeAckData = Input(Bool())
+  val probeAckDataThrough = Output(Bool())
+}
+
 class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, SelfTagWrite] {
   val io = IO(new BaseMSHRIO[DirResult, SelfDirWrite, SelfTagWrite] {
     override val tasks = new MSHRTasks[SelfDirWrite, SelfTagWrite] {
@@ -20,6 +37,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
     override val dirResult = Flipped(ValidIO(new DirResult()))
   })
+
+  val io_c_status = IO(new C_Status)
+  val io_b_status = IO(new B_Status())
+  val io_releaseThrough = IO(Input(Bool()))
+  val io_probeAckDataThrough = IO(Input(Bool()))
+  val io_is_nestedReleaseData = IO(Output(Bool()))
+  val io_is_nestedProbeAckData = IO(Output(Bool()))
 
   val req = Reg(new MSHRRequest)
   val req_valid = RegInit(false.B)
@@ -295,7 +319,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val releaseThrough = RegInit(false.B)
   val releaseDrop = RegInit(false.B)
   val releaseSave = !releaseThrough && !releaseDrop
-  when(io.nestedwb.releaseThrough) {
+  when(io_releaseThrough) {
     assert(req_valid)
     releaseThrough := req.fromC && !other_clients_hit
     releaseDrop := req.fromC && other_clients_hit
@@ -303,7 +327,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val probeAckDataThrough = RegInit(false.B)
   val probeAckDataDrop = RegInit(false.B)
   val probeAckDataSave = !probeAckDataThrough && !probeAckDataDrop
-  when(io.nestedwb.probeAckDataThrough) {
+  when(io_probeAckDataThrough) {
     assert(req_valid)
     probeAckDataThrough := req.fromB && clients_have_T
     probeAckDataDrop := req.fromB && !clients_have_T
@@ -620,7 +644,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   ia.size := req.size
   ia.off := req.off
 
-  ic.sourceId := req.source // TODO: this is useless
+  ic.sourceId := DontCare
+  ic.source := io.id
   ic.set := req.set
   ic.tag := req.tag
   ic.size := req.size
@@ -651,7 +676,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       )
     )
   ) // FIXME
-  ic.source := io.id
   ic.save := Mux(req.fromC, releaseSave, probeAckDataSave)
   ic.drop := Mux(req.fromC, releaseDrop, probeAckDataDrop)
   ic.release := Mux(req.fromC, releaseThrough, probeAckDataThrough)
@@ -798,15 +822,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.nestC := meta_valid && (!w_probeackfirst || !w_grantfirst)
 
   // C nest A (C -> A)
-  io.status.bits.nestedReleaseData := req.fromC && !other_clients_hit /*&& isToN(req.param) */ && req_valid
+  io_is_nestedReleaseData := req.fromC && !other_clients_hit /*&& isToN(req.param) */ && req_valid
   // B nest A (B -> A)
-  io.status.bits.nestedProbeAckData := req.fromB && clients_hit && req_valid
+  io_is_nestedProbeAckData := req.fromB && clients_hit && req_valid
 
   // C nest A (A -> C)
-  io.c_status.releaseThrough := req_valid && io.c_status.set === req.set /*&& io.c_status.tag === self_meta.tag */ &&
-    io.c_status.way === self_meta.way && io.c_status.nestedReleaseData &&
+  io_c_status.releaseThrough := req_valid && io_c_status.set === req.set /*&& io.c_status.tag === self_meta.tag */ &&
+    io_c_status.way === self_meta.way && io_c_status.nestedReleaseData &&
     req.fromA
   // B nest A (A -> B)
-  io.b_status.probeAckDataThrough := req_valid && io.b_status.set === req.set && io.b_status.way === self_meta.way &&
-    io.b_status.nestedProbeAckData && req.fromA
+  io_b_status.probeAckDataThrough := req_valid && io_b_status.set === req.set && io_b_status.way === self_meta.way &&
+    io_b_status.nestedProbeAckData && req.fromA
 }

@@ -131,10 +131,6 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val reload = Bool()
   val blockB, blockC = Bool()
   val nestB, nestC = Bool()
-  // c -> abc: nested C need to write BankedStore
-  val nestedReleaseData = Bool()
-  // b -> abd: nested B need to write BankedStore
-  val nestedProbeAckData = Bool()
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
