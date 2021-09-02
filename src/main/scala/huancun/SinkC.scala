@@ -156,7 +156,7 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   io.release.bits.data := releaseBuf(task_r.bufIdx)(w_counter)
   io.release.bits.opcode := task_r.opcode
   io.release.bits.param := task_r.param
-  io.release.bits.source := task_r.sourceId
+  io.release.bits.source := task_r.source
   io.release.bits.size := task_r.size
   io.release.bits.corrupt := false.B
 
