@@ -355,6 +355,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   oa.tag := req.tag
   oa.set := req.set
   oa.opcode := TLMessages.AcquireBlock // TODO: change this
+  oa.opcode := Mux(meta.hit, TLMessages.AcquirePerm, TLMessages.AcquireBlock)
   oa.param := Mux(req_needT, Mux(meta.hit, BtoT, NtoT), NtoB)
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U
@@ -430,6 +431,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   ic.off := req.off
   ic.way := meta.way
   ic.bufIdx := req.bufIdx
+  ic.opcode := req.opcode
+  ic.param := req.param
+  ic.save := true.B // inclusive always save
+  ic.drop := false.B
+  ic.release := false.B
 
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := meta.way

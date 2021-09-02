@@ -34,6 +34,8 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
     val bs_waddr = DecoupledIO(new DSAddress)
     val bs_wdata = Output(new DSData)
     val sourceD_r_hazard = Flipped(ValidIO(new SourceDHazard))
+    // directly release inner data to next level
+    val release = DecoupledIO(new TLBundleC(edgeOut.bundle))
   })
   /*
       Release/ReleaseData
@@ -116,12 +118,12 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
       bufValids(insertIdxReg) := true.B
     }
   }
-  when(w_done && busy_r) { // release data write done
+  when((w_done || task_r.drop) && busy_r) { // release data write done
     bufValids(task_r.bufIdx) := false.B
     beatValids(task_r.bufIdx).foreach(_ := false.B)
   }
 
-  when(io.bs_waddr.fire() && !io.bs_waddr.bits.noop) {
+  when(io.bs_waddr.fire() && !io.bs_waddr.bits.noop || io.release.fire()) {
     w_counter := w_counter + 1.U
   }
   when(w_done) {
@@ -135,18 +137,28 @@ class SinkC(implicit p: Parameters) extends HuanCunModule {
   val isProbeAckDataReg = RegEnable(isProbeAckData, io.c.fire())
   val resp_way = Mux(io.c.valid, io.way, RegEnable(io.way, io.c.fire()))
   val resp_set = Mux(io.c.valid, set, RegEnable(set, io.c.fire()))
-  val req_w_valid = io.task.fire() || busy_r // ReleaseData
   val resp_w_valid = (io.c.valid && can_recv_resp && isProbeAckData) || (!first && isProbeAckDataReg) // ProbeAckData
+  val req_w_valid =
+    (io.task.fire() && io.task.bits.save) || (busy_r && task_r.save)
 
   io.task.ready := first && !busy_r && task_w_safe // TODO: flow here
 
   io.bs_waddr.valid := req_w_valid || resp_w_valid
-  io.bs_waddr.bits.way := Mux(req_w_valid, bs_w_task.way, resp_way)
-  io.bs_waddr.bits.set := Mux(req_w_valid, bs_w_task.set, resp_set) // TODO: do we need io.set?
+  io.bs_waddr.bits.way := Mux(do_release, bs_w_task.way, resp_way)
+  io.bs_waddr.bits.set := Mux(do_release, bs_w_task.set, resp_set) // TODO: do we need io.set?
   io.bs_waddr.bits.beat := w_counter
   io.bs_waddr.bits.write := true.B
-  io.bs_waddr.bits.noop := Mux(req_w_valid, !beatValids(bs_w_task.bufIdx)(w_counter), !c.valid)
-  io.bs_wdata.data := Mux(req_w_valid, releaseBuf(bs_w_task.bufIdx)(w_counter), c.bits.data)
+  io.bs_waddr.bits.noop := Mux(do_release, !beatValids(bs_w_task.bufIdx)(w_counter), !c.valid)
+  io.bs_wdata.data := Mux(do_release, releaseBuf(bs_w_task.bufIdx)(w_counter), c.bits.data)
+
+  io.release.valid := busy_r && task_r.release
+  io.release.bits.address := Cat(task_r.tag, task_r.set, task_r.off)
+  io.release.bits.data := releaseBuf(task_r.bufIdx)(w_counter)
+  io.release.bits.opcode := task_r.opcode
+  io.release.bits.param := task_r.param
+  io.release.bits.source := task_r.sourceId
+  io.release.bits.size := task_r.size
+  io.release.bits.corrupt := false.B
 
   io.resp.valid := c.valid && isResp && can_recv_resp
   io.resp.bits.hasData := hasData
