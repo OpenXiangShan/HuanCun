@@ -152,7 +152,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       req_needT || gotT,
       Mux(
         req_acquire,
-        Mux(oa.opcode === AcquirePerm && self_meta.state === INVALID, INVALID, TRUNK),
+        Mux((clients_hit || self_meta.hit) && self_meta.state === INVALID, INVALID, TRUNK),
         Mux(req.opcode === Hint, prefetch_write_self_next_state, TIP)
       ),
       Mux(
@@ -394,7 +394,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // need replacement when:
     // (1) some other client owns the block, probe this block and allocate a block in self cache (transmit_from_other_client),
     // (2) other clients and self dir both miss, allocate a block only when this req acquires a BRANCH (!req_needT).
-    when (!self_meta.hit && self_meta.state =/= INVALID && replace_need_release && (transmit_from_other_client || req.opcode === AcquireBlock || req.opcode === Hint)) {
+    when (!self_meta.hit && self_meta.state =/= INVALID && replace_need_release && (transmit_from_other_client || req.opcode === AcquireBlock || req.opcode === Get || req.opcode === Hint)) {
       s_release := false.B
       w_releaseack := false.B
     }
@@ -434,7 +434,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_wbselfdir := false.B
     }
     // need write self tag
-    when (!self_meta.hit && (req.opcode =/= Hint || Mux(req.param === PREFETCH_WRITE, !isT(clients_meta(iam).state), !clients_meta(iam).hit))) {
+    when (!self_meta.hit && (req.opcode === Get || req.opcode === AcquireBlock || (req.opcode === Hint && Mux(req.param === PREFETCH_WRITE, !isT(clients_meta(iam).state), !clients_meta(iam).hit)))) {
       s_wbselftag := false.B
     }
     // need write putbuffer in Sink A into data array
