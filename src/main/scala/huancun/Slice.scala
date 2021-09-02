@@ -36,7 +36,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   // Inner channels
   val sinkA = Module(new SinkA)
   val sourceB = Module(new SourceB)
-  val sinkC = Module(new SinkC)
+  val sinkC = Module(if(cacheParams.inclusive) new inclusive.SinkC else new noninclusive.SinkC)
   val sourceD = Module(new SourceD)
   val sinkE = Module(new SinkE)
 
