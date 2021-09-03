@@ -827,10 +827,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io_is_nestedProbeAckData := req.fromB && clients_hit && req_valid
 
   // C nest A (A -> C)
-  io_c_status.releaseThrough := req_valid && io_c_status.set === req.set /*&& io.c_status.tag === self_meta.tag */ &&
-    io_c_status.way === self_meta.way && io_c_status.nestedReleaseData &&
-    req.fromA
+  io_c_status.releaseThrough := req_valid &&
+    io_c_status.set === req.set && io_c_status.tag =/= self_meta.tag &&
+    io_c_status.way === self_meta.way && io_c_status.nestedReleaseData && req.fromA
   // B nest A (A -> B)
-  io_b_status.probeAckDataThrough := req_valid && io_b_status.set === req.set && io_b_status.way === self_meta.way &&
+  io_b_status.probeAckDataThrough := req_valid &&
+    io_b_status.set === req.set && io_c_status.tag =/= self_meta.tag &&
+    io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData && req.fromA
 }
