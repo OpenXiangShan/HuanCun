@@ -316,22 +316,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         }
       }
   }
-  val releaseThrough = RegInit(false.B)
-  val releaseDrop = RegInit(false.B)
-  val releaseSave = !releaseThrough && !releaseDrop
-  when(io_releaseThrough && io.dirResult.valid) {
-    assert(req_valid)
-    releaseThrough := req.fromC && !other_clients_hit
-    releaseDrop := req.fromC && other_clients_hit
-  }
-  val probeAckDataThrough = RegInit(false.B)
-  val probeAckDataDrop = RegInit(false.B)
-  val probeAckDataSave = !probeAckDataThrough && !probeAckDataDrop
-  when(io_probeAckDataThrough) {
-    assert(req_valid)
-    probeAckDataThrough := req.fromB && clients_have_T
-    probeAckDataDrop := req.fromB && !clients_have_T
-  }
+
 
   // Set tasks to be scheduled and resps to wait for
   val s_acquire = RegInit(true.B) // source_a
@@ -358,6 +343,26 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_grant = RegInit(true.B)
   val w_releaseack = RegInit(true.B)
   val w_grantack = RegInit(true.B)
+
+  val releaseThrough = RegInit(false.B)
+  val releaseDrop = RegInit(false.B)
+  val releaseSave = !releaseThrough && !releaseDrop
+  when(io_releaseThrough && io.dirResult.valid) {
+    assert(req_valid)
+    releaseThrough := req.fromC && !other_clients_hit
+    releaseDrop := req.fromC && other_clients_hit
+    when(releaseThrough){
+      w_releaseack := false.B
+    }
+  }
+  val probeAckDataThrough = RegInit(false.B)
+  val probeAckDataDrop = RegInit(false.B)
+  val probeAckDataSave = !probeAckDataThrough && !probeAckDataDrop
+  when(io_probeAckDataThrough) {
+    assert(req_valid)
+    probeAckDataThrough := req.fromB && clients_have_T
+    probeAckDataDrop := req.fromB && !clients_have_T
+  }
 
   def reset_all_flags(): Unit = {
     // Default value
