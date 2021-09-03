@@ -535,7 +535,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     val set_release_through = req.fromC && !other_clients_hit
     releaseThrough := set_release_through
     releaseDrop := req.fromC && other_clients_hit
-    w_releaseack := set_release_through
+    w_releaseack := !set_release_through
   }
   when(io_probeAckDataThrough) {
     assert(req_valid)
@@ -790,8 +790,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probe_dirty := probe_dirty || resp.hasData && !w_probeackfirst
   }
   when(io.resps.sink_d.valid) {
-    sink := io.resps.sink_d.bits.sink
     when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData) {
+      sink := io.resps.sink_d.bits.sink
       w_grantfirst := true.B
       w_grantlast := w_grantlast || io.resps.sink_d.bits.last
       w_grant := req.off === 0.U || io.resps.sink_d.bits.last
