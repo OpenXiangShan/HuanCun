@@ -398,7 +398,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_wbselftag := false.B
     }
     // When miss in self dir or , write self dir.
-    when(self_meta.hit || req.opcode(0) || client_shrink_perm) {
+    when(self_meta.hit || req.opcode(0)) {
       s_wbselfdir := false.B
     }
     // When ReleaseData, write data array.
@@ -406,12 +406,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_writerelease := false.B // including drop and release-through
     }
     when(!self_meta.hit && req.opcode(0) && self_meta.state =/= INVALID && replace_need_release) {
-      when (self_meta.state === TRUNK) {
-        s_probe := false.B
-        w_probeackfirst := false.B
-        w_probeacklast := false.B
-        w_probeack := false.B
-      }
       s_release := false.B
       w_releaseack := false.B
     }
