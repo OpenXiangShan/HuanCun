@@ -319,7 +319,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val releaseThrough = RegInit(false.B)
   val releaseDrop = RegInit(false.B)
   val releaseSave = !releaseThrough && !releaseDrop
-  when(io_releaseThrough) {
+  when(io_releaseThrough && io.dirResult.valid) {
     assert(req_valid)
     releaseThrough := req.fromC && !other_clients_hit
     releaseDrop := req.fromC && other_clients_hit
