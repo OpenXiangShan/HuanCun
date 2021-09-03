@@ -27,7 +27,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val hasData = edgeIn.hasData(c.bits)
   val noSpace = full && hasData
   val insertIdx = PriorityEncoder(~bufVals)
-  val insertIdxReg = RegEnable(insertIdx, c.fire() && isReleaseData && first)
+  val insertIdxReg = RegEnable(insertIdx, c.fire() && first)
   val (tag, set, off) = parseAddress(c.bits.address)
 
   c.ready := Mux(first,
