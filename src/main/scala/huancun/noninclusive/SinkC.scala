@@ -68,7 +68,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   val task_r = RegEnable(io.task.bits, io.task.fire())
   val busy = RegInit(false.B)
-  val task_v = io.task.valid || busy
+  val task_v = io.task.fire() || busy
   val task = Mux(busy, task_r, io.task.bits)
   val w_counter = RegInit(0.U(beatBits.W))
   val task_w_safe = !(io.sourceD_r_hazard.valid &&
