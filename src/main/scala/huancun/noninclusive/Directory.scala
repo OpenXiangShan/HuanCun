@@ -5,7 +5,8 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.random.LFSR
 import huancun._
-import huancun.utils.{ParallelPriorityMux, SRAMTemplate}
+import huancun.debug.{DirectoryLogger, TypeId}
+import huancun.utils.{GTimer, ParallelPriorityMux, SRAMTemplate}
 
 trait HasClientInfo { this: HasHuanCunParameters =>
   val clientCacheParams = cacheParams.clientCache.get
@@ -97,6 +98,34 @@ class Directory(implicit p: Parameters)
     extends BaseDirectory[DirResult, SelfDirWrite, SelfTagWrite]
     with HasClientInfo {
   val io = IO(new DirectoryIO())
+
+
+  val stamp = GTimer()
+  for(i <- 0 until mshrsAll) {
+    val selfDirW = io.dirWReqs(i)
+    DirectoryLogger(cacheParams.name, TypeId.self_dir)(
+      selfDirW.bits.set, selfDirW.bits.way, 0.U,
+      selfDirW.bits.data, stamp, selfDirW.fire(), this.clock, this.reset
+    )
+  }
+  DirectoryLogger(cacheParams.name, TypeId.self_tag)(
+    io.tagWReq.bits.set, io.tagWReq.bits.way, io.tagWReq.bits.tag,
+    0.U, stamp, io.tagWReq.fire(), this.clock, this.reset
+  )
+
+  for((cDir, cTag) <- io.clientDirWReqs.zip(io.clientTagWreq)) {
+    for(i <- 0 until mshrsAll){
+      val dirW = cDir(i)
+      DirectoryLogger(cacheParams.name, TypeId.client_dir)(
+        dirW.bits.set, dirW.bits.way, 0.U,
+        dirW.bits.data, stamp, dirW.fire(), this.clock, this.reset
+      )
+    }
+    DirectoryLogger(cacheParams.name, TypeId.self_tag)(
+      cTag.bits.set, cTag.bits.way, cTag.bits.tag,
+      0.U, stamp, cTag.fire(), this.clock, this.reset
+    )
+  }
 
   def clientHitFn(dir: ClientDirEntry): Bool = dir.state =/= MetaData.INVALID
   val clientDirs = (0 until clientBits).map { _ =>
