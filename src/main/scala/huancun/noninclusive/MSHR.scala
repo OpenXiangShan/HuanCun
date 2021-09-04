@@ -345,6 +345,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_releaseack = RegInit(true.B)
   val w_grantack = RegInit(true.B)
 
+  val will_release_through = WireInit(false.B) // 1 cycle ahead 'releaseThrough'
   val releaseThrough = RegInit(false.B)
   val releaseDrop = RegInit(false.B)
   val releaseSave = !releaseThrough && !releaseDrop
@@ -406,7 +407,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(req.opcode(0)) {
       s_writerelease := false.B // including drop and release-through
     }
-    when(!self_meta.hit && req.opcode(0) && self_meta.state =/= INVALID && replace_need_release) {
+    when(!self_meta.hit && req.opcode(0) &&
+      self_meta.state =/= INVALID && replace_need_release &&
+      !will_release_through // if release through, no need to replace
+    ) {
       s_release := false.B
       w_releaseack := false.B
     }
@@ -530,8 +534,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   when(io_releaseThrough && io.dirResult.valid) {
     assert(req_valid)
-    val set_release_through = req.fromC && !other_clients_hit
-    releaseThrough := set_release_through
+    will_release_through := req.fromC && !other_clients_hit
+    releaseThrough := will_release_through
     releaseDrop := req.fromC && other_clients_hit
     /*
       for c mshr:
@@ -539,7 +543,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       set_release_throuht <=> send outer release
       so 'w_releaseack' should be set
     */
-    w_releaseack := !(set_release_through && req.opcode(0))
+    w_releaseack := !(will_release_through && req.opcode(0))
   }
   when(io_probeAckDataThrough) {
     assert(req_valid)
