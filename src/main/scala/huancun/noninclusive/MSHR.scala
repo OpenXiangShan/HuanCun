@@ -165,15 +165,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   def onBReq(): Unit = {
     // Probe
-    new_self_meta.dirty := req.param === toT && self_meta.dirty || probe_dirty
-    new_self_meta.state := probe_next_state(self_meta.state, req.param)
+//    new_self_meta.dirty := Mux(self_meta.hit, req.param === toT && self_meta.dirty || probe_dirty, self_meta.dirty)
+    new_self_meta.dirty := !self_meta.hit && self_meta.dirty
+    new_self_meta.state := Mux(self_meta.hit, probe_next_state(self_meta.state, req.param), self_meta.state)
     new_self_meta.clientStates.zipWithIndex.foreach {
       case (state, i) =>
-        state := probe_next_state(self_meta.clientStates(i), req.param)
+        state := Mux(self_meta.hit, probe_next_state(self_meta.clientStates(i), req.param), self_meta.clientStates(i))
     }
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
-        m.state := probe_next_state(clients_meta(i).state, req.param)
+        m.state := Mux(m.hit, probe_next_state(clients_meta(i).state, req.param), clients_meta(i).state)
     }
   }
 
@@ -599,7 +600,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   oc.opcode := Mux(
     req.fromB,
-    Cat(ProbeAck(2, 1), (probe_dirty || self_meta.dirty).asUInt),
+    Cat(ProbeAck(2, 1), (probe_dirty || self_meta.hit && self_meta.dirty).asUInt),
     Cat(Release(2, 1), self_meta.dirty.asUInt)
   )
   oc.tag := Mux(req.fromB, req.tag, self_meta.tag)
@@ -817,6 +818,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req_valid := false.B
     releaseThrough := false.B
     releaseDrop := false.B
+    probeAckDataThrough := false.B
+    probeAckDataDrop := false.B
   }
 
   // Alloc MSHR (alloc has higher priority than release)
