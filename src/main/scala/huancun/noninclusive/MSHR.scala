@@ -818,6 +818,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req_valid := false.B
     releaseThrough := false.B
     releaseDrop := false.B
+    probeAckDataThrough := false.B
+    probeAckDataDrop := false.B
   }
 
   // Alloc MSHR (alloc has higher priority than release)
