@@ -454,7 +454,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantlast := false.B
       w_grant := false.B
       s_grantack := false.B
-      s_wbselfdir := false.B
+//      s_wbselfdir := false.B
+      when (!(req.opcode === AcquirePerm && req.param === BtoT && !self_meta.hit)) { s_wbselfdir := false.B }
     }
     // need probe
     clients_meta.zipWithIndex.foreach {
@@ -478,7 +479,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // need grantack
     when(req_acquire) {
       w_grantack := false.B
-      s_wbselfdir := false.B
+//      s_wbselfdir := false.B
+      // When AcquirePerm BtoT and self_meta miss, do not write self_meta
+      when (!(req.opcode(0) && req.param === BtoT && !self_meta.hit)) { s_wbselfdir := false.B }
       s_wbclientsdir(iam) := false.B
       when(!clients_meta(iam).hit) {
         s_wbclientstag(iam) := false.B
