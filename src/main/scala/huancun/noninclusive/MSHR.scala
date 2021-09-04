@@ -402,7 +402,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_wbselfdir := false.B
     }
     // When ReleaseData, write data array.
-    when(req.opcode(0) /*|| !self_meta.hit*/ ) {
+    when(req.opcode(0)) {
       s_writerelease := false.B // including drop and release-through
     }
     when(!self_meta.hit && req.opcode(0) && self_meta.state =/= INVALID && replace_need_release) {
@@ -529,7 +529,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     val set_release_through = req.fromC && !other_clients_hit
     releaseThrough := set_release_through
     releaseDrop := req.fromC && other_clients_hit
-    w_releaseack := !set_release_through
+    /*
+      for c mshr:
+      req.opcode(0) <=> s_writerelease
+      set_release_throuht <=> send outer release
+      so 'w_releaseack' should be set
+    */
+    w_releaseack := !(set_release_through && req.opcode(0))
   }
   when(io_probeAckDataThrough) {
     assert(req_valid)
