@@ -521,13 +521,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     }
   }
   when(io.resps.sink_d.valid) {
-    sink := io.resps.sink_d.bits.sink
     when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData) {
       w_grantfirst := true.B
       w_grantlast := io.resps.sink_d.bits.last
       w_grant := req.off === 0.U || io.resps.sink_d.bits.last
       bad_grant := io.resps.sink_d.bits.denied
       gotT := io.resps.sink_d.bits.param === toT
+      sink := io.resps.sink_d.bits.sink
     }
     when(io.resps.sink_d.bits.opcode === ReleaseAck) {
       w_releaseack := true.B
@@ -540,7 +540,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   // Release MSHR
   val no_schedule = s_execute && s_probeack && meta_valid && s_writebacktag && s_writebackdir && s_writerelease &&
     s_triggerprefetch.getOrElse(true.B) &&
-    s_prefetchack.getOrElse(true.B)
+    s_prefetchack.getOrElse(true.B) &&
+    s_grantack
   when(no_wait && no_schedule) { // TODO: remove s_writebackdir to improve perf
     req_valid := false.B
     meta_valid := false.B
