@@ -262,7 +262,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   block_decoupled(directory.io.dirWReqs, ms.map(_.io.tasks.dir_write))
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
-  arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
+  arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"), strict = true)
   arbTasks(sourceD.io.task, ms.map(_.io.tasks.source_d), Some("sourceD"))
   arbTasks(sourceE.io.task, ms.map(_.io.tasks.source_e), Some("sourceE"))
   arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"))
