@@ -1,3 +1,4 @@
+import graphviz
 import itertools
 import inspect
 from functools import reduce
@@ -231,6 +232,19 @@ def selfclient_filter(s):
         return False
   return True
 
+
+# if a block is NULL, we dont care:
+#   1 dirty or clean
+#   2 client state
+def null_block_filter(s):
+  if s.self_dir.block_state == Block.NULL:
+    if s.self_dir.dirty_state != DirtyState.CLEAN:
+      return False
+    for c in s.self_dir.client_tl_states:
+      if c != TLState.INVALID:
+        return False
+  return True
+
 def retrieve_name(var):
   for fi in reversed(inspect.stack()):
     names = [var_name for var_name, var_val in fi.frame.f_locals.items() if var_val is var]
@@ -243,12 +257,22 @@ filters = [
   miss_filter,
   tilelink_filter,
   clientmiss_filter,
-  selfclient_filter
+  selfclient_filter,
+  null_block_filter
 ]
 
 for f in filters:
   all_states = list(filter(f, all_states))
   print(f"filter: {retrieve_name(f)} states: {len(all_states)}")
 
-for state in random.sample(all_states, 10):
-  print(f"{state}")
+#for state in random.sample(all_states, 10):
+#  print(f"{state}")
+
+def visualize(states):
+  dot = graphviz.Digraph()
+  for i, s in enumerate(states):
+    dot.node(str(i), str(s))
+  dot.unflatten()
+  dot.render()
+
+visualize(all_states[0:10])
