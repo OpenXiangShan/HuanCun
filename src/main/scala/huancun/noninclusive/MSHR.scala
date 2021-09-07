@@ -102,9 +102,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }).asUInt.orR
 
   // When replacing a block in data array, it is not always necessary to send Release,
-  // but only when state perm > clientStates' perm
+  // but only when state perm > clientStates' perm or replacing a dirty block
   val replace_clients_perm = ParallelMax(self_meta.clientStates)
-  val replace_need_release = self_meta.state > replace_clients_perm
+  val replace_need_release = self_meta.state > replace_clients_perm || self_meta.dirty
   val replace_param = Mux(self_meta.state === BRANCH, BtoN, Mux(replace_clients_perm === INVALID, TtoN, TtoB))
 
   val prefetch_miss_need_acquire = Mux(req.param === PREFETCH_READ, highest_perm === INVALID, !isT(highest_perm))

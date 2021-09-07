@@ -450,6 +450,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     train.bits.tag := req.tag
     train.bits.set := req.set
     train.bits.needT := req_needT
+    train.bits.source := io.id
   }
 
   io.tasks.prefetch_resp.foreach { resp =>
