@@ -359,7 +359,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_grantack = RegInit(true.B)
 
   val will_release_through = WireInit(false.B) // 1 cycle ahead 'releaseThrough'
-  val do_replace_release = RegInit(false.B)
   val releaseThrough = RegInit(false.B)
   val releaseDrop = RegInit(false.B)
   val releaseSave = !releaseThrough && !releaseDrop
@@ -401,7 +400,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probes_done := 0.U
     bad_grant := false.B
 
-    do_replace_release := false.B
   }
 
   def c_schedule(): Unit = {
@@ -427,7 +425,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       self_meta.state =/= INVALID && replace_need_release &&
       !will_release_through // if release through, no need to replace
     ) {
-      do_replace_release := true.B
       s_release := false.B
       w_releaseack := false.B
     }
@@ -464,7 +461,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(
       !self_meta.hit && self_meta.state =/= INVALID && replace_need_release && (transmit_from_other_client || req.opcode === AcquireBlock || req.opcode === Get || req.opcode === Hint)
     ) {
-      do_replace_release := true.B
       s_release := false.B
       w_releaseack := false.B
     }
@@ -866,7 +862,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.nestB := meta_valid && w_releaseack && w_probeacklast && !w_grantfirst
   io.status.bits.blockC := true.B
   // C nest B | C nest A
-  io.status.bits.nestC := meta_valid && (!w_probeackfirst || !w_grantfirst)
+  io.status.bits.nestC := meta_valid && w_releaseack && (!w_probeackfirst || !w_grantfirst)
 
   // C nest A (C -> A)
   io_is_nestedReleaseData := req.fromC && !other_clients_hit /*&& isToN(req.param) */ && req_valid
@@ -876,12 +872,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // C nest A (A -> C)
   io_c_status.releaseThrough := req_valid &&
     io_c_status.set === req.set && io_c_status.tag =/= req.tag &&
-    io_c_status.way === self_meta.way && io_c_status.nestedReleaseData && req.fromA &&
-    !(do_replace_release && !s_release && io_c_status.tag === meta.self.tag)
+    io_c_status.way === self_meta.way && io_c_status.nestedReleaseData && req.fromA
   // B nest A (A -> B)
   io_b_status.probeAckDataThrough := req_valid &&
     io_b_status.set === req.set && io_c_status.tag =/= req.tag &&
     io_b_status.way === self_meta.way &&
-    io_b_status.nestedProbeAckData && req.fromA &&
-    !(do_replace_release && !s_release && io_b_status.tag === meta.self.tag)
+    io_b_status.nestedProbeAckData && req.fromA
 }
