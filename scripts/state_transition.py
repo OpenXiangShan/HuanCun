@@ -144,15 +144,25 @@ def invalid_filter(s):
 
 def hit_filter(s):
   if s.self_dir.hit_state == HitState.HIT:
-    if s.block_state.self_block == Block.NULL:
+    if s.block_state.self_block != s.block_state.req_block:
       return False
     if s.self_dir.tl_state == TLState.INVALID:
       return False
   for c, b in zip(s.client_dirs, s.block_state.client_blocks):
     if c.hit_state == HitState.HIT:
-      if b == Block.NULL:
+      if b != s.block_state.req_block:
         return False
       if c.tl_state == TLState.INVALID:
+        return False
+  return True
+
+def miss_filter(s):
+  if s.self_dir.hit_state == HitState.MISS:
+    if s.block_state.self_block == s.block_state.req_block:
+      return False
+  for c, b in zip(s.client_dirs, s.block_state.client_blocks):
+    if c.hit_state == HitState.MISS:
+      if b == s.block_state.req_block:
         return False
   return True
 
@@ -164,7 +174,8 @@ def retrieve_name(var):
 
 filters = [
   invalid_filter,
-  hit_filter
+  hit_filter,
+  miss_filter
 ]
 
 for f in filters:
