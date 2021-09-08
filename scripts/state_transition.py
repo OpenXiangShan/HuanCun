@@ -5,6 +5,7 @@ import graphviz
 import itertools
 import inspect
 from enum import Enum, unique
+import random
 
 
 @unique
@@ -267,6 +268,10 @@ def tilelink_filter(s: DirState):
             if s.self_dir.client_tl_states[i] == TLState.BRANCH and s.self_dir.client_tl_states[j] == TLState.TIP:
                 return False
 
+	# Branch cannot be dirty
+    if s.self_dir.tl_state == TLState.BRANCH and s.self_dir.dirty_state == DirtyState.DIRTY:
+        return False
+
     return True
 
 
@@ -297,6 +302,10 @@ def null_block_filter(s: DirState):
                 return False
     return True
 
+def acquireToB_filter(s):
+	if s.client_dirs[0].block == Block.F and s.client_dirs[0].tl_state != TLState.INVALID:
+		return False
+	return True
 
 def retrieve_name(var):
     for fi in reversed(inspect.stack()):
@@ -304,6 +313,11 @@ def retrieve_name(var):
         if len(names) > 0:
             return names[0]
 
+def visualize(states):
+    dot = graphviz.Digraph()
+    for i, s in enumerate(states):
+        dot.node(str(i), str(s))
+    dot.render()
 
 filters = [
     invalid_filter,
@@ -322,20 +336,12 @@ for f in filters:
 for i, s in enumerate(all_states):
     s.id = i
 
-
-def visualize(states):
-    dot = graphviz.Digraph()
-    for i, s in enumerate(states):
-        dot.node(str(i), str(s))
-    dot.render()
-
-
 example_state = DirState(
     SelfDir(TLState.TRUNK, DirtyState.CLEAN, HitState.MISS,
             [TLState.TIP, TLState.INVALID], Block.G),
     [
-        ClientDir(TLState.TIP, HitState.HIT, Block.F),
-        ClientDir(TLState.INVALID, HitState.MISS, Block.NULL)
+		ClientDir(TLState.INVALID, HitState.MISS, Block.NULL),
+        ClientDir(TLState.TIP, HitState.HIT, Block.F)
     ]
 )
 
