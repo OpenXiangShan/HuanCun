@@ -241,13 +241,27 @@ def tilelink_filter(s: DirState):
         if c == TLState.TRUNK:
             return False
 
-    # no Branch on top of Trunk
+    # no Branch on top of Trunk; there must be Tip on top of Trunk
     if s.self_dir.tl_state == TLState.TRUNK:
         for c in s.client_dirs:
             if c.block == s.self_dir.block and (c.tl_state == TLState.BRANCH):
                 return False
+        tipflag = False
         for c in s.self_dir.client_tl_states:
             if c == TLState.BRANCH:
+                return False
+            if c == TLState.TIP:
+                tipflag = True
+        if tipflag == False:
+            return False
+
+    # no Tip on top of Tip
+    if s.self_dir.tl_state == TLState.TIP:
+        for c in s.client_dirs:
+            if c.block == s.self_dir.block and c.tl_state == TLState.TIP:
+                return False
+        for c in s.self_dir.client_tl_states:
+            if c == TLState.TIP:
                 return False
 
     # one Tip at most; Tip repels Branch
