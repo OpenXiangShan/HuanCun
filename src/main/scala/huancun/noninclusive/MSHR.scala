@@ -166,6 +166,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           self_meta.clientStates(i)
         )
     }
+    new_self_meta.alias.foreach(
+      _ := Mux(req.param === BtoB || req.param === NtoN, self_meta.alias.get, clients_meta(iam).alias.get)
+    )
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
         m.state := Mux(
@@ -522,7 +525,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_writeput := false.B
     }
     prefetchOpt.map(_ => {
-      when(req.opcode =/= Hint && req.needHint && (!self_meta.hit || self_meta.prefetch.get)) {
+      when(req.opcode =/= Hint && req.needHint.getOrElse(false.B) && (!self_meta.hit || self_meta.prefetch.get)) {
         s_triggerprefetch.map(_ := false.B)
       }
       when(req.opcode === Hint) {
@@ -738,6 +741,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     train.bits.set := req.set
     train.bits.needT := req_needT
     train.bits.source := req.source
+    train.bits.alias.foreach(_ := req.alias.get)
   }
 
   io.tasks.prefetch_resp.foreach { resp =>

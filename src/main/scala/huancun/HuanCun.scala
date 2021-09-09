@@ -31,6 +31,7 @@ trait HasHuanCunParameters {
   val cacheParams = p(HCCacheParamsKey)
   val prefetchOpt = cacheParams.prefetch
   val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
+  val hasAliasBits = cacheParams.clientCaches.head.needResolveAlias
 
   val blockBytes = cacheParams.blockBytes
   val beatBytes = cacheParams.channelBytes.d.get
@@ -49,6 +50,8 @@ trait HasHuanCunParameters {
   val beatBits = offsetBits - log2Ceil(beatBytes)
 
   val stateBits = MetaData.stateBits
+
+  val aliasBitsOpt = cacheParams.clientCaches.head.aliasBitsOpt
 
   val bufBlocks = 4
   val bufIdxBits = log2Ceil(bufBlocks)

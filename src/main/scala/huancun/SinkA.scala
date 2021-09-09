@@ -56,5 +56,6 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
   allocInfo.tag := tag
   allocInfo.off := offset
   allocInfo.bufIdx := DontCare
-  allocInfo.needHint := a.bits.user.lift(PrefetchKey).getOrElse(false.B)
+  allocInfo.needHint.foreach(_ := a.bits.user.lift(PrefetchKey).getOrElse(false.B))
+  allocInfo.alias.foreach(_ := a.bits.user.lift(AliasKey).getOrElse(0.U))
 }
