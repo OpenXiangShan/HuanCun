@@ -558,9 +558,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_releaseack := !(will_release_through && req.opcode(0))
   }
   when(io_probeAckDataThrough) {
+    // bc mshr
     assert(req_valid)
     probeAckDataThrough := req.fromB && clients_have_T
     probeAckDataDrop := req.fromB && !clients_have_T
+  }.elsewhen(req.fromB && io.dirResult.valid) {
+    // abc mshr or bc mshr
+    assert(req_valid)
+    probeAckDataThrough := clients_have_T && (!self_meta.hit || req.param === toN)
+    probeAckDataDrop := !clients_have_T
   }
 
   val no_wait = w_probeacklast && w_grantlast && w_releaseack && w_grantack
