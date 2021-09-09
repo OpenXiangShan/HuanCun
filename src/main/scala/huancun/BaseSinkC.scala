@@ -38,4 +38,3 @@ abstract class BaseSinkC(implicit p: Parameters) extends HuanCunModule {
     val release = DecoupledIO(new TLBundleC(edgeOut.bundle))
   })
 }
-

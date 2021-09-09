@@ -36,7 +36,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   // Inner channels
   val sinkA = Module(new SinkA)
   val sourceB = Module(new SourceB)
-  val sinkC = Module(if(cacheParams.inclusive) new inclusive.SinkC else new noninclusive.SinkC)
+  val sinkC = Module(if (cacheParams.inclusive) new inclusive.SinkC else new noninclusive.SinkC)
   val sourceD = Module(new SourceD)
   val sinkE = Module(new SinkE)
 
@@ -212,7 +212,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io_releaseThrough := false.B
       mshr.io_probeAckDataThrough := Cat(
         abc_mshr
-        .map(_.asInstanceOf[noninclusive.MSHR].io_b_status.probeAckDataThrough)
+          .map(_.asInstanceOf[noninclusive.MSHR].io_b_status.probeAckDataThrough)
       ).orR
     case _ => // skip
   }
@@ -268,8 +268,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"))
   arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"))
   arbTasks(
-    directory.io.tagWReq, ms.map(_.io.tasks.tag_write),
-    Some("tagWrite"), strict = true
+    directory.io.tagWReq,
+    ms.map(_.io.tasks.tag_write),
+    Some("tagWrite"),
+    strict = true
   )
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
@@ -278,8 +280,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       }
       for ((tagW, idx) <- dir.io.clientTagWreq.zipWithIndex) {
         arbTasks(
-          tagW, ms.map(_.io.tasks.client_tag_write(idx)),
-          Some(s"client_${idx}_tagWrite"), strict = true
+          tagW,
+          ms.map(_.io.tasks.client_tag_write(idx)),
+          Some(s"client_${idx}_tagWrite"),
+          strict = true
         )
       }
     case (_: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
@@ -288,15 +292,14 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       assert(false)
   }
 
-  def arbTasks[T <: Bundle]
-  (
-    out: DecoupledIO[T],
-    in: Seq[DecoupledIO[T]],
-    name: Option[String] = None,
+  def arbTasks[T <: Bundle](
+    out:    DecoupledIO[T],
+    in:     Seq[DecoupledIO[T]],
+    name:   Option[String] = None,
     strict: Boolean = false
   ) = {
     require(!strict || in.size == mshrsAll)
-    if(in.size == mshrsAll){
+    if (in.size == mshrsAll) {
       val abc = in.init.init
       val bc = in.init.last
       val c = in.last
@@ -305,10 +308,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       for ((arb, req) <- arbiter.io.in.zip(abc)) {
         arb <> req
       }
-      if(strict){
+      if (strict) {
         out.valid := c.valid ||
-          !block_bc && bc.valid ||
-          !block_abc && arbiter.io.out.valid
+        !block_bc && bc.valid ||
+        !block_abc && arbiter.io.out.valid
         out.bits := Mux(c.valid, c.bits, Mux(bc.valid, bc.bits, arbiter.io.out.bits))
         c.ready := out.ready
         bc.ready := out.ready && !block_bc

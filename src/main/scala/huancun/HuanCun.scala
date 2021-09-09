@@ -28,7 +28,7 @@ import freechips.rocketchip.util.UIntToOH1
 
 trait HasHuanCunParameters {
   val p: Parameters
-  val cacheParams = p(CacheParamsKey)
+  val cacheParams = p(HCCacheParamsKey)
   val prefetchOpt = cacheParams.prefetch
   val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
 

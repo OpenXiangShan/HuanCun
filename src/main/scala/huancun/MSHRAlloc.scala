@@ -66,8 +66,8 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   /* Whether selected request can be accepted */
 
-  val block_granularity = if (!cacheParams.inclusive && cacheParams.clientCache.nonEmpty) {
-    log2Ceil(cacheParams.clientCache.get.sets)
+  val block_granularity = if (!cacheParams.inclusive && cacheParams.clientCaches.nonEmpty) {
+    log2Ceil(cacheParams.clientCaches.head.sets)
   } else setBits
 
   def get_match_vec(req: MSHRRequest, granularity: Int = setBits): Vec[Bool] = {

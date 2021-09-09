@@ -13,10 +13,10 @@ import huancun.prefetch._
 abstract class L2Tester extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
   behavior of "L2"
   implicit val defaultConfig = new Config((_, _, _) => {
-    case CacheParamsKey => CacheParameters(
+    case HCCacheParamsKey => HCCacheParameters(
       prefetch = None,
       inclusive = false,
-      clientCache = Some(ClientCacheParameters(sets = 32, ways = 8, blockBytes = 64))
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2"))
     )
   })
 }

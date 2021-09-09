@@ -424,7 +424,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   ia.size := req.size
   ia.off := req.off
 
-  ic.sourceId := DontCare//req.source
+  ic.sourceId := DontCare //req.source
   ic.source := io.id
   ic.set := req.set
   ic.tag := req.tag

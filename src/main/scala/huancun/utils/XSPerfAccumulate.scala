@@ -2,10 +2,10 @@ package huancun.utils
 
 import chisel3._
 import chisel3.util.experimental.BoringUtils
-import huancun.CacheParameters
+import huancun.HCCacheParameters
 
 object XSPerfAccumulate {
-  def apply(params: CacheParameters, perfName: String, perfCnt: UInt) = {
+  def apply(params: HCCacheParameters, perfName: String, perfCnt: UInt) = {
     if (params.enablePerf) {
       val logTimestamp = WireInit(0.U(64.W))
       val perfClean = WireInit(false.B)
@@ -29,7 +29,7 @@ object XSPerfHistogram {
   // instead of simply accumulating counters
   // this function draws a histogram
   def apply(
-    params:   CacheParameters,
+    params:   HCCacheParameters,
     perfName: String,
     perfCnt:  UInt,
     enable:   Bool,
@@ -78,7 +78,7 @@ object XSPerfHistogram {
 }
 
 object XSPerfMax {
-  def apply(params: CacheParameters, perfName: String, perfCnt: UInt, enable: Bool) = {
+  def apply(params: HCCacheParameters, perfName: String, perfCnt: UInt, enable: Bool) = {
     if (params.enablePerf) {
       val logTimestamp = WireInit(0.U(64.W))
       val perfClean = WireInit(false.B)

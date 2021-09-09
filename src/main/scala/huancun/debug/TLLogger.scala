@@ -28,9 +28,7 @@ class TLLog extends Bundle with HasCLikeTypes {
   val stamp = uint64_t
 }
 
-class TLLogWriter(prefix: String) extends
-  BlackBox( Map("prefix" -> StringParam(prefix)) ) with HasBlackBoxInline
-{
+class TLLogWriter(prefix: String) extends BlackBox(Map("prefix" -> StringParam(prefix))) with HasBlackBoxInline {
   val io = IO(Input(new TLLog {
     val wen = Bool()
     val clock = Clock()
@@ -100,7 +98,7 @@ class TLLogger(name: String)(implicit p: Parameters) extends LazyModule {
 
 class TLLoggerImp(outer: TLLogger, name: String) extends LazyModuleImp(outer) {
   val node = outer.node
-  for(((in, edgeIn), (out, edgeOut)) <- node.in.zip(node.out)) {
+  for (((in, edgeIn), (out, edgeOut)) <- node.in.zip(node.out)) {
     out <> in
     TLLogger.track(in, edgeIn, this.clock, this.reset)(name)
   }
@@ -115,9 +113,9 @@ object TLLogger {
   def e = 4.U // not used
 
   def writeChannel[T <: TLChannel](log: TLLog, chn: T, stamp: UInt): Unit = {
-    for((name, data) <- log.elements.filterNot(_._1 == "data")) {
+    for ((name, data) <- log.elements.filterNot(_._1 == "data")) {
       val e = chn.elements.find(_._1 == name)
-      if(e.nonEmpty){
+      if (e.nonEmpty) {
         data := e.get._2
       } else {
         data := 0.U
@@ -181,27 +179,24 @@ object TLLogger {
     connect(c_writer, c_log, in.c.fire())
     connect(d_writer, d_log, in.d.fire())
 
-    when(in.a.fire()){
+    when(in.a.fire()) {
       logA(a_log, in.a.bits, timer)
       a_d_addrs(in.a.bits.source) := in.a.bits.address
     }
 
-    when(in.b.fire()){
+    when(in.b.fire()) {
       logB(b_log, in.b.bits, timer)
     }
 
-    when(in.c.fire()){
+    when(in.c.fire()) {
       logC(c_log, in.c.bits, timer)
       c_d_addrs(in.c.bits.source) := in.c.bits.address
     }
 
-    when(in.d.fire()){
+    when(in.d.fire()) {
       val a_d = a_d_addrs(in.d.bits.source)
       val c_d = c_d_addrs(in.d.bits.source)
-      val addr = Mux(in.d.bits.opcode === TLMessages.ReleaseAck,
-        c_d,
-        a_d
-      )
+      val addr = Mux(in.d.bits.opcode === TLMessages.ReleaseAck, c_d, a_d)
       logD(d_log, in.d.bits, timer, addr)
     }
 
@@ -213,5 +208,3 @@ object TLLogger {
   }
 
 }
-
-

@@ -21,16 +21,27 @@ package huancun
 
 import chipsalliance.rocketchip.config.Field
 import chisel3._
+import chisel3.util.log2Ceil
 import freechips.rocketchip.tilelink.{TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, BundleKeyBase, ControlKey}
 import huancun.prefetch.PrefetchParameters
 
-case object CacheParamsKey extends Field[CacheParameters](CacheParameters())
+case object HCCacheParamsKey extends Field[HCCacheParameters](HCCacheParameters())
 
-case class ClientCacheParameters(
-  sets:       Int,
-  ways:       Int,
-  blockBytes: Int)
+case class CacheParameters(
+  name:          String,
+  sets:          Int,
+  ways:          Int,
+  blockBytes:    Int = 64,
+  pageBytes:     Int = 4096,
+  physicalIndex: Boolean = true,
+  inner:         Seq[CacheParameters] = Nil) {
+  val capacity = sets * ways * blockBytes
+  val virtualIndexBits = log2Ceil(pageBytes)
+  val setBits = log2Ceil(sets)
+  val needResolveAlias = !physicalIndex && setBits > virtualIndexBits
+  val aliasBitsOpt = if (needResolveAlias) Some(setBits - virtualIndexBits) else None
+}
 
 case object PrefetchKey extends ControlKey[Bool]("needHint")
 
@@ -40,7 +51,7 @@ case class PrefetchField() extends BundleField(PrefetchKey) {
   override def default(x: Bool): Unit = false.B
 }
 
-case class CacheParameters(
+case class HCCacheParameters(
   name:         String = "L2",
   level:        Int = 2,
   ways:         Int = 4,
@@ -54,7 +65,7 @@ case class CacheParameters(
   enablePerf:   Boolean = false,
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   prefetch:     Option[PrefetchParameters] = None,
-  clientCache:  Option[ClientCacheParameters] = None,
+  clientCaches: Seq[CacheParameters] = Nil,
   inclusive:    Boolean = true,
   echoField:    Seq[BundleFieldBase] = Nil,
   reqField:     Seq[BundleFieldBase] = Nil, // master
@@ -66,8 +77,16 @@ case class CacheParameters(
   require(channelBytes.d.get >= 8)
   require(dirReadPorts == 1, "now we only use 1 read port")
   if (!inclusive) {
-    require(clientCache.nonEmpty, "Non-inclusive cache need to know client cache information")
+    require(clientCaches.nonEmpty, "Non-inclusive cache need to know client cache information")
   }
+
+  def toCacheParams: CacheParameters = CacheParameters(
+    name = name,
+    sets = sets,
+    ways = ways,
+    blockBytes = blockBytes,
+    inner = clientCaches
+  )
 }
 
 case object EdgeInKey extends Field[TLEdgeIn]

@@ -6,13 +6,12 @@ import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.tilelink.{TLBundleC, TLMessages}
 import huancun._
 
-
 class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   val beats = blockBytes / beatBytes
   val buffer = Reg(Vec(bufBlocks, Vec(beats, UInt((beatBytes * 8).W))))
-  val beatVals = RegInit(VecInit(Seq.fill(bufBlocks){
-    VecInit(Seq.fill(beats){false.B})
+  val beatVals = RegInit(VecInit(Seq.fill(bufBlocks) {
+    VecInit(Seq.fill(beats) { false.B })
   }))
   val bufVals = VecInit(beatVals.map(_.asUInt().orR())).asUInt()
   val full = bufVals.andR()
@@ -30,10 +29,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val insertIdxReg = RegEnable(insertIdx, c.fire() && first)
   val (tag, set, off) = parseAddress(c.bits.address)
 
-  c.ready := Mux(first,
-    !noSpace && !(isReq && !io.alloc.ready),
-    true.B
-  )
+  c.ready := Mux(first, !noSpace && !(isReq && !io.alloc.ready), true.B)
 
   // alloc.ready depends on alloc.valid
   io.alloc.valid := c.valid && isReq && first && !noSpace
@@ -47,9 +43,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.off := off
   io.alloc.bits.bufIdx := insertIdx
   io.alloc.bits.needHint := false.B
-  assert(!io.alloc.fire() || c.fire() && first,
-    "alloc fire, but c channel not fire!"
-  )
+  assert(!io.alloc.fire() || c.fire() && first, "alloc fire, but c channel not fire!")
 
   io.resp.valid := c.fire() && isResp
   io.resp.bits.hasData := hasData
@@ -79,7 +73,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     io.sourceD_r_hazard.bits.safe(io.task.bits.set, io.task.bits.way))
 
   io.task.ready := !busy && task_w_safe
-  when(io.task.fire()){ busy := true.B }
+  when(io.task.fire()) { busy := true.B }
 
   io.bs_waddr.valid := task_v && task.save
   io.bs_waddr.bits.way := task.way
@@ -99,14 +93,13 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.release.bits.corrupt := false.B
 
   val w_fire = io.bs_waddr.fire() && !io.bs_waddr.bits.noop || io.release.fire()
-  when(w_fire){
+  when(w_fire) {
     w_counter := w_counter + 1.U
   }
   val w_done = (w_counter === (beats - 1).U) && w_fire
-  when(w_done || busy && task_r.drop){
+  when(w_done || busy && task_r.drop) {
     w_counter := 0.U
     busy := false.B
     beatVals(task_r.bufIdx).foreach(_ := false.B)
   }
 }
-

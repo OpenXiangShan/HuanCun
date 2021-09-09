@@ -1,8 +1,10 @@
 package huancun.debug
 
+import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.experimental.{IntParam, StringParam}
 import chisel3.util._
+import huancun.{HCCacheParameters, HCCacheParamsKey}
 
 object TypeId {
   val self_dir = 0
@@ -24,10 +26,11 @@ class DirectoryInfo extends Bundle with HasCLikeTypes {
   val typeId = uint8_t
 }
 
-class DirLogWriter(prefix: String) extends BlackBox(
-  Map("prefix" -> StringParam(prefix))
-) with HasBlackBoxInline
-{
+class DirLogWriter(prefix: String)
+    extends BlackBox(
+      Map("prefix" -> StringParam(prefix))
+    )
+    with HasBlackBoxInline {
   val io = IO(Input(new DirectoryInfo {
     val wen = Bool()
     val clock = Clock()
@@ -75,27 +78,32 @@ class DirLogWriter(prefix: String) extends BlackBox(
 }
 
 object DirectoryLogger {
-  def apply[T <: Data](prefix: String, typeId: Int)
-  (
-   set: UInt,
-   way: UInt,
-   tag: UInt,
-   state: T,
-   stamp: UInt,
-   wen: Bool,
-   clock: Clock,
-   reset: Reset
+  def apply[T <: Data](
+    prefix: String,
+    typeId: Int
+  )(set:    UInt,
+    way:    UInt,
+    tag:    UInt,
+    state:  T,
+    stamp:  UInt,
+    wen:    Bool,
+    clock:  Clock,
+    reset:  Reset
+  )(
+    implicit p: Parameters
   ) = {
-    val dirLogger = Module(new DirLogWriter(prefix))
-    dirLogger.io.set := set
-    dirLogger.io.way := way
-    dirLogger.io.typeId := typeId.U
-    dirLogger.io.stamp := stamp
-    dirLogger.io.dir := state.asUInt()
-    dirLogger.io.tag := tag
-    dirLogger.io.wen := wen
-    dirLogger.io.clock := clock
-    dirLogger.io.reset := reset
-    dirLogger
+    if (p(HCCacheParamsKey).enableDebug) {
+      val dirLogger = Module(new DirLogWriter(prefix))
+      dirLogger.io.set := set
+      dirLogger.io.way := way
+      dirLogger.io.typeId := typeId.U
+      dirLogger.io.stamp := stamp
+      dirLogger.io.dir := state.asUInt()
+      dirLogger.io.tag := tag
+      dirLogger.io.wen := wen
+      dirLogger.io.clock := clock
+      dirLogger.io.reset := reset
+      dirLogger
+    }
   }
 }

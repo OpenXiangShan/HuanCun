@@ -331,7 +331,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
   }
 
-
   // Set tasks to be scheduled and resps to wait for
   val s_acquire = RegInit(true.B) // source_a
   val s_probe = RegInit(true.B) // source_b
@@ -365,8 +364,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val probeAckDataThrough = RegInit(false.B)
   val probeAckDataDrop = RegInit(false.B)
   val probeAckDataSave = !probeAckDataThrough && !probeAckDataDrop
-
-
 
   def reset_all_flags(): Unit = {
     // Default value
@@ -421,9 +418,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(req.opcode(0)) {
       s_writerelease := false.B // including drop and release-through
     }
-    when(!self_meta.hit && req.opcode(0) &&
-      self_meta.state =/= INVALID && replace_need_release &&
-      !will_release_through // if release through, no need to replace
+    when(
+      !self_meta.hit && req.opcode(0) &&
+        self_meta.state =/= INVALID && replace_need_release &&
+        !will_release_through // if release through, no need to replace
     ) {
       s_release := false.B
       w_releaseack := false.B
@@ -473,7 +471,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grant := false.B
       s_grantack := false.B
 //      s_wbselfdir := false.B
-      when (!(req.opcode === AcquirePerm && req.param === BtoT && !self_meta.hit)) { s_wbselfdir := false.B }
+      when(!(req.opcode === AcquirePerm && req.param === BtoT && !self_meta.hit)) { s_wbselfdir := false.B }
     }
     // need probe
     clients_meta.zipWithIndex.foreach {
@@ -499,7 +497,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantack := false.B
 //      s_wbselfdir := false.B
       // When AcquirePerm BtoT and self_meta miss, do not write self_meta
-      when (!(req.opcode(0) && req.param === BtoT && !self_meta.hit)) { s_wbselfdir := false.B }
+      when(!(req.opcode(0) && req.param === BtoT && !self_meta.hit)) { s_wbselfdir := false.B }
       s_wbclientsdir(iam) := false.B
       when(!clients_meta(iam).hit) {
         s_wbclientstag(iam) := false.B
@@ -556,7 +554,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       req.opcode(0) <=> s_writerelease
       set_release_throuht <=> send outer release
       so 'w_releaseack' should be set
-    */
+     */
     w_releaseack := !(will_release_through && req.opcode(0))
   }
   when(io_probeAckDataThrough) {
@@ -780,7 +778,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     s_writeput := true.B
   }
   when(io.tasks.sink_c.fire()) {
-    when (!s_writeprobe) {
+    when(!s_writeprobe) {
       s_writeprobe := true.B
     }.otherwise {
       s_writerelease := true.B
