@@ -270,8 +270,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(
     directory.io.tagWReq,
     ms.map(_.io.tasks.tag_write),
-    Some("tagWrite"),
-    strict = true
+    Some("tagWrite")
   )
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
@@ -282,8 +281,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
         arbTasks(
           tagW,
           ms.map(_.io.tasks.client_tag_write(idx)),
-          Some(s"client_${idx}_tagWrite"),
-          strict = true
+          Some(s"client_${idx}_tagWrite")
         )
       }
     case (_: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
