@@ -53,6 +53,11 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val sinkD = Module(new SinkD(edgeOut))
   val sourceE = Module(new SourceE(edgeOut))
 
+  val refillBuffer = Module(new RefillBuffer)
+
+  refillBuffer.io.sourceDr <> sourceD.io.bypass_read
+  refillBuffer.io.sinkDw <> sinkD.io.bypass_write
+
   io.out.a <> sourceA.io.a
   sinkB.io.b <> io.out.b
   TLArbiter.lowest(edgeOut, io.out.c, sinkC.io.release, sourceC.io.c)

@@ -29,6 +29,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val d = Flipped(DecoupledIO(new TLBundleD(edge.bundle)))
     val bs_waddr = DecoupledIO(new DSAddress)
     val bs_wdata = Output(new DSData)
+    val bypass_write = Flipped(new SinkDBufferWrite)
     val way = Input(UInt(wayBits.W))
     val set = Input(UInt(setBits.W))
     val resp = ValidIO(new SinkDResp)
@@ -62,4 +63,9 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.bs_waddr.bits.write := true.B
   io.bs_waddr.bits.noop := !io.d.valid
   io.bs_wdata.data := io.d.bits.data
+
+  io.bypass_write.w_valid := io.bs_waddr.fire() && !io.bs_waddr.bits.noop
+  io.bypass_write.w_id := io.d.bits.source
+  io.bypass_write.w_beat := io.bs_waddr.bits.beat
+  io.bypass_write.w_data := io.bs_wdata
 }
