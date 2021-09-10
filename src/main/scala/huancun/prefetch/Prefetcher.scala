@@ -102,6 +102,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       io.req.bits.off := 0.U
       io.req.bits.channel := "b001".U
       io.req.bits.needHint := false.B
+      io.req.bits.isPrefetch := true.B
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }

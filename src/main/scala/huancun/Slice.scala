@@ -402,9 +402,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     )
   )
 
-  VecInit(ms.map(_.io.status.bits.way))(sinkC.io.resp.bits.source)
   sinkD.io.way := VecInit(ms.map(_.io.status.bits.way))(sinkD.io.resp.bits.source)
   sinkD.io.set := VecInit(ms.map(_.io.status.bits.set))(sinkD.io.resp.bits.source)
+  sinkD.io.isPrefetch := VecInit(ms.map(_.io.status.bits.isPrefetch))(sinkD.io.resp.bits.source)
 
   sinkC.io.sourceD_r_hazard <> sourceD.io.sourceD_r_hazard
   sinkD.io.sourceD_r_hazard <> sourceD.io.sourceD_r_hazard
