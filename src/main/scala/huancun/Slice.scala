@@ -259,7 +259,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
-  block_decoupled(directory.io.dirWReqs, ms.map(_.io.tasks.dir_write))
+  directory.io.dirWReqs.zip(ms.map(_.io.tasks.dir_write)).foreach(w => w._1 <> w._2)
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
@@ -275,7 +275,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
       for ((dirW, idx) <- dir.io.clientDirWReqs.zipWithIndex) {
-        block_decoupled(dirW, ms.map(_.io.tasks.client_dir_write(idx)))
+        dirW <> ms.map(_.io.tasks.client_dir_write(idx))
       }
       for ((tagW, idx) <- dir.io.clientTagWreq.zipWithIndex) {
         arbTasks(
