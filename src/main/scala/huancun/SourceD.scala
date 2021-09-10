@@ -126,8 +126,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   )
   val s2_d = Wire(io.d.cloneType)
 
-  s1_queue.io.deq.ready := s2_d.fire()
-  s2_d.valid := s2_full && s2_bypass_hit
+  s1_queue.io.deq.ready := s2_full && s2_bypass_hit && s2_d.ready
+  s2_d.valid := s2_full && (s2_bypass_hit || !s2_needData)
   s2_d.bits.opcode := s2_req.opcode
   s2_d.bits.param := Mux(s2_releaseAck, 0.U, s2_req.param)
   s2_d.bits.sink := s2_req.sinkId
@@ -152,6 +152,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s3_releaseAck = RegEnable(s2_releaseAck, s3_latch)
   val s3_d = Wire(io.d.cloneType)
   val s3_queue = Module(new Queue(new DSData, 3, flow = true))
+
+  assert(!s3_full || s3_needData, "Only data task can go to stage3!")
 
   when(d.ready) {
     s3_full := false.B
@@ -184,6 +186,6 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   TLArbiter.lowest(edgeIn, io.d, s3_d, s2_d)
 
   io.sourceD_r_hazard.valid := busy && s1_needData
-  io.sourceD_r_hazard.bits.set := s1_req.set
-  io.sourceD_r_hazard.bits.way := s1_req.way
+  io.sourceD_r_hazard.bits.set := s1_req_reg.set
+  io.sourceD_r_hazard.bits.way := s1_req_reg.way
 }
