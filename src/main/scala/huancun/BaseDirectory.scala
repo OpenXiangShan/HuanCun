@@ -23,6 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import chisel3.util.random.LFSR
+import freechips.rocketchip.tilelink.TLMessages
 import huancun.utils.{ParallelPriorityMux, SRAMTemplate}
 
 trait BaseDirResult extends HuanCunBundle {
@@ -35,9 +36,9 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val idOH = UInt(mshrsAll.W)
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
-  val replaceInfo = new Bundle() {
+  val replacerInfo = new Bundle() {
     val channel = UInt(3.W)
-    val isHint = Bool()
+    val opcode = UInt(3.W)
   }
 }
 
@@ -63,7 +64,7 @@ class SubDirectory[T <: Data](
   ways:        Int,
   tagBits:     Int,
   dir_init_fn: () => T)
-    extends Module {
+    extends MultiIOModule {
 
   val setBits = log2Ceil(sets)
   val wayBits = log2Ceil(ways)
@@ -75,6 +76,10 @@ class SubDirectory[T <: Data](
       Flipped(DecoupledIO(new Bundle() {
         val tag = UInt(tagBits.W)
         val set = UInt(setBits.W)
+        val replacerInfo = new Bundle() {
+          val channel = UInt(3.W)
+          val opcode = UInt(3.W)
+        }
       }))
     )
     val resps = Vec(
@@ -178,5 +183,60 @@ class RandomSubDirectory[T <: Data](
     val meta = metas(result.bits.way)
     result.bits.dir := meta
     result.bits.tag := tags(result.bits.way)
+  }
+}
+
+class LRUSubDirectory[T <: Data](
+  rports:      Int,
+  wports:      Int,
+  sets:        Int,
+  ways:        Int,
+  tagBits:     Int,
+  dir_init_fn: () => T,
+  dir_hit_fn:  T => Bool)
+    extends SubDirectory[T](rports, wports, sets, ways, tagBits, dir_init_fn) {
+
+  // [0] for oldest, [ways-1] for newest
+  val lruArray = Mem(sets, Vec(ways, UInt(log2Ceil(ways).W)))
+
+  when(!resetFinish) {
+    lruArray(resetIdx) := VecInit(Seq.tabulate(ways)(i => i.U))
+  }
+  val reqReplacerInfo = io.reads.map(r => RegEnable(r.bits.replacerInfo, enable = r.fire()))
+
+  // read resp logic
+  for ((result, i) <- io.resps.zipWithIndex) {
+    result.valid := reqValids(i)
+    val tags = tagRead(i)
+    val metas = metaArray(reqSets(i))
+    val tagMatchVec = tags.map(_ === reqTags(i))
+    val metaValidVec = metas.map(dir_hit_fn)
+    hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
+    val hitWay = OHToUInt(hitVec(i))
+    val replaceWay = lruArray(reqSets(i))(0) // choose the oldest way
+    val invalidWay = ParallelPriorityMux(metaValidVec.zipWithIndex.map(a => (!a._1, a._2.U)))
+    val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
+
+    result.bits.hit := Cat(hitVec(i)).orR()
+    result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
+    val meta = metas(result.bits.way)
+    result.bits.dir := meta
+    result.bits.tag := tags(result.bits.way)
+
+    val updateReplacer = reqReplacerInfo(i).channel(2) && reqReplacerInfo(i).opcode === TLMessages.ReleaseData // update on every releaseData
+    val temp = lruArray(reqSets(i))
+    val indexOH = lruArray(reqSets(i)).map(_ === result.bits.way)
+    val moveMask = VecInit(Seq.fill(ways)(false.B))
+    when(reqValids(i) && updateReplacer) {
+      moveMask.zipWithIndex.foreach{
+        case (n, ii) =>
+          n := Cat(indexOH.take(ii+1)).orR
+      }
+      lruArray(reqSets(i)).init.zipWithIndex.foreach {
+        case (n, ii) =>
+          n := Mux(moveMask(ii), lruArray(reqSets(i))(ii+1), n)
+      }
+      lruArray(reqSets(i))(ways-1) := result.bits.way
+    }
   }
 }
