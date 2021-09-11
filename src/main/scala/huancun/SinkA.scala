@@ -30,7 +30,6 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
     val alloc = DecoupledIO(new MSHRRequest)
     val task = Flipped(DecoupledIO(new SinkAReq))
   })
-  dontTouch(io)
 
   // TODO: Handle task
   io.task.ready := false.B
@@ -57,4 +56,5 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
   allocInfo.off := offset
   allocInfo.bufIdx := DontCare
   allocInfo.needHint := a.bits.user.lift(PrefetchKey).getOrElse(false.B)
+  allocInfo.isPrefetch := false.B
 }

@@ -37,4 +37,5 @@ abstract class BaseSinkC(implicit p: Parameters) extends HuanCunModule {
     // directly release inner data to next level
     val release = DecoupledIO(new TLBundleC(edgeOut.bundle))
   })
+  io.alloc.bits.isPrefetch := false.B
 }

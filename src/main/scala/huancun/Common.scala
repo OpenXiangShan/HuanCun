@@ -121,6 +121,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val off = UInt(offsetBits.W)
   val bufIdx = UInt(bufIdxBits.W)
   val needHint = Bool()
+  val isPrefetch = Bool()
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
@@ -130,6 +131,7 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val reload = Bool()
   val blockB, blockC = Bool()
   val nestB, nestC = Bool()
+  val isPrefetch = Bool()
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
