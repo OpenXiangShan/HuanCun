@@ -202,8 +202,7 @@ class Directory(implicit p: Parameters)
     rports.foreach { p =>
       p.valid := req.valid
       addrConnect(p.bits.set, p.bits.tag, req.bits.set, req.bits.tag)
-      p.bits.replacerInfo.channel := req.bits.replacerInfo.channel
-      p.bits.replacerInfo.opcode := req.bits.replacerInfo.opcode
+      p.bits.replacerInfo := req.bits.replacerInfo
     }
     req.ready := Cat(rports.map(_.ready)).andR()
     val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
