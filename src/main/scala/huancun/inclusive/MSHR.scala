@@ -365,7 +365,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   ob.param := Mux(!s_rprobe, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
   ob.clients := meta.clients & ~probe_exclude // TODO: Provides all clients needing probe
 
-  oc.opcode := Cat(Mux(req.fromB, ProbeAck, Release)(2, 1), meta.dirty.asUInt)
+  oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), Cat(Release(2, 1), 1.U(1.W)))
   oc.tag := meta.tag
   oc.set := req.set
   oc.param := Mux(
