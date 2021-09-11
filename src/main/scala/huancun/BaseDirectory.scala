@@ -62,8 +62,7 @@ class SubDirectory[T <: Data](
   sets:        Int,
   ways:        Int,
   tagBits:     Int,
-  dir_init_fn: () => T,
-  dir_hit_fn:  T => Bool)
+  dir_init_fn: () => T)
     extends Module {
 
   val setBits = log2Ceil(sets)
@@ -141,6 +140,27 @@ class SubDirectory[T <: Data](
   val reqValids = io.reads.map(r => RegNext(r.fire(), false.B))
 
   val hitVec = Seq.fill(rports)(Wire(Vec(ways, Bool())))
+
+  for (req <- io.dir_w) {
+    when(req.fire()) {
+      metaArray(req.bits.set)(req.bits.way) := req.bits.dir
+    }
+    req.ready := true.B
+  }
+
+}
+
+class RandomSubDirectory[T <: Data](
+  rports:      Int,
+  wports:      Int,
+  sets:        Int,
+  ways:        Int,
+  tagBits:     Int,
+  dir_init_fn: () => T,
+  dir_hit_fn:  T => Bool)
+    extends SubDirectory[T](rports, wports, sets, ways, tagBits, dir_init_fn) {
+
+  // read resp logic
   for ((result, i) <- io.resps.zipWithIndex) {
     result.valid := reqValids(i)
     val tags = tagRead(i)
@@ -149,7 +169,7 @@ class SubDirectory[T <: Data](
     val metaValidVec = metas.map(dir_hit_fn)
     hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
     val hitWay = OHToUInt(hitVec(i))
-    val replaceWay = LFSR(wayBits) // TODO: improve this
+    val replaceWay = LFSR(wayBits)
     val invalidWay = ParallelPriorityMux(metaValidVec.zipWithIndex.map(a => (!a._1, a._2.U)))
     val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
 
@@ -159,12 +179,4 @@ class SubDirectory[T <: Data](
     result.bits.dir := meta
     result.bits.tag := tags(result.bits.way)
   }
-
-  for (req <- io.dir_w) {
-    when(req.fire()) {
-      metaArray(req.bits.set)(req.bits.way) := req.bits.dir
-    }
-    req.ready := true.B
-  }
-
 }

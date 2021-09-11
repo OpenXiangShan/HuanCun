@@ -154,7 +154,7 @@ class Directory(implicit p: Parameters)
   def clientHitFn(dir: ClientDirEntry): Bool = dir.state =/= MetaData.INVALID
   val clientDirs = (0 until clientBits).map { _ =>
     val clientDir = Module(
-      new SubDirectory[ClientDirEntry](
+      new RandomSubDirectory[ClientDirEntry](
         rports = dirReadPorts,
         wports = mshrsAll,
         sets = clientSets,
@@ -173,7 +173,7 @@ class Directory(implicit p: Parameters)
 
   def selfHitFn(dir: SelfDirEntry): Bool = dir.state =/= MetaData.INVALID
   val selfDir = Module(
-    new SubDirectory[SelfDirEntry](
+    new RandomSubDirectory[SelfDirEntry](
       rports = dirReadPorts,
       wports = mshrsAll,
       sets = cacheParams.sets,

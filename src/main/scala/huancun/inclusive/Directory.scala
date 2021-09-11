@@ -44,7 +44,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
   val io = IO(new DirectoryIO())
 
   val dir = Module(
-    new SubDirectory[DirectoryEntry](
+    new RandomSubDirectory[DirectoryEntry](
       rports = dirReadPorts,
       wports = mshrsAll,
       sets = cacheParams.sets,
