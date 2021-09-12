@@ -199,7 +199,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       Mux(
         req_acquire,
 //        Mux((clients_hit || self_meta.hit) && self_meta.state === INVALID, INVALID, TRUNK),
-        Mux(req_needT && gotT, TRUNK, TIP),
+        Mux(req_needT && (gotT || self_meta.hit && isT(self_meta.state)), TRUNK, TIP),
         Mux(req.opcode === Hint, prefetch_write_self_next_state, TIP)
       ),
       Mux(
@@ -222,7 +222,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         when(iam === i.U) {
           state := Mux(
             req_acquire,
-            Mux(req_needT && gotT, TIP, BRANCH),
+            Mux(req_needT && (gotT || self_meta.hit && isT(self_meta.state)), TIP, BRANCH),
             Mux(clients_meta(i).hit, clients_meta(i).state, INVALID)
           )
         }.otherwise {
@@ -240,7 +240,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
         when(iam === i.U) {
-          m.state := Mux(req_acquire, Mux(req_needT && gotT, TIP, BRANCH), clients_meta(i).state)
+          m.state := Mux(req_acquire, Mux(req_needT && (gotT || self_meta.hit && isT(self_meta.state)), TIP, BRANCH), clients_meta(i).state)
           m.alias.foreach(_ := Mux(req_acquire, req.alias.get, clients_meta(i).alias.get))
         }.otherwise {
           m.state := Mux(
