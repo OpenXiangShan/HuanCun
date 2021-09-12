@@ -53,6 +53,11 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val sinkD = Module(new SinkD(edgeOut))
   val sourceE = Module(new SourceE(edgeOut))
 
+  val refillBuffer = Module(new RefillBuffer)
+
+  refillBuffer.io.sourceDr <> sourceD.io.bypass_read
+  refillBuffer.io.sinkDw <> sinkD.io.bypass_write
+
   io.out.a <> sourceA.io.a
   sinkB.io.b <> io.out.b
   TLArbiter.lowest(edgeOut, io.out.c, sinkC.io.release, sourceC.io.c)
@@ -397,9 +402,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     )
   )
 
-  VecInit(ms.map(_.io.status.bits.way))(sinkC.io.resp.bits.source)
   sinkD.io.way := VecInit(ms.map(_.io.status.bits.way))(sinkD.io.resp.bits.source)
   sinkD.io.set := VecInit(ms.map(_.io.status.bits.set))(sinkD.io.resp.bits.source)
+  sinkD.io.inner_grant := VecInit(ms.map(_.io.status.bits.will_grant_data))(sinkD.io.resp.bits.source)
 
   sinkC.io.sourceD_r_hazard <> sourceD.io.sourceD_r_hazard
   sinkD.io.sourceD_r_hazard <> sourceD.io.sourceD_r_hazard

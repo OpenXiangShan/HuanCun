@@ -365,7 +365,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   ob.param := Mux(!s_rprobe, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
   ob.clients := meta.clients & ~probe_exclude // TODO: Provides all clients needing probe
 
-  oc.opcode := Cat(Mux(req.fromB, ProbeAck, Release)(2, 1), meta.dirty.asUInt)
+  oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), Cat(Release(2, 1), 1.U(1.W)))
   oc.tag := meta.tag
   oc.set := req.set
   oc.param := Mux(
@@ -389,7 +389,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   )
   oc.source := io.id
   oc.way := meta.way
-  oc.dirty := meta.dirty
 
   od.sinkId := io.id
   od.sourceId := req.source
@@ -560,6 +559,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   io.status.bits.tag := req.tag
   io.status.bits.reload := false.B // TODO
   io.status.bits.way := meta.way
+  io.status.bits.will_grant_data := req.fromA && od.opcode(0)
   io.status.bits.blockB := !meta_valid ||
     ((!w_releaseack || !w_rprobeacklast || !w_pprobeacklast) && !w_grantfirst)
   // B nest A

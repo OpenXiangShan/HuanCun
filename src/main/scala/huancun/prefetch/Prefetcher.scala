@@ -104,6 +104,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       io.req.bits.off := 0.U
       io.req.bits.channel := "b001".U
       io.req.bits.needHint.foreach(_ := false.B)
+      io.req.bits.isPrefetch.foreach(_ := true.B)
       io.req.bits.alias.foreach(_ := pftQueue.io.deq.bits.alias.get)
     case _ => assert(cond = false, "Unknown prefetcher")
   }

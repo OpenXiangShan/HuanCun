@@ -76,7 +76,6 @@ class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
   val param = UInt(3.W)
   val source = UInt(mshrBits.W)
   val way = UInt(wayBits.W)
-  val dirty = Bool()
 }
 class SourceEReq(implicit p: Parameters) extends HuanCunBundle {
   val sink = UInt(outerSinkBits.W)
@@ -121,8 +120,9 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val tag = UInt(tagBits.W)
   val off = UInt(offsetBits.W)
   val bufIdx = UInt(bufIdxBits.W)
-  val needHint = if (prefetchOpt.nonEmpty) Some(Bool()) else None
-  val alias = if (hasAliasBits) Some(UInt(aliasBitsOpt.get.W)) else None
+  val needHint = prefetchOpt.map(_ => Bool())
+  val isPrefetch = prefetchOpt.map(_ => Bool())
+  val alias = aliasBitsOpt.map(_ => UInt(aliasBitsOpt.get.W))
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
@@ -132,6 +132,12 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val reload = Bool()
   val blockB, blockC = Bool()
   val nestB, nestC = Bool()
+  /**
+    *   for missed acquire, if 'will_grant_data' is true:
+    *     sinkD must write refill buffer
+    *     soruceD must read data from refill buffer
+    */
+  val will_grant_data = Bool()
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
@@ -153,4 +159,9 @@ class SourceDHazard(implicit p: Parameters) extends HuanCunBundle {
   def safe(s: UInt, w: UInt): Bool = {
     set === s && way === w
   }
+}
+
+class ReplacerInfo() extends Bundle {
+  val channel = UInt(3.W)
+  val opcode = UInt(3.W)
 }
