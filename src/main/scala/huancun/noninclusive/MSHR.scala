@@ -458,8 +458,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // Probe
     // TODO: probe a non-existing block is possible?
     // assert(self_meta.hit || clients_meta.map(_.hit).reduce(_ || _), "Trying to probe a non-existing block")
-    s_probeack := false.B
     when(will_save_probeack) {
+      // if through/drop, probeack will be sent by s_writeprobe
+      s_probeack := false.B
       when(self_meta.hit) {
         // TODO: consider Report?
         assert(probe_shrink_perm(self_meta.state, req.param), "Probe should always shrink perm")
