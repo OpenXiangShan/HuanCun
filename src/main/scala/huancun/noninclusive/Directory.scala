@@ -11,8 +11,8 @@ trait HasClientInfo { this: HasHuanCunParameters =>
   // assume all clients have same params
   // TODO: check client params to ensure they are same
   val clientCacheParams = cacheParams.clientCaches.head
+  val aliasBits = aliasBitsOpt.getOrElse(0)
 
-  val aliasBits = clientCacheParams.aliasBitsOpt.getOrElse(0)
   val clientSets = clientCacheParams.sets >> aliasBits
   val clientWays = clientCacheParams.ways << aliasBits
   val clientSetBits = log2Ceil(clientSets)
@@ -25,7 +25,6 @@ class SelfDirEntry(implicit p: Parameters) extends HuanCunBundle {
   val state = UInt(stateBits.W)
   val clientStates = Vec(clientBits, UInt(stateBits.W))
   val prefetch = if (hasPrefetchBit) Some(Bool()) else None // whether the block is prefetched
-  val alias = if (hasAliasBits) Some(UInt(aliasBitsOpt.get.W)) else None
 }
 
 class ClientDirEntry(implicit p: Parameters) extends HuanCunBundle {
@@ -88,12 +87,6 @@ class ClientDirWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
     this.way := way
     this.data := data
   }
-  def apply(lineAddr: UInt, way: UInt, state: UInt) = {
-    this.set := lineAddr(clientSetBits - 1, 0)
-    this.way := way
-    this.data.state := state
-    this.data.alias.foreach(_ := 0.U)
-  } // TODO: only for compiling, delete this later
 }
 
 class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, SelfDirWrite, SelfTagWrite] {
@@ -229,7 +222,6 @@ class Directory(implicit p: Parameters)
     resp.bits.self.state := selfResp.bits.dir.state
     resp.bits.self.clientStates := selfResp.bits.dir.clientStates
     resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
-    resp.bits.self.alias.foreach(a => a := selfResp.bits.dir.alias.get)
     resp.bits.clients.zip(clientResps).foreach {
       case (resp, clientResp) =>
         resp.hit := clientResp.bits.hit
