@@ -63,6 +63,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.off := off
   io.alloc.bits.bufIdx := insertIdx
   io.alloc.bits.needHint := false.B
+  io.alloc.bits.preferCache := true.B
 
   if (cacheParams.enableDebug) {
     when(c.fire()) {

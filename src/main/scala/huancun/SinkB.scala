@@ -45,5 +45,6 @@ class SinkB(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.alloc.bits.off := off
   io.alloc.bits.bufIdx := 0.U
   io.alloc.bits.needHint := false.B
+  io.alloc.bits.preferCache := true.B
   io.alloc.bits.isPrefetch := false.B
 }

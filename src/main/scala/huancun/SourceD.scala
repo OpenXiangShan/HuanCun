@@ -175,7 +175,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s3_d.bits.data := s3_rdata
   s3_d.bits.corrupt := false.B
 
-  s3_queue.io.enq.valid := RegNext(RegNext(io.bs_raddr.fire() && !s1_bypass_hit, false.B), false.B)
+  s3_queue.io.enq.valid := RegNext(RegNext(
+    io.bs_raddr.fire() && !Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire),
+    false.B), false.B)
   s3_queue.io.enq.bits := io.bs_rdata
   assert(!s3_queue.io.enq.valid || s3_queue.io.enq.ready)
   s3_queue.io.deq.ready := s3_d.ready && s3_needData && s3_valid

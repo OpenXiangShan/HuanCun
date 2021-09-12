@@ -43,6 +43,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.off := off
   io.alloc.bits.bufIdx := insertIdx
   io.alloc.bits.needHint := false.B
+  io.alloc.bits.preferCache := true.B
   assert(!io.alloc.fire() || c.fire() && first, "alloc fire, but c channel not fire!")
 
   io.resp.valid := c.fire() && isResp
