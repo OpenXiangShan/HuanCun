@@ -24,7 +24,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.random.LFSR
 import freechips.rocketchip.tilelink.TLMessages
-import huancun.utils.{ParallelPriorityMux, SRAMTemplate}
+import huancun.utils._
 
 trait BaseDirResult extends HuanCunBundle {
   val idOH = UInt(mshrsAll.W) // which mshr the result should be sent to
@@ -36,10 +36,7 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val idOH = UInt(mshrsAll.W)
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
-  val replacerInfo = new Bundle() {
-    val channel = UInt(3.W)
-    val opcode = UInt(3.W)
-  }
+  val replacerInfo = new ReplacerInfo()
 }
 
 abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
@@ -63,7 +60,9 @@ class SubDirectory[T <: Data](
   sets:        Int,
   ways:        Int,
   tagBits:     Int,
-  dir_init_fn: () => T)
+  dir_init_fn: () => T,
+  dir_hit_fn: T => Bool,
+  replacement: String)
     extends MultiIOModule {
 
   val setBits = log2Ceil(sets)
@@ -76,10 +75,7 @@ class SubDirectory[T <: Data](
       Flipped(DecoupledIO(new Bundle() {
         val tag = UInt(tagBits.W)
         val set = UInt(setBits.W)
-        val replacerInfo = new Bundle() {
-          val channel = UInt(3.W)
-          val opcode = UInt(3.W)
-        }
+        val replacerInfo = new ReplacerInfo()
       }))
     )
     val resps = Vec(
@@ -140,11 +136,33 @@ class SubDirectory[T <: Data](
         assert(wen || (!wen && sram.io.r.req.ready))
     })
 
+  val replacer = new SetAssocReplacer(sets, ways, replacement)
+
   val reqTags = io.reads.map(r => RegEnable(r.bits.tag, enable = r.fire()))
   val reqSets = io.reads.map(r => RegEnable(r.bits.set, enable = r.fire()))
   val reqValids = io.reads.map(r => RegNext(r.fire(), false.B))
+  val reqReplacerInfo = io.reads.map(r => RegEnable(r.bits.replacerInfo, enable = r.fire()))
 
   val hitVec = Seq.fill(rports)(Wire(Vec(ways, Bool())))
+
+  for ((result, i) <- io.resps.zipWithIndex) {
+    result.valid := reqValids(i)
+    val tags = tagRead(i)
+    val metas = metaArray(reqSets(i))
+    val tagMatchVec = tags.map(_ === reqTags(i))
+    val metaValidVec = metas.map(dir_hit_fn)
+    hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
+    val hitWay = OHToUInt(hitVec(i))
+    val replaceWay = replacer.way(reqSets(i))
+    val invalidWay = ParallelPriorityMux(metaValidVec.zipWithIndex.map(a => (!a._1, a._2.U)))
+    val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
+
+    result.bits.hit := Cat(hitVec(i)).orR()
+    result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
+    val meta = metas(result.bits.way)
+    result.bits.dir := meta
+    result.bits.tag := tags(result.bits.way)
+  }
 
   for (req <- io.dir_w) {
     when(req.fire()) {
@@ -155,88 +173,59 @@ class SubDirectory[T <: Data](
 
 }
 
-class RandomSubDirectory[T <: Data](
-  rports:      Int,
-  wports:      Int,
-  sets:        Int,
-  ways:        Int,
-  tagBits:     Int,
-  dir_init_fn: () => T,
-  dir_hit_fn:  T => Bool)
-    extends SubDirectory[T](rports, wports, sets, ways, tagBits, dir_init_fn) {
+trait HasUpdate {
+  def doUpdate(info: ReplacerInfo): Bool
+}
 
-  // read resp logic
-  for ((result, i) <- io.resps.zipWithIndex) {
-    result.valid := reqValids(i)
-    val tags = tagRead(i)
-    val metas = metaArray(reqSets(i))
-    val tagMatchVec = tags.map(_ === reqTags(i))
-    val metaValidVec = metas.map(dir_hit_fn)
-    hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
-    val hitWay = OHToUInt(hitVec(i))
-    val replaceWay = LFSR(wayBits)
-    val invalidWay = ParallelPriorityMux(metaValidVec.zipWithIndex.map(a => (!a._1, a._2.U)))
-    val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
-
-    result.bits.hit := Cat(hitVec(i)).orR()
-    result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
-    val meta = metas(result.bits.way)
-    result.bits.dir := meta
-    result.bits.tag := tags(result.bits.way)
+trait UpdateOnRelease extends HasUpdate {
+  override def doUpdate(info: ReplacerInfo) = {
+    info.channel(2) && info.opcode === TLMessages.ReleaseData
   }
 }
 
-class LRUSubDirectory[T <: Data](
+trait UpdateOnAcquire extends HasUpdate {
+  override def doUpdate(info: ReplacerInfo) = {
+    info.channel(0) && (info.opcode === TLMessages.AcquirePerm || info.opcode === TLMessages.AcquireBlock)
+  }
+}
+
+abstract class SubDirectoryDoUpdate[T <: Data](
   rports:      Int,
   wports:      Int,
   sets:        Int,
   ways:        Int,
   tagBits:     Int,
   dir_init_fn: () => T,
-  dir_hit_fn:  T => Bool)
-    extends SubDirectory[T](rports, wports, sets, ways, tagBits, dir_init_fn) {
+  dir_hit_fn:  T => Bool,
+  replacement: String)
+    extends SubDirectory[T](rports, wports, sets, ways, tagBits, dir_init_fn, dir_hit_fn, replacement) with HasUpdate {
 
-  // [0] for oldest, [ways-1] for newest
-  val lruArray = Mem(sets, Vec(ways, UInt(log2Ceil(ways).W)))
-
-  when(!resetFinish) {
-    lruArray(resetIdx) := VecInit(Seq.tabulate(ways)(i => i.U))
-  }
-  val reqReplacerInfo = io.reads.map(r => RegEnable(r.bits.replacerInfo, enable = r.fire()))
-
-  // read resp logic
   for ((result, i) <- io.resps.zipWithIndex) {
-    result.valid := reqValids(i)
-    val tags = tagRead(i)
-    val metas = metaArray(reqSets(i))
-    val tagMatchVec = tags.map(_ === reqTags(i))
-    val metaValidVec = metas.map(dir_hit_fn)
-    hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
-    val hitWay = OHToUInt(hitVec(i))
-    val replaceWay = lruArray(reqSets(i))(0) // choose the oldest way
-    val invalidWay = ParallelPriorityMux(metaValidVec.zipWithIndex.map(a => (!a._1, a._2.U)))
-    val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
-
-    result.bits.hit := Cat(hitVec(i)).orR()
-    result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
-    val meta = metas(result.bits.way)
-    result.bits.dir := meta
-    result.bits.tag := tags(result.bits.way)
-
-    val updateReplacer = reqReplacerInfo(i).channel(2) && reqReplacerInfo(i).opcode === TLMessages.ReleaseData // update on every releaseData
-    val temp = lruArray(reqSets(i))
-    val indexOH = lruArray(reqSets(i)).map(_ === result.bits.way)
-    val moveMask = VecInit(Seq.fill(ways)(false.B))
+    val updateReplacer = doUpdate(reqReplacerInfo(i))
     when(reqValids(i) && updateReplacer) {
-      moveMask.zipWithIndex.foreach{
-        case (n, ii) =>
-          n := Cat(indexOH.take(ii+1)).orR
-      }
-      lruArray(reqSets(i)).init.zipWithIndex.foreach {
-        case (n, ii) =>
-          n := Mux(moveMask(ii), lruArray(reqSets(i))(ii+1), n)
-      }
-      lruArray(reqSets(i))(ways-1) := result.bits.way
+      replacer.access(reqSets(i), result.bits.way)
     }
   }
 }
+
+class SubDirectoryOnRelease[T <: Data](
+  rports:      Int,
+  wports:      Int,
+  sets:        Int,
+  ways:        Int,
+  tagBits:     Int,
+  dir_init_fn: () => T,
+  dir_hit_fn:  T => Bool,
+  replacement: String)
+    extends SubDirectoryDoUpdate[T](rports, wports, sets, ways, tagBits, dir_init_fn, dir_hit_fn, replacement) with UpdateOnRelease
+
+class SubDirectoryOnAcquire[T <: Data](
+  rports:      Int,
+  wports:      Int,
+  sets:        Int,
+  ways:        Int,
+  tagBits:     Int,
+  dir_init_fn: () => T,
+  dir_hit_fn:  T => Bool,
+  replacement: String)
+    extends SubDirectoryDoUpdate[T](rports, wports, sets, ways, tagBits, dir_init_fn, dir_hit_fn, replacement) with UpdateOnAcquire
