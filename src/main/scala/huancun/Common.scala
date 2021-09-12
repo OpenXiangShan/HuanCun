@@ -131,7 +131,12 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val reload = Bool()
   val blockB, blockC = Bool()
   val nestB, nestC = Bool()
-  val isPrefetch = Bool()
+  /**
+    *   for missed acquire, if 'will_grant_data' is true:
+    *     sinkD must write refill buffer
+    *     soruceD must read data from refill buffer
+    */
+  val will_grant_data = Bool()
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
