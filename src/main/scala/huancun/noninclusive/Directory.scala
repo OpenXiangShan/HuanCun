@@ -165,7 +165,8 @@ class Directory(implicit p: Parameters)
           init.state := MetaData.INVALID
           init
         },
-        dir_hit_fn = clientHitFn
+        dir_hit_fn = clientHitFn,
+        replacement = "random"
       )
     )
     clientDir
@@ -173,7 +174,7 @@ class Directory(implicit p: Parameters)
 
   def selfHitFn(dir: SelfDirEntry): Bool = dir.state =/= MetaData.INVALID
   val selfDir = Module(
-    new SubDirectory[SelfDirEntry](
+    new SubDirectoryOnRelease[SelfDirEntry](
       rports = dirReadPorts,
       wports = mshrsAll,
       sets = cacheParams.sets,
@@ -185,7 +186,8 @@ class Directory(implicit p: Parameters)
         init.state := MetaData.INVALID
         init
       },
-      dir_hit_fn = selfHitFn
+      dir_hit_fn = selfHitFn,
+      replacement = "lru"
     )
   )
 
@@ -202,6 +204,7 @@ class Directory(implicit p: Parameters)
     rports.foreach { p =>
       p.valid := req.valid
       addrConnect(p.bits.set, p.bits.tag, req.bits.set, req.bits.tag)
+      p.bits.replacerInfo := req.bits.replacerInfo
     }
     req.ready := Cat(rports.map(_.ready)).andR()
     val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())

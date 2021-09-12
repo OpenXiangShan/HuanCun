@@ -44,7 +44,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
   val io = IO(new DirectoryIO())
 
   val dir = Module(
-    new SubDirectory[DirectoryEntry](
+    new SubDirectoryOnAcquire[DirectoryEntry](
       rports = dirReadPorts,
       wports = mshrsAll,
       sets = cacheParams.sets,
@@ -56,7 +56,8 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
         init.state := MetaData.INVALID
         init
       },
-      dir_hit_fn = x => x.state =/= MetaData.INVALID
+      dir_hit_fn = x => x.state =/= MetaData.INVALID,
+      replacement = "plru"
     )
   )
 
@@ -66,6 +67,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
     rport.valid := req.valid
     rport.bits.set := req.bits.set
     rport.bits.tag := req.bits.tag
+    rport.bits.replacerInfo := req.bits.replacerInfo
     req.ready := rport.ready
     val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
     val resp = io.results(i)
