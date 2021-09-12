@@ -33,6 +33,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val way = Input(UInt(wayBits.W))
     val set = Input(UInt(setBits.W))
     val inner_grant = Input(Bool())
+    val save_data_in_bs = Input(Bool())
     val resp = ValidIO(new SinkDResp)
     val sourceD_r_hazard = Flipped(ValidIO(new SourceDHazard))
   })
@@ -40,12 +41,14 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   assert(!io.d.valid || io.d.bits.size === log2Up(blockBytes).U, "SinkD must receive aligned message")
 
   val (first, last, _, beat) = edge.count(io.d)
-  val uncache = io.d.bits.opcode === AccessAckData
-  val cache = !uncache
-  val needData = cache && io.d.bits.opcode(0) // =/= ReleaseAck
+  val cache = io.save_data_in_bs
+  val needData = io.d.bits.opcode(0)
   val w_safe = !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(io.set, io.way))
 
-  io.d.ready := cache && io.bs_waddr.ready && (!first || w_safe) // TODO: handle uncache access
+  io.d.ready := !needData || (!first || w_safe) && Mux(cache,
+    io.bs_waddr.ready,
+    true.B // refill buffer always ready (it is large enough)
+  )
 
   // Generate resp
   io.resp.valid := (first || last) && io.d.fire() // MSHR need to be notified when both first & last
@@ -57,7 +60,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.resp.bits.denied := io.d.bits.denied
 
   // Save data to Datastorage
-  io.bs_waddr.valid := (needData && io.d.valid && w_safe) || !first
+  io.bs_waddr.valid := ((needData && io.d.valid && w_safe) || !first) && cache
   io.bs_waddr.bits.way := io.way
   io.bs_waddr.bits.set := io.set
   io.bs_waddr.bits.beat := Mux(io.d.valid, beat, RegEnable(beat + io.bs_waddr.ready.asUInt(), io.d.valid))
@@ -65,8 +68,8 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.bs_waddr.bits.noop := !io.d.valid
   io.bs_wdata.data := io.d.bits.data
 
-  io.bypass_write.w_valid := io.bs_waddr.fire() && !io.bs_waddr.bits.noop && io.inner_grant
+  io.bypass_write.w_valid := io.d.fire() && needData && io.inner_grant
   io.bypass_write.w_id := io.d.bits.source
-  io.bypass_write.w_beat := io.bs_waddr.bits.beat
+  io.bypass_write.w_beat := beat
   io.bypass_write.w_data := io.bs_wdata
 }

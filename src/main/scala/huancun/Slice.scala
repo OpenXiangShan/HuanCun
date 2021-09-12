@@ -369,6 +369,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io.resps.sink_d.bits := sinkD.io.resp.bits
       mshr.io.resps.sink_e.bits := sinkE.io.resp.bits
   }
+  c_mshr.io.resps.sink_c.valid := false.B
 
   // Directory read results to MSHRs
   def regFn[T <: Data](x: Valid[T]): Valid[T] = {
@@ -402,9 +403,14 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     )
   )
 
-  sinkD.io.way := VecInit(ms.map(_.io.status.bits.way))(sinkD.io.resp.bits.source)
-  sinkD.io.set := VecInit(ms.map(_.io.status.bits.set))(sinkD.io.resp.bits.source)
-  sinkD.io.inner_grant := VecInit(ms.map(_.io.status.bits.will_grant_data))(sinkD.io.resp.bits.source)
+  // there must be 1 match so we can use Mux1H
+  val sinkD_status = Mux1H(ms.map(_.io.status).zipWithIndex.map{
+    case (s, i) => (i.U === sinkD.io.resp.bits.source) -> s
+  })
+  sinkD.io.way := sinkD_status.bits.way
+  sinkD.io.set := sinkD_status.bits.set
+  sinkD.io.inner_grant := sinkD_status.bits.will_grant_data
+  sinkD.io.save_data_in_bs := sinkD_status.bits.will_save_data
 
   sinkC.io.sourceD_r_hazard <> sourceD.io.sourceD_r_hazard
   sinkD.io.sourceD_r_hazard <> sourceD.io.sourceD_r_hazard

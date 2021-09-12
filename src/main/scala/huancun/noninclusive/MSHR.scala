@@ -480,16 +480,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
+
+  val preferCache = req.preferCache
   def a_schedule(): Unit = {
     // A channel requests
     // TODO: consider parameterized write-through policy for put/atomics
     s_execute := req.opcode === Hint
-    // need replacement when:
+    // need replacement when prefer cache and:
     // (1) some other client owns the block, probe this block and allocate a block in self cache (transmit_from_other_client),
     // (2) other clients and self dir both miss, allocate a block only when this req acquires a BRANCH (!req_needT).
     when(
       !self_meta.hit && self_meta.state =/= INVALID &&
-        replace_need_release &&
+        replace_need_release && preferCache &&
         (transmit_from_other_client ||
           req.opcode === AcquireBlock ||
           req.opcode === Get ||
@@ -507,7 +509,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantlast := false.B
       w_grant := false.B
       s_grantack := false.B
-      when(!acquirePermMiss) {
+      // for acquirePermMiss and (miss && !preferCache):
+      // no data block will be saved, so self dir won't change
+      when(!acquirePermMiss && (self_meta.hit || preferCache)) {
         s_wbselfdir := false.B
       }
     }
@@ -535,7 +539,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // need grantack
     when(req_acquire) {
       w_grantack := false.B
-      when(!acquirePermMiss) {
+      when(!acquirePermMiss && (self_meta.hit || preferCache)) {
         s_wbselfdir := false.B
       }
       s_wbclientsdir(iam) := false.B
@@ -553,7 +557,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       !clients_meta(iam).hit
     )
     when(
-      !self_meta.hit &&
+      !self_meta.hit && preferCache &&
         (req.opcode === Get || req.opcode === AcquireBlock || prefetchMiss)
     ) {
       s_wbselftag := false.B
@@ -890,6 +894,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.reload := false.B // TODO
   io.status.bits.way := self_meta.way
   io.status.bits.will_grant_data := req.fromA && od.opcode(0)
+  io.status.bits.will_save_data := req.fromA && (preferCache || self_meta.hit)
   io.status.bits.blockB := true.B
   // B nest A
   io.status.bits.nestB := meta_valid && w_releaseack && w_probeacklast && !w_grantfirst
