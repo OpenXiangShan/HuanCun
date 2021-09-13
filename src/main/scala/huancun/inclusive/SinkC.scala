@@ -130,6 +130,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.release.bits.source := task_r.source
   io.release.bits.size := task_r.size
   io.release.bits.corrupt := false.B
+  io.release.bits.user.lift(PreferCacheKey).map(_ := true.B)
 
   io.resp.valid := c.valid && isResp && can_recv_resp
   io.resp.bits.hasData := hasData

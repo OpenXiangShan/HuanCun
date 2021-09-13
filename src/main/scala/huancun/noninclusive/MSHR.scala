@@ -591,8 +591,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   when(io_releaseThrough && io.dirResult.valid) {
     assert(req_valid)
-    will_release_through := req.fromC && !other_clients_hit
-    will_drop_release := req.fromC && other_clients_hit
+    will_release_through := req.fromC && (!other_clients_hit || isShrink(req.param) && !req.param === TtoB)
+    // report or TtoB will be dropped
+    will_drop_release := req.fromC && (other_clients_hit || !isShrink(req.param) || req.param === TtoB)
     will_save_release := !(will_release_through || will_drop_release)
     releaseThrough := will_release_through
     releaseDrop := will_drop_release
@@ -739,10 +740,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
   ic.opcode := Mux(s_writeprobe, req.opcode, ProbeAckData)
   // ic.param will only be used when ic.release is true
+  // if need release through
+  //      req.param must be [TtoN, BtoN]
+  //      Report/TtoB will be dropped
   ic.param := Mux(
     !s_writeprobe,
-    probeack_param,
-    Mux(self_meta.hit, replace_param, req.param)
+    probeack_param, // TODO: check this
+    req.param
   )
   ic.save := Mux(s_writeprobe, releaseSave, probeAckDataSave)
   ic.drop := Mux(s_writeprobe, releaseDrop, probeAckDataDrop)
@@ -910,10 +914,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // C nest A (A -> C)
   io_c_status.releaseThrough := req_valid &&
     io_c_status.set === req.set && io_c_status.tag =/= req.tag &&
-    io_c_status.way === self_meta.way && io_c_status.nestedReleaseData && req.fromA
+    io_c_status.way === self_meta.way && io_c_status.nestedReleaseData &&
+    req.fromA && (preferCache || self_meta.hit)
   // B nest A (A -> B)
   io_b_status.probeAckDataThrough := req_valid &&
     io_b_status.set === req.set && io_c_status.tag =/= req.tag &&
     io_b_status.way === self_meta.way &&
-    io_b_status.nestedProbeAckData && req.fromA
+    io_b_status.nestedProbeAckData &&
+    req.fromA && (preferCache || self_meta.hit)
 }

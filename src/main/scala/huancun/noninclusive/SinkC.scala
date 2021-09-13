@@ -92,6 +92,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.release.bits.source := task_r.source
   io.release.bits.size := task_r.size
   io.release.bits.corrupt := false.B
+  io.release.bits.user.lift(PreferCacheKey).map(_ := true.B)
 
   val w_fire = io.bs_waddr.fire() && !io.bs_waddr.bits.noop || io.release.fire()
   when(w_fire) {
