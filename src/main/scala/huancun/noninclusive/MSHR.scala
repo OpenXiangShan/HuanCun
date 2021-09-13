@@ -687,7 +687,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     case (m, i) =>
       m.hit &&
         (req.alias.getOrElse(0.U) =/= m.alias.getOrElse(0.U) ||
-          (i.U =/= iam && (req_needT && m.state =/= INVALID || isT(m.state))))
+          (i.U =/= iam && (req_needT && m.state =/= INVALID) || isT(m.state) && !(req_acquire && i.U === iam)))
   })
   val b_probe_clients = VecInit(clients_meta.map {
     case m => Mux(ob.param === toN, m.hit, m.hit && ob.param === toB && isT(m.state))
