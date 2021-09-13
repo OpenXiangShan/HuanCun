@@ -26,7 +26,7 @@ abstract class BaseFakeClient(name: String, nBanks: Int, probe: Boolean = true)(
       channelBytes = TLChannelBeatBytes(blockBytes),
       minLatency = 1,
       echoFields = cacheParams.echoField,
-      requestFields = Seq(PrefetchField()),
+      requestFields = Seq(PrefetchField(), PreferCacheField()),
       responseKeys = cacheParams.respKey
     )
   })

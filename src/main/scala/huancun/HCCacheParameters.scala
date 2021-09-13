@@ -58,6 +58,14 @@ case class AliasField() extends BundleField(AliasKey) {
 
   override def default(x: UInt): Unit = 0.U
 }
+// try to keep data in cache is true
+// now it only works for non-inclusive cache (ignored in inclusive cahce)
+case object PreferCacheKey extends ControlKey[Bool](name = "preferCache")
+
+case class PreferCacheField() extends BundleField(PreferCacheKey) {
+  override def data: Bool = Bool()
+  override def default(x: Bool): Unit = true.B
+}
 
 case class HCCacheParameters(
   name:         String = "L2",
@@ -78,7 +86,7 @@ case class HCCacheParameters(
   echoField:    Seq[BundleFieldBase] = Nil,
   reqField:     Seq[BundleFieldBase] = Nil, // master
   respKey:      Seq[BundleKeyBase] = Nil,
-  reqKey:       Seq[BundleKeyBase] = Seq(PrefetchKey, AliasKey), // slave
+  reqKey:       Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey), // slave
   respField:    Seq[BundleFieldBase] = Nil) {
   require(ways > 0)
   require(sets > 0)

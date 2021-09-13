@@ -64,6 +64,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.bufIdx := insertIdx
   io.alloc.bits.needHint.foreach(_ := false.B)
   io.alloc.bits.alias.foreach(_ := 0.U)
+  io.alloc.bits.preferCache := true.B
 
   if (cacheParams.enableDebug) {
     when(c.fire()) {
@@ -130,6 +131,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.release.bits.source := task_r.source
   io.release.bits.size := task_r.size
   io.release.bits.corrupt := false.B
+  io.release.bits.user.lift(PreferCacheKey).map(_ := true.B)
 
   io.resp.valid := c.valid && isResp && can_recv_resp
   io.resp.bits.hasData := hasData

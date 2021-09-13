@@ -476,16 +476,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
+
+  val preferCache = req.preferCache
   def a_schedule(): Unit = {
     // A channel requests
     // TODO: consider parameterized write-through policy for put/atomics
     s_execute := req.opcode === Hint
-    // need replacement when:
+    // need replacement when prefer cache and:
     // (1) some other client owns the block, probe this block and allocate a block in self cache (transmit_from_other_client),
     // (2) other clients and self dir both miss, allocate a block only when this req acquires a BRANCH (!req_needT).
     when(
       !self_meta.hit && self_meta.state =/= INVALID &&
-        replace_need_release &&
+        replace_need_release && preferCache &&
         (transmit_from_other_client ||
           req.opcode === AcquireBlock ||
           req.opcode === Get ||
@@ -503,7 +505,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantlast := false.B
       w_grant := false.B
       s_grantack := false.B
-      when(!acquirePermMiss) {
+      // for acquirePermMiss and (miss && !preferCache):
+      // no data block will be saved, so self dir won't change
+      when(!acquirePermMiss && (self_meta.hit || preferCache)) {
         s_wbselfdir := false.B
       }
     }
@@ -535,7 +539,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // need grantack
     when(req_acquire) {
       w_grantack := false.B
-      when(!acquirePermMiss) {
+      when(!acquirePermMiss && (self_meta.hit || preferCache)) {
         s_wbselfdir := false.B
       }
       s_wbclientsdir(iam) := false.B
@@ -553,7 +557,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       !clients_meta(iam).hit
     )
     when(
-      !self_meta.hit &&
+      !self_meta.hit && preferCache &&
         (req.opcode === Get || req.opcode === AcquireBlock || prefetchMiss)
     ) {
       s_wbselftag := false.B
@@ -587,8 +591,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   when(io_releaseThrough && io.dirResult.valid) {
     assert(req_valid)
-    will_release_through := req.fromC && !other_clients_hit
-    will_drop_release := req.fromC && other_clients_hit
+    will_release_through := req.fromC && (!other_clients_hit || isShrink(req.param) && !req.param === TtoB)
+    // report or TtoB will be dropped
+    will_drop_release := req.fromC && (other_clients_hit || !isShrink(req.param) || req.param === TtoB)
     will_save_release := !(will_release_through || will_drop_release)
     releaseThrough := will_release_through
     releaseDrop := will_drop_release
@@ -770,10 +775,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
   ic.opcode := Mux(s_writeprobe, req.opcode, ProbeAckData)
   // ic.param will only be used when ic.release is true
+  // if need release through
+  //      req.param must be [TtoN, BtoN]
+  //      Report/TtoB will be dropped
   ic.param := Mux(
     !s_writeprobe,
-    probeack_param,
-    Mux(self_meta.hit, replace_param, req.param)
+    probeack_param, // TODO: check this
+    req.param
   )
   ic.save := Mux(s_writeprobe, releaseSave, probeAckDataSave)
   ic.drop := Mux(s_writeprobe, releaseDrop, probeAckDataDrop)
@@ -927,6 +935,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.reload := false.B // TODO
   io.status.bits.way := self_meta.way
   io.status.bits.will_grant_data := req.fromA && od.opcode(0)
+  io.status.bits.will_save_data := req.fromA && (preferCache || self_meta.hit)
   io.status.bits.blockB := true.B
   // B nest A
   io.status.bits.nestB := meta_valid && w_releaseack && w_probeacklast && !w_grantfirst
@@ -942,10 +951,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // C nest A (A -> C)
   io_c_status.releaseThrough := req_valid &&
     io_c_status.set === req.set && io_c_status.tag =/= req.tag &&
-    io_c_status.way === self_meta.way && io_c_status.nestedReleaseData && req.fromA
+    io_c_status.way === self_meta.way && io_c_status.nestedReleaseData &&
+    req.fromA && (preferCache || self_meta.hit)
   // B nest A (A -> B)
   io_b_status.probeAckDataThrough := req_valid &&
     io_b_status.set === req.set && io_c_status.tag =/= req.tag &&
     io_b_status.way === self_meta.way &&
-    io_b_status.nestedProbeAckData && req.fromA
+    io_b_status.nestedProbeAckData &&
+    req.fromA && (preferCache || self_meta.hit)
 }

@@ -53,7 +53,7 @@ trait HasHuanCunParameters {
 
   val aliasBitsOpt = cacheParams.clientCaches.head.aliasBitsOpt
 
-  val bufBlocks = 4
+  val bufBlocks = mshrs
   val bufIdxBits = log2Ceil(bufBlocks)
 
   lazy val edgeIn = p(EdgeInKey)

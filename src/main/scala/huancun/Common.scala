@@ -22,6 +22,7 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import freechips.rocketchip.util.BundleMap
 
 abstract class InnerTask(implicit p: Parameters) extends HuanCunBundle {
   val sourceId = UInt(sourceIdBits.W)
@@ -123,6 +124,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val needHint = prefetchOpt.map(_ => Bool())
   val isPrefetch = prefetchOpt.map(_ => Bool())
   val alias = aliasBitsOpt.map(_ => UInt(aliasBitsOpt.get.W))
+  val preferCache = Bool()
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
@@ -138,6 +140,14 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
     *     soruceD must read data from refill buffer
     */
   val will_grant_data = Bool()
+  /**
+    *   for missed acquire/get, if 'will_save_data' is true:
+    *     sinkD must write bankedstore to keep it in cache
+    *   else:
+    *     sinkD just write to refill buffer,
+    *     and the data will be bypassed to inner cache
+    */
+  val will_save_data = Bool()
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
