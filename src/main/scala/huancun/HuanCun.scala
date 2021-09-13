@@ -50,7 +50,7 @@ trait HasHuanCunParameters {
 
   val stateBits = MetaData.stateBits
 
-  val bufBlocks = 4
+  val bufBlocks = mshrs
   val bufIdxBits = log2Ceil(bufBlocks)
 
   lazy val edgeIn = p(EdgeInKey)

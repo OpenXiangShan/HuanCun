@@ -88,6 +88,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   queue.io.enq.bits.address := Cat(s2_task.tag, s2_task.set, 0.U(offsetBits.W))
   queue.io.enq.bits.data := io.bs_rdata.data
   queue.io.enq.bits.corrupt := false.B
+  queue.io.enq.bits.user.lift(PreferCacheKey).map(_ := true.B)
 
   io.c <> queue.io.deq
 }
