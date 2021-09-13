@@ -478,6 +478,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
 
   val preferCache = req.preferCache
+  def set_probe(): Unit = {
+    s_probe := false.B
+    w_probeackfirst := false.B
+    w_probeacklast := false.B
+    w_probeack := false.B
+  }
   def a_schedule(): Unit = {
     // A channel requests
     // TODO: consider parameterized write-through policy for put/atomics
@@ -514,25 +520,29 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // need probe
     clients_meta.zipWithIndex.foreach {
       case (meta, i) =>
-        when(i.U =/= iam) {
-          when(
-            meta.hit && (req_acquire && (req.alias.getOrElse(0.U) =/= meta.alias
-              .getOrElse(0.U) || req_needT || isT(
-              meta.state
-            )) || req.opcode === Hint && prefetch_miss_need_probe)
-          ) {
-            s_probe := false.B
-            w_probeackfirst := false.B
-            w_probeacklast := false.B
-            w_probeack := false.B
-            when(req_acquire) { s_wbclientsdir(i) := false.B }
+        when (req.opcode =/= Get) {
+          // Acquire / Hint
+          when(i.U =/= iam) {
+            when(
+              meta.hit && (req_acquire && (req.alias.getOrElse(0.U) =/= meta.alias
+                .getOrElse(0.U) || req_needT || isT(
+                meta.state
+              )) || req.opcode === Hint && prefetch_miss_need_probe)
+            ) {
+              set_probe()
+              when(req_acquire) { s_wbclientsdir(i) := false.B }
+            }
+          }.otherwise {
+            when(meta.hit && req_acquire && req.alias.getOrElse(0.U) =/= meta.alias.getOrElse(0.U)) {
+              set_probe()
+              s_wbclientsdir(i) := false.B
+            }
           }
         }.otherwise {
-          when(meta.hit && req_acquire && req.alias.getOrElse(0.U) =/= meta.alias.getOrElse(0.U)) {
-            s_probe := false.B
-            w_probeackfirst := false.B
-            w_probeacklast := false.B
-            w_probeack := false.B
+          // Get
+          when (meta.hit && (req.alias.getOrElse(0.U) =/= meta.alias.getOrElse(0.U) || isT(meta.state))) {
+            set_probe()
+            s_wbclientsdir(i) := false.B
           }
         }
     }
