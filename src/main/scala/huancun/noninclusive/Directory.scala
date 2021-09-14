@@ -29,7 +29,7 @@ class SelfDirEntry(implicit p: Parameters) extends HuanCunBundle {
 
 class ClientDirEntry(implicit p: Parameters) extends HuanCunBundle {
   val state = UInt(stateBits.W)
-  val alias = aliasBitsOpt.map(_ => UInt(aliasBitsOpt.get.W))
+  val alias = aliasBitsOpt.map(bits => UInt(bits.W))
 }
 
 class SelfDirResult(implicit p: Parameters) extends SelfDirEntry {

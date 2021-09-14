@@ -662,15 +662,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     ),
     io.dirResult.valid
   )
-  ob.set := {
-    if (!hasAliasBits) req.set
-    else
-      Cat(
-        req.set.head(setBits - log2Ceil(clientCacheParams.sets)),
-        probe_alias,
-        req.set(clientSetBits - 1, 0)
-      )
-  }
+  ob.set := req.set
+  ob.alias.foreach(_ := probe_alias)
   assert(ob.set.getWidth == req.set.getWidth)
   ob.param := Mux(
     req.fromB,

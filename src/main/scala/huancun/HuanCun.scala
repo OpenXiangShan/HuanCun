@@ -187,6 +187,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
     println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr) $prefetch ======")
+    aliasBitsOpt.foreach(bits => println(s"aliasBits: $bits"))
     node.in.zip(node.out).foreach {
       case ((in, edgeIn), (out, edgeOut)) =>
         require(in.params.dataBits == out.params.dataBits)

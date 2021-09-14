@@ -54,7 +54,7 @@ class SourceB(implicit p: Parameters) extends HuanCunModule {
   io.b.bits.size := offsetBits.U
   io.b.bits.source := getSourceId(chosenClient)
   io.b.bits.address := Cat(taskLatch.tag, taskLatch.set, 0.U(offsetBits.W))
-  io.b.bits.mask := ~0.U(beatBytes.W)
+  io.b.bits.mask := taskLatch.alias.getOrElse(0.U)
   io.b.bits.data := 0.U
   io.b.bits.corrupt := 0.U
 }

@@ -39,6 +39,7 @@ class SourceBReq(implicit p: Parameters) extends HuanCunBundle {
   val tag = UInt(tagBits.W)
   val param = UInt(3.W)
   val clients = UInt(clientBits.W)
+  val alias = aliasBitsOpt.map(w => UInt(w.W))
 }
 class SinkCReq(implicit p: Parameters) extends InnerTask {
   val size = UInt(msgSizeBits.W)
