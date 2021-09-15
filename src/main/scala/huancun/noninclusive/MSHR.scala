@@ -706,7 +706,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // 2. transmit from other clients
   val a_probe_clients = VecInit(clients_meta.zipWithIndex.map {
     case (m, i) =>
-      Mux(i.U === iam,
+      Mux(i.U === iam && req_acquire,
         cache_alias,
         m.hit && (
           req_needT && m.state =/= INVALID || isT(m.state) ||
