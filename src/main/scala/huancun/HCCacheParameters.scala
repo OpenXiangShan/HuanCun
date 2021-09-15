@@ -43,19 +43,27 @@ case class CacheParameters(
   val aliasBitsOpt = if (needResolveAlias) Some(setBits - virtualIndexBits) else None
 }
 
-case object PrefetchKey extends ControlKey[Bool]("needHint")
+case object PrefetchKey extends ControlKey[Bool](name ="needHint")
 
 case class PrefetchField() extends BundleField(PrefetchKey) {
   override def data: Bool = Bool()
-
   override def default(x: Bool): Unit = false.B
 }
 
 // try to keep data in cache is true
-// now it only works for non-inclusive cache (ignored in inclusive cahce)
+// now it only works for non-inclusive cache (ignored in inclusive cache)
 case object PreferCacheKey extends ControlKey[Bool](name = "preferCache")
 
 case class PreferCacheField() extends BundleField(PreferCacheKey) {
+  override def data: Bool = Bool()
+  override def default(x: Bool): Unit = true.B
+}
+
+// indicate whether this block is dirty or not (only used in handle Release/ReleaseData)
+// now it only works for non-inclusive cache (ignored in inclusive cache)
+case object DirtyKey extends ControlKey[Bool](name = "blockisdirty")
+
+case class DirtyField() extends BundleField(DirtyKey) {
   override def data: Bool = Bool()
   override def default(x: Bool): Unit = true.B
 }
@@ -77,9 +85,9 @@ case class HCCacheParameters(
   clientCaches: Seq[CacheParameters] = Nil,
   inclusive:    Boolean = true,
   echoField:    Seq[BundleFieldBase] = Nil,
-  reqField:     Seq[BundleFieldBase] = Nil, // master
+  reqField:     Seq[BundleFieldBase] = Seq(DirtyField()), // master
   respKey:      Seq[BundleKeyBase] = Nil,
-  reqKey:       Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey), // slave
+  reqKey:       Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, DirtyKey), // slave
   respField:    Seq[BundleFieldBase] = Nil) {
   require(ways > 0)
   require(sets > 0)

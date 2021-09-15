@@ -77,6 +77,7 @@ class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
   val param = UInt(3.W)
   val source = UInt(mshrBits.W)
   val way = UInt(wayBits.W)
+  val dirty = Bool()
 }
 class SourceEReq(implicit p: Parameters) extends HuanCunBundle {
   val sink = UInt(outerSinkBits.W)

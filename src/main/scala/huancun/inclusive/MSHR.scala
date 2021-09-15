@@ -389,6 +389,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   )
   oc.source := io.id
   oc.way := meta.way
+  oc.dirty := meta.dirty
 
   od.sinkId := io.id
   od.sourceId := req.source

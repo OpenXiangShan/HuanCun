@@ -31,7 +31,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val bs_rdata = Input(new DSData)
     val task = Flipped(DecoupledIO(new SourceCReq))
   })
-  // TODO: handle ProbeAck & ProbeAckData
+
   val queue_size = 6
   val queue_flow = true
 
@@ -88,7 +88,8 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   queue.io.enq.bits.address := Cat(s2_task.tag, s2_task.set, 0.U(offsetBits.W))
   queue.io.enq.bits.data := io.bs_rdata.data
   queue.io.enq.bits.corrupt := false.B
-  queue.io.enq.bits.user.lift(PreferCacheKey).map(_ := true.B)
+  queue.io.enq.bits.user.lift(PreferCacheKey).foreach(_ := true.B)
+  queue.io.enq.bits.user.lift(DirtyKey).foreach(_ := task.dirty)
 
   io.c <> queue.io.deq
 }

@@ -691,6 +691,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
   oc.source := io.id
   oc.way := self_meta.way
+  oc.dirty := Mux(req.fromB, probe_dirty, self_meta.dirty)
 
   od.sinkId := io.id
   od.sourceId := req.source
