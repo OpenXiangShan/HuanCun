@@ -132,6 +132,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val prefetch_miss = prefetch_miss_need_acquire || prefetch_miss_need_probe
   val prefetch_need_data = !self_meta.hit
 
+  assert(RegNext(!req_valid || !meta_valid || !req.fromA || !req_acquire ||
+    clients_meta(iam).hit || clients_meta(iam).state === INVALID
+  )) // If assert fails, we need more redundant ways
+
   def probe_next_state(state: UInt, param: UInt): UInt = Mux(
     isT(state) && param === toT,
     state,
@@ -551,6 +555,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             s_wbclientsdir(i) := false.B
           }
         }
+    }
+    when (probe_dirty) {
+      s_wbselfdir := false.B
+      when (!self_meta.hit) {
+        s_wbselftag := false.B
+      }
     }
     // need grantack
     when(req_acquire) {
