@@ -62,9 +62,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   when(io.dirResult.valid) {
     meta_valid := true.B
     meta_reg := io.dirResult.bits
-    for(c <- io.dirResult.bits.clients){
-      assert(c.hit || c.state === INVALID)
-    }
   }
   meta := Mux(io.dirResult.valid, io.dirResult.bits, meta_reg)
   val self_meta = meta.self
@@ -501,6 +498,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
 
   val preferCache = req.preferCache
+  val req_client_meta = clients_meta(iam)
+  val cache_alias = req_client_meta.hit && req_acquire &&
+    req_client_meta.alias.getOrElse(0.U) =/= req.alias.getOrElse(0.U)
+
   def set_probe(): Unit = {
     s_probe := false.B
     w_probeackfirst := false.B
@@ -513,17 +514,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // A channel requests
     // TODO: consider parameterized write-through policy for put/atomics
     s_execute := req.opcode === Hint
-    // need replacement when prefer cache and:
-    // (1) some other client owns the block, probe this block and allocate a block in self cache (transmit_from_other_client),
-    // (2) other clients and self dir both miss, allocate a block only when this req acquires a BRANCH (!req_needT).
-    when(
-      !self_meta.hit && self_meta.state =/= INVALID &&
-        replace_need_release && preferCache &&
-        (transmit_from_other_client ||
-          req.opcode === AcquireBlock ||
-          req.opcode === Get ||
-          req.opcode === Hint)
-    ) {
+    when(!self_meta.hit && self_meta.state =/= INVALID && replace_need_release &&
+      (
+        (preferCache && (req.opcode === AcquireBlock || req.opcode === Get)) ||
+          (
+            req.opcode === Hint ||
+              transmit_from_other_client || // inner probe -> replace -> release
+              cache_alias                   // inner probe -> replace -> release
+            )
+        )
+    ){
       s_release := false.B
       w_releaseack := false.B
     }
@@ -549,23 +549,23 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           // Acquire / Hint
           when(i.U =/= iam) {
             when(
-              meta.hit && (req_acquire && (req.alias.getOrElse(0.U) =/= meta.alias
-                .getOrElse(0.U) || req_needT || isT(
-                meta.state
-              )) || req.opcode === Hint && prefetch_miss_need_probe)
+              meta.hit && (
+                req_acquire && (req_needT || !self_meta.hit || isT(meta.state)) ||
+                req.opcode === Hint && prefetch_miss_need_probe
+                )
             ) {
               set_probe()
               when(req_acquire) { s_wbclientsdir(i) := false.B }
             }
           }.otherwise {
-            when(meta.hit && req_acquire && req.alias.getOrElse(0.U) =/= meta.alias.getOrElse(0.U)) {
+            when(cache_alias) {
               set_probe()
               s_wbclientsdir(i) := false.B
             }
           }
         }.otherwise {
           // Get
-          when (meta.hit && (req.alias.getOrElse(0.U) =/= meta.alias.getOrElse(0.U) || isT(meta.state))) {
+          when (meta.hit && (isT(meta.state) || !self_meta.hit)) {
             set_probe()
             s_wbclientsdir(i) := false.B
           }
@@ -692,20 +692,27 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req.param,
     Mux(
       req.opcode === Hint,
-      toT, // If prefetch needs to find the block in other clients, send Probe toT to get data
+      Mux(req.param === PREFETCH_READ, toB, toN),
       Mux(
-        req_needT || Cat(clients_meta.map(m => m.hit && m.alias.getOrElse(0.U) =/= req.alias.getOrElse(0.U))).orR,
+        req_needT || cache_alias,
         toN,
         toB
       )
     )
   )
   // Which clients should be probed?
+  // a req:
+  // 1. cache alias
+  // 2. transmit from other clients
   val a_probe_clients = VecInit(clients_meta.zipWithIndex.map {
     case (m, i) =>
-      m.hit &&
-        (req.alias.getOrElse(0.U) =/= m.alias.getOrElse(0.U) ||
-          (i.U =/= iam && (req_needT && m.state =/= INVALID) || isT(m.state) && !(req_acquire && i.U === iam)))
+      Mux(i.U === iam,
+        cache_alias,
+        m.hit && (
+          req_needT && m.state =/= INVALID || isT(m.state) ||
+            !self_meta.hit   // transmit from other client since we are non-inclusive
+          )
+      )
   })
   val b_probe_clients = VecInit(clients_meta.map {
     case m => Mux(ob.param === toN, m.hit, m.hit && ob.param === toB && isT(m.state))
