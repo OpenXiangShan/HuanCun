@@ -45,6 +45,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.needHint.foreach(_ := false.B)
   io.alloc.bits.alias.foreach(_ := 0.U)
   io.alloc.bits.preferCache := true.B
+  io.alloc.bits.fromProbeHelper := false.B
   assert(!io.alloc.fire() || c.fire() && first, "alloc fire, but c channel not fire!")
 
   io.resp.valid := c.fire() && isResp

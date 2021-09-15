@@ -59,4 +59,5 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
   allocInfo.isPrefetch.foreach(_ := false.B)
   allocInfo.alias.foreach(_ := a.bits.user.lift(AliasKey).getOrElse(0.U))
   allocInfo.preferCache := a.bits.user.lift(PreferCacheKey).getOrElse(true.B)
+  allocInfo.fromProbeHelper := false.B
 }

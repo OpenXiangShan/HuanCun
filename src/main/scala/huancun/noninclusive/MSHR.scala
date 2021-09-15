@@ -340,10 +340,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   meta_reg.clients.zipWithIndex.foreach {
     case (reg, i) =>
       when(change_clients_meta(i)) {
-        when((io.nestedwb.clients.get) (i).isToB) {
+        when(io.nestedwb.clients.get (i).isToB) {
           // reg.state := BRANCH
         }
-        when((io.nestedwb.clients.get) (i).isToN) {
+        when(io.nestedwb.clients.get (i).isToN) {
           reg.state := INVALID
           reg.hit := false.B
         }
@@ -476,7 +476,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // assert(self_meta.hit || clients_meta.map(_.hit).reduce(_ || _), "Trying to probe a non-existing block")
     when(will_save_probeack) {
       // if through/drop, probeack will be sent by s_writeprobe
-      s_probeack := false.B
+      // if fromProbeHelper, no need to send probeack
+      when(!req.fromProbeHelper) {
+        s_probeack := false.B
+      }
       when(self_meta.hit) {
         // TODO: consider Report?
         assert(probe_shrink_perm(self_meta.state, req.param), "Probe should always shrink perm")
@@ -637,7 +640,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   when(req.fromB && io.dirResult.valid) {
     will_probeack_through := clients_have_T && (io_probeAckDataThrough || !self_meta.hit || req.param === toN)
     will_drop_probeack := !clients_have_T
-    will_save_probeack := !(will_probeack_through || !will_drop_probeack)
+    will_save_probeack := !(will_probeack_through || will_drop_probeack)
     probeAckDataThrough := will_probeack_through
     probeAckDataDrop := will_drop_probeack
   }
@@ -650,8 +653,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
   io.tasks.dir_write.valid := !s_wbselfdir && no_wait
   io.tasks.tag_write.valid := !s_wbselftag && no_wait
-  io.tasks.client_dir_write.zip(s_wbclientsdir).foreach { case (t, s) => t.valid := !s && no_wait }
-  io.tasks.client_tag_write.zip(s_wbclientstag).foreach { case (t, s) => t.valid := !s && no_wait }
+  for(i <- 0 until clientBits){
+    val can_write = clients_meta(i).hit || clients_meta(i).state === INVALID
+    io.tasks.client_dir_write(i).valid := !s_wbclientsdir(i) && no_wait && can_write
+    io.tasks.client_tag_write(i).valid := !s_wbclientstag(i) && no_wait && can_write
+  }
   io.tasks.sink_a.valid := !s_writeput && w_grant && s_writeprobe && w_probeacklast // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.sink_c.valid := (!s_writerelease && (!releaseSave || s_release)) || (!s_writeprobe)
   io.tasks.prefetch_train.foreach(_.valid := !s_triggerprefetch.get)
@@ -807,7 +813,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req.bufIdx,
     RegEnable(io.resps.sink_c.bits.bufIdx, io.resps.sink_c.valid && io.resps.sink_c.bits.hasData)
   )
-  ic.opcode := Mux(s_writeprobe, req.opcode, ProbeAckData)
+  ic.opcode := Mux(s_writeprobe,
+    req.opcode,
+    Mux(req.fromProbeHelper,
+      ReleaseData, // convert ProbeAckData -> ReleaseData
+      ProbeAckData
+    )
+  )
   // ic.param will only be used when ic.release is true
   // if need release through
   //      req.param must be [TtoN, BtoN]
@@ -910,6 +922,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(probeack_last && io.resps.sink_c.bits.last) {
       // TODO: this is slow, optimize this
       s_writeprobe := false.B
+      when(req.fromProbeHelper){
+        // inner ProbeAck -> outer ReleaseData
+        w_releaseack := false.B
+      }
     }
   }
   val a_need_data = req.fromA && (req.opcode === Get || req.opcode === AcquireBlock || req.opcode === Hint)

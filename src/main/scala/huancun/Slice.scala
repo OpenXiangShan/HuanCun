@@ -24,7 +24,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import huancun.inclusive.MSHR
-import huancun.noninclusive.MSHR
+import huancun.noninclusive.{MSHR, ProbeHelper}
 import huancun.prefetch._
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
@@ -90,9 +90,28 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   val mshrAlloc = Module(new MSHRAlloc)
   val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher))
+  val probeHelperOpt = if(cacheParams.inclusive) None else Some(Module(new ProbeHelper))
 
-  mshrAlloc.io.a_req <> sinkA.io.alloc
-  mshrAlloc.io.b_req <> sinkB.io.alloc
+  val a_req = Wire(DecoupledIO(new MSHRRequest()))
+  if(cacheParams.inclusive){
+    a_req <> sinkA.io.alloc
+    mshrAlloc.io.b_req <> sinkB.io.alloc
+  } else {
+    val probeHelper = probeHelperOpt.get
+    block_decoupled(a_req, sinkA.io.alloc, probeHelper.io.full)
+    val b_arb = Module(new Arbiter(new MSHRRequest, 2))
+    b_arb.io.in(0) <> probeHelper.io.probe
+    b_arb.io.in(1) <> sinkB.io.alloc
+    mshrAlloc.io.b_req <> b_arb.io.out
+  }
+  if(prefetcher.nonEmpty){
+    val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
+    alloc_A_arb.io.in(0) <> a_req
+    alloc_A_arb.io.in(1) <> prefetcher.get.io.req
+    mshrAlloc.io.a_req <> alloc_A_arb.io.out
+  } else {
+    mshrAlloc.io.a_req <> a_req
+  }
   mshrAlloc.io.c_req <> sinkC.io.alloc
 
   ms.zipWithIndex.foreach {
@@ -357,11 +376,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   prefetcher.foreach { pft =>
-    // override mshrAlloc.io.a_req
-    val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
-    alloc_A_arb.io.in(0) <> sinkA.io.alloc
-    alloc_A_arb.io.in(1) <> pft.io.req
-    mshrAlloc.io.a_req <> alloc_A_arb.io.out
+
     // connect abc mshrs to prefetcher
     arbTasks(
       pft.io.train,
@@ -409,6 +424,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       val dirResult = Wire(Valid(directory.io.results.head.bits.cloneType))
       dirResult.valid := Cat(dirResultMatch).orR()
       dirResult.bits := Mux1H(dirResultMatch.zip(directory.io.results.map(_.bits)))
+      probeHelperOpt.foreach(_.io.dirResult := dirResult)
       mshr.io.dirResult := regFn(dirResult)
   }
 
