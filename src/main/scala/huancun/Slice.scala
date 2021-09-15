@@ -146,6 +146,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   val nestedWb = Wire(new NestedWriteback)
+  nestedWb := DontCare
   nestedWb.set := Mux(select_c, c_mshr.io.status.bits.set, bc_mshr.io.status.bits.set)
   nestedWb.tag := Mux(select_c, c_mshr.io.status.bits.tag, bc_mshr.io.status.bits.tag)
 
@@ -179,6 +180,20 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   nestedWb.c_set_dirty := select_c &&
     c_mshr.io.tasks.dir_write.valid &&
     c_wb_dirty
+  val nestedWb_c_set_hit = c_mshr match {
+    case c: inclusive.MSHR =>
+      ms.map {
+        case m =>
+          select_c && c.io.tasks.tag_write.valid &&
+          c.io.tasks.tag_write.bits.tag === m.io.status.bits.tag
+      }
+    case c: noninclusive.MSHR =>
+      ms.map {
+        case m =>
+          select_c && c.io.tasks.tag_write.valid &&
+            c.io.tasks.tag_write.bits.tag === m.io.status.bits.tag
+      }
+  }
 
   // nested client dir write
   (bc_mshr, c_mshr) match {
@@ -207,11 +222,16 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   abc_mshr.foreach(_.io.nestedwb := nestedWb)
+  abc_mshr.zip(nestedWb_c_set_hit.init.init).foreach {
+    case (m, set_hit) =>
+      m.io.nestedwb.c_set_hit := set_hit
+  }
 
   bc_mshr.io.nestedwb := 0.U.asTypeOf(nestedWb)
   bc_mshr.io.nestedwb.set := c_mshr.io.status.bits.set
   bc_mshr.io.nestedwb.tag := c_mshr.io.status.bits.tag
   bc_mshr.io.nestedwb.c_set_dirty := nestedWb.c_set_dirty
+  bc_mshr.io.nestedwb.c_set_hit := nestedWb_c_set_hit.init.last
   bc_mshr match {
     case mshr: noninclusive.MSHR =>
       mshr.io_releaseThrough := false.B

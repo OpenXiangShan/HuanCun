@@ -103,6 +103,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       i.U =/= iam && meta.hit
   }).asUInt.orR
 
+  val need_block_downwards = RegInit(false.B)
+
   // When replacing a block in data array, it is not always necessary to send Release,
   // but only when state perm > clientStates' perm or replacing a dirty block
   val replace_clients_perm = ParallelMax(self_meta.clientStates)
@@ -329,6 +331,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       meta_reg.self.clientStates.foreach(_ := INVALID)
     }
   }
+  val nested_c_hit_reg = RegInit(false.B)
+  val nested_c_hit = WireInit(nested_c_hit_reg)
+  when (meta_valid && !self_meta.hit && req.fromA &&
+    io.nestedwb.set === req.set && io.nestedwb.c_set_hit
+  ) {
+    nested_c_hit := true.B
+    nested_c_hit_reg := true.B
+  }
+
   meta_reg.clients.zipWithIndex.foreach {
     case (reg, i) =>
       when(change_clients_meta(i)) {
@@ -336,7 +347,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           // reg.state := BRANCH
         }
         when((io.nestedwb.clients.get) (i).isToN) {
-          // reg.state := INVALID
+          reg.state := INVALID
           reg.hit := false.B
         }
       }
@@ -418,6 +429,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probe_dirty := false.B
     probes_done := 0.U
     bad_grant := false.B
+    need_block_downwards := false.B
+    nested_c_hit_reg := false.B
 
   }
 
@@ -493,6 +506,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_probeackfirst := false.B
     w_probeacklast := false.B
     w_probeack := false.B
+    s_wbselfdir := false.B
+    when (!self_meta.hit) { s_wbselftag := false.B }
   }
   def a_schedule(): Unit = {
     // A channel requests
@@ -555,12 +570,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             s_wbclientsdir(i) := false.B
           }
         }
-    }
-    when (probe_dirty) {
-      s_wbselfdir := false.B
-      when (!self_meta.hit) {
-        s_wbselftag := false.B
-      }
     }
     // need grantack
     when(req_acquire) {
@@ -658,7 +667,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   oa.tag := req.tag
   oa.set := req.set
-  oa.opcode := Mux(clients_hit || self_meta.hit, AcquirePerm, AcquireBlock)
+  oa.opcode := Mux((clients_hit || self_meta.hit) && !need_block_downwards, AcquirePerm, AcquireBlock)
   oa.param := Mux(req_needT, Mux(clients_hit || self_meta.hit, BtoT, NtoT), NtoB)
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U
@@ -896,6 +905,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_writeprobe := false.B
     }
   }
+  val a_need_data = req.fromA && (req.opcode === Get || req.opcode === AcquireBlock || req.opcode === Hint)
   when(io.resps.sink_c.valid) {
     val resp = io.resps.sink_c.bits
     probes_done := probes_done | probeack_bit
@@ -904,6 +914,14 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_probeack := w_probeack || probeack_last && (resp.last || req.off === 0.U)
 
     probe_dirty := probe_dirty || resp.hasData && !w_probeackfirst
+    when (a_need_data && probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit) {
+      s_acquire := false.B
+      w_grantfirst := false.B
+      w_grantlast := false.B
+      w_grant := false.B
+      s_grantack := false.B
+      need_block_downwards := true.B
+    }
   }
   when(io.resps.sink_d.valid) {
     when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData) {
