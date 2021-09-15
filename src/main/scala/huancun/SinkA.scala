@@ -57,5 +57,6 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
   allocInfo.bufIdx := DontCare
   allocInfo.needHint := a.bits.user.lift(PrefetchKey).getOrElse(false.B)
   allocInfo.preferCache := a.bits.user.lift(PreferCacheKey).getOrElse(true.B)
+  allocInfo.dirty := false.B // ignored
   allocInfo.isPrefetch := false.B
 }

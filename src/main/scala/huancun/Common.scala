@@ -51,6 +51,7 @@ class SinkCReq(implicit p: Parameters) extends InnerTask {
   val save = Bool() // write into banked store
   val drop = Bool() // clear write buf (without writing banked store)
   val release = Bool() // send buffer contents to SourceC
+  val dirty = Bool() // useful only when release = true
 }
 class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val opcode = UInt(3.W)
@@ -125,6 +126,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val needHint = Bool()
   val preferCache = Bool()
   val isPrefetch = Bool()
+  val dirty = Bool()
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {

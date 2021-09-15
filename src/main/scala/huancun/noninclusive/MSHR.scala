@@ -146,7 +146,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   def onCReq(): Unit = {
     // Release / ReleaseData
-    new_self_meta.dirty := self_meta.hit && self_meta.dirty || req.opcode(0) && isParamFromT(req.param)
+    new_self_meta.dirty := self_meta.hit && self_meta.dirty || req.dirty && isParamFromT(req.param)
     new_self_meta.state := MuxLookup(
       req.param,
       self_meta.state,
@@ -664,7 +664,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oc.opcode := Mux(
     req.fromB,
     Cat(ProbeAck(2, 1), (probe_dirty || self_meta.hit && self_meta.dirty).asUInt),
-    Cat(Release(2, 1), self_meta.dirty.asUInt)
+    if (isLLC) Cat(Release(2, 1), self_meta.dirty.asUInt) else ReleaseData
   )
   oc.tag := Mux(req.fromB, req.tag, self_meta.tag)
   oc.set := req.set
@@ -691,7 +691,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
   oc.source := io.id
   oc.way := self_meta.way
-  oc.dirty := Mux(req.fromB, probe_dirty, self_meta.dirty)
+  oc.dirty := Mux(req.fromB, probe_dirty || self_meta.hit && self_meta.dirty, self_meta.dirty)
 
   od.sinkId := io.id
   od.sourceId := req.source
@@ -752,6 +752,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   ic.save := Mux(s_writeprobe, releaseSave, probeAckDataSave)
   ic.drop := Mux(s_writeprobe, releaseDrop, probeAckDataDrop)
   ic.release := Mux(s_writeprobe, releaseThrough, probeAckDataThrough)
+  ic.dirty := req.dirty
 
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := self_meta.way
