@@ -62,6 +62,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   when(io.dirResult.valid) {
     meta_valid := true.B
     meta_reg := io.dirResult.bits
+    for(c <- io.dirResult.bits.clients){
+      assert(c.hit || c.state === INVALID)
+    }
   }
   meta := Mux(io.dirResult.valid, io.dirResult.bits, meta_reg)
   val self_meta = meta.self
@@ -75,7 +78,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val req_acquire = req.opcode === AcquireBlock || req.opcode === AcquirePerm
   val req_needT = needT(req.opcode, req.param)
   val gotT = RegInit(false.B)
-  val meta_no_clients = Cat(self_meta.clientStates.map(_ === INVALID)).orR()
+  val meta_no_clients = Cat(self_meta.clientStates.map(_ === INVALID)).andR()
   val req_promoteT = req_acquire && Mux(self_meta.hit, meta_no_clients && self_meta.state === TIP, gotT)
   val probe_dirty = RegInit(false.B) // probe a block that is dirty
   val probes_done = RegInit(0.U(clientBits.W))
@@ -221,14 +224,14 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       case (state, i) =>
         when(iam === i.U) {
           state := Mux(req_acquire,
-            Mux(req_needT || !self_meta.hit && gotT, TIP, BRANCH),
+            Mux(req_needT || req_promoteT, TIP, BRANCH),
             Mux(clients_meta(i).hit, clients_meta(i).state, INVALID)
           )
         }.otherwise {
           state := Mux(
             req_acquire,
             Mux(
-              req.param =/= NtoB,
+              req.param =/= NtoB || req_promoteT,
               INVALID,
               Mux(clients_meta(i).hit, BRANCH, INVALID)
             ),
@@ -241,7 +244,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         when(iam === i.U) {
           m.state := Mux(
             req_acquire,
-            Mux(req_needT || !self_meta.hit && gotT, TIP, BRANCH),
+            Mux(req_needT || req_promoteT, TIP, BRANCH),
             clients_meta(i).state
           )
           m.alias.foreach(_ := Mux(req_acquire, req.alias.get, clients_meta(i).alias.get))
@@ -249,7 +252,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           m.state := Mux(
             req_acquire,
             Mux(
-              req.param =/= NtoB,
+              req.param =/= NtoB || req_promoteT,
               Mux(clients_meta(i).hit, INVALID, clients_meta(i).state),
               // NtoB
               Mux(clients_meta(i).hit, BRANCH, clients_meta(i).state)
