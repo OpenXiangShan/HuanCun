@@ -69,26 +69,27 @@ case class DirtyField() extends BundleField(DirtyKey) {
 }
 
 case class HCCacheParameters(
-  name:         String = "L2",
-  level:        Int = 2,
-  ways:         Int = 4,
-  sets:         Int = 128,
-  blockBytes:   Int = 64,
-  replacement:  String = "plru",
-  mshrs:        Int = 16,
-  dirReadPorts: Int = 1,
-  dirReg:       Boolean = true,
-  enableDebug:  Boolean = false,
-  enablePerf:   Boolean = false,
-  channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
-  prefetch:     Option[PrefetchParameters] = None,
-  clientCaches: Seq[CacheParameters] = Nil,
-  inclusive:    Boolean = true,
-  echoField:    Seq[BundleFieldBase] = Nil,
-  reqField:     Seq[BundleFieldBase] = Seq(DirtyField()), // master
-  respKey:      Seq[BundleKeyBase] = Nil,
-  reqKey:       Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, DirtyKey), // slave
-  respField:    Seq[BundleFieldBase] = Nil) {
+  name:              String = "L2",
+  level:             Int = 2,
+  ways:              Int = 4,
+  sets:              Int = 128,
+  blockBytes:        Int = 64,
+  replacement:       String = "plru",
+  mshrs:             Int = 16,
+  dirReadPorts:      Int = 1,
+  dirReg:            Boolean = true,
+  enableDebug:       Boolean = false,
+  enablePerf:        Boolean = false,
+  channelBytes:      TLChannelBeatBytes = TLChannelBeatBytes(32),
+  prefetch:          Option[PrefetchParameters] = None,
+  clientCaches:      Seq[CacheParameters] = Nil,
+  inclusive:         Boolean = true,
+  alwaysReleaseData: Boolean = false,
+  echoField:         Seq[BundleFieldBase] = Nil,
+  reqField:          Seq[BundleFieldBase] = Seq(DirtyField()), // master
+  respKey:           Seq[BundleKeyBase] = Nil,
+  reqKey:            Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, DirtyKey), // slave
+  respField:         Seq[BundleFieldBase] = Nil) {
   require(ways > 0)
   require(sets > 0)
   require(channelBytes.d.get >= 8)

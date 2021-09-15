@@ -225,9 +225,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
 
       when(req.opcode(0)) { // has data
         s_writerelease := false.B
-        when (req.opcode === ReleaseData) {
-          assert(req.dirty === true.B) // for inclusive data, we assume releaseData as dirty
-        }
+        // when (req.opcode === ReleaseData) {
+        //  assert(req.dirty === true.B) // for inclusive data, we assume releaseData as dirty
+        // }
       }
 
     }.elsewhen(req.fromB) {
@@ -368,7 +368,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   ob.param := Mux(!s_rprobe, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
   ob.clients := meta.clients & ~probe_exclude // TODO: Provides all clients needing probe
 
-  oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), if (isLLC) Cat(Release(2, 1), meta.dirty.asUInt) else ReleaseData)
+  oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), meta.dirty.asUInt))
   oc.tag := meta.tag
   oc.set := req.set
   oc.param := Mux(

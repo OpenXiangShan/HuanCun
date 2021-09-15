@@ -53,7 +53,7 @@ trait HasHuanCunParameters {
   val bufBlocks = mshrs
   val bufIdxBits = log2Ceil(bufBlocks)
 
-  val isLLC = cacheParams.level == 3
+  val alwaysReleaseData = cacheParams.alwaysReleaseData
 
   lazy val edgeIn = p(EdgeInKey)
   lazy val edgeOut = p(EdgeOutKey)
