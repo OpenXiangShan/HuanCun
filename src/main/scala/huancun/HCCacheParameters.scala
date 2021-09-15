@@ -86,7 +86,7 @@ case class HCCacheParameters(
   inclusive:         Boolean = true,
   alwaysReleaseData: Boolean = false,
   echoField:         Seq[BundleFieldBase] = Nil,
-  reqField:          Seq[BundleFieldBase] = Seq(DirtyField()), // master
+  reqField:          Seq[BundleFieldBase] = Nil, // master
   respKey:           Seq[BundleKeyBase] = Nil,
   reqKey:            Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, DirtyKey), // slave
   respField:         Seq[BundleFieldBase] = Nil) {
