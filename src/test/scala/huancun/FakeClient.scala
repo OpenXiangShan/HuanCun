@@ -66,7 +66,6 @@ class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0
           TLPermissions.toT
         )
         out.a.bits := acquire
-        out.a.bits.user.apply(PrefetchKey) := (name == "L1D").B
         out.a.valid := cnt =/= 0.U
       } else {
         val (_, get) = edge.Get(
@@ -177,6 +176,7 @@ class MasterAgent
       io.a.bits.address.poke(a.address.U)
       io.a.bits.mask.poke(a.mask.U)
       io.a.bits.data.poke(a.data.U)
+      io.a.bits.user.lift(PrefetchKey).get.poke(true.B)
     } else {
       io.a.valid.poke(false.B)
     }

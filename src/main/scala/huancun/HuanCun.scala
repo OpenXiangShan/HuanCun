@@ -48,6 +48,7 @@ trait HasHuanCunParameters {
   val setBits = log2Ceil(cacheParams.sets)
   val offsetBits = log2Ceil(blockBytes)
   val beatBits = offsetBits - log2Ceil(beatBytes)
+  val pageOffsetBits = log2Ceil(cacheParams.pageBytes)
 
   val stateBits = MetaData.stateBits
 
@@ -101,6 +102,10 @@ trait HasHuanCunParameters {
     val set = offset >> offsetBits
     val tag = set >> setBits
     (tag(tagBits - 1, 0), set(setBits - 1, 0), offset(offsetBits - 1, 0))
+  }
+
+  def getPPN(x: UInt): UInt = {
+    x(x.getWidth - 1, pageOffsetBits)
   }
 
   def startBeat(offset: UInt): UInt = {
