@@ -13,8 +13,8 @@ trait HasClientInfo { this: HasHuanCunParameters =>
   val clientCacheParams = cacheParams.clientCaches.head
   val aliasBits = aliasBitsOpt.getOrElse(0)
 
-  val clientSets = clientCacheParams.sets >> aliasBits
-  val clientWays = clientCacheParams.ways << aliasBits
+  val clientSets = clientCacheParams.sets
+  val clientWays = clientCacheParams.ways
   val clientSetBits = log2Ceil(clientSets)
   val clientWayBits = log2Ceil(clientWays)
   val clientTagBits = addressBits - clientSetBits - offsetBits
@@ -51,6 +51,9 @@ class ClientDirResult(implicit p: Parameters) extends ClientDirEntry with HasCli
 class DirResult(implicit p: Parameters) extends BaseDirResult {
   val self = new SelfDirResult
   val clients = Vec(clientBits, new ClientDirResult)
+  val sourceId = UInt(sourceIdBits.W)
+  val set = UInt(setBits.W)
+  val replacerInfo = new ReplacerInfo
 }
 
 class SelfTagWrite(implicit p: Parameters) extends BaseTagWrite {
@@ -212,6 +215,9 @@ class Directory(implicit p: Parameters)
     }
     req.ready := Cat(rports.map(_.ready)).andR()
     val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
+    val sourceIdReg = RegEnable(req.bits.source, req.fire())
+    val setReg = RegEnable(req.bits.set, req.fire())
+    val replacerInfoReg = RegEnable(req.bits.replacerInfo, req.fire())
     val resp = io.results(i)
     val clientResps = clientDirs.map(_.io.resps(i))
     val selfResp = selfDir.io.resps(i)
@@ -219,6 +225,9 @@ class Directory(implicit p: Parameters)
     val valids = Cat(clientResps.map(_.valid) :+ selfResp.valid)
     assert(valids.andR() || !valids.orR(), "valids must be all 1s or 0s")
     resp.bits.idOH := reqIdOHReg
+    resp.bits.sourceId := sourceIdReg
+    resp.bits.set := setReg
+    resp.bits.replacerInfo := replacerInfoReg
     resp.bits.self.hit := selfResp.bits.hit
     resp.bits.self.way := selfResp.bits.way
     resp.bits.self.tag := selfResp.bits.tag

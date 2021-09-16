@@ -37,6 +37,7 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
   val replacerInfo = new ReplacerInfo()
+  val source = UInt(sourceIdBits.W)
 }
 
 abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](

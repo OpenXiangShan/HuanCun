@@ -5,7 +5,7 @@ import chisel3._
 import freechips.rocketchip.diplomacy.{AddressSet, DisableMonitors, LazyModule, LazyModuleImp}
 import freechips.rocketchip.tilelink.{TLBuffer, TLCacheCork, TLDelayer, TLFragmenter, TLRAM, TLWidthWidget, TLXbar}
 import huancun._
-import tltest.{ScoreboardData, TLCTrans, TLMessagesBigInt}
+import tltest.{ScoreboardData, TLCMasterAgent, TLCTrans, TLMessagesBigInt, TLULMasterAgent}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -79,4 +79,8 @@ abstract class TLCTest extends L2Tester {
   val serialList = ArrayBuffer[(Int, TLCTrans)]()
   val scoreboard = mutable.Map[BigInt, ScoreboardData]()
   val testTop = LazyModule(new TestTop(serialList, scoreboard, dcacheNum = 2))
+
+  def l1d_map(func: TLCMasterAgent => Unit) = testTop.l1d_list.map(_.agent).foreach(func)
+  def l1i_map(func: TLULMasterAgent => Unit) = testTop.l1i_list.map(_.agent).foreach(func)
+
 }

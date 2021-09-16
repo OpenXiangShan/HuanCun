@@ -146,6 +146,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   c_mshr_alloc.bits := request.bits
 
   dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR() && dirRead.ready
+  dirRead.bits.source := request.bits.source
   dirRead.bits.tag := request.bits.tag
   dirRead.bits.set := request.bits.set
   dirRead.bits.idOH := Cat(

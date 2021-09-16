@@ -35,6 +35,7 @@ class NestedWriteback(implicit p: Parameters) extends HuanCunBundle {
   val tag = UInt(tagBits.W)
   val b_toN, b_toB, b_clr_dirty = Bool()
   val c_set_dirty = Bool()
+  val c_set_hit = Bool()
   val clients =
     if (!cacheParams.inclusive)
       Some(
