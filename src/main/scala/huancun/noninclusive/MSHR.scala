@@ -922,7 +922,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(probeack_last && io.resps.sink_c.bits.last) {
       // TODO: this is slow, optimize this
       s_writeprobe := false.B
-      when(req.fromProbeHelper){
+      when(req.fromProbeHelper && probeAckDataThrough){
         // inner ProbeAck -> outer ReleaseData
         w_releaseack := false.B
       }
