@@ -48,9 +48,6 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
     var total_release = 0
     var total_get = 0
 
-    def l1d_map(func: TLCMasterAgent => Unit) = testTop.l1d_list.map(_.agent).foreach(func)
-    def l1i_map(func: TLULMasterAgent => Unit) = testTop.l1i_list.map(_.agent).foreach(func)
-
     test(testTop.module).withAnnotations(testAnnos) { dut =>
 
       for (_ <- 0 to totalTick) {
