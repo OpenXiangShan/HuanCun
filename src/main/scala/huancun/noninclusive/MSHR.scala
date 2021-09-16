@@ -131,9 +131,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val prefetch_miss = prefetch_miss_need_acquire || prefetch_miss_need_probe
   val prefetch_need_data = !self_meta.hit
 
-  assert(RegNext(!req_valid || !meta_valid || !req.fromA || !req_acquire ||
-    clients_meta(iam).hit || clients_meta(iam).state === INVALID
-  )) // If assert fails, we need more redundant ways
+//  assert(RegNext(!req_valid || !meta_valid || !req.fromA || !req_acquire ||
+//    clients_meta(iam).hit || clients_meta(iam).state === INVALID
+//  )) // If assert fails, we need more redundant ways
 
   def probe_next_state(state: UInt, param: UInt): UInt = Mux(
     isT(state) && param === toT,
@@ -308,7 +308,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val change_clients_meta = clients_meta.zipWithIndex.map {
     case (meta, i) =>
       meta_valid && meta.state =/= INVALID &&
-        io.nestedwb.set === req.set &&
+        io.nestedwb.set(clientSetBits - 1, 0) === req.set(clientSetBits - 1, 0) &&
         meta.parseTag(Cat(io.nestedwb.tag, io.nestedwb.set)) === meta.tag
   }
   when(change_self_meta) {

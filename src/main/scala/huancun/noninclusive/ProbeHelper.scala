@@ -10,7 +10,7 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   extends HuanCunModule with HasClientInfo
 {
   val io = IO(new Bundle() {
-    val dirResult = Flipped(ValidIO(new DirResult()))
+    val dirResult = Flipped(Valid(new DirResult()))
     val probe = DecoupledIO(new MSHRRequest)
     val full = Output(Bool())
   })
@@ -24,9 +24,9 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   val req = Wire(new MSHRRequest)
 
   val full_addr = Cat(dir.clients(req_client).tag, dir.set(clientSetBits - 1, 0))
-  val tgt_tag = full_addr.head(clientTagBits)
-  val tgt_set = full_addr.tail(clientTagBits).head(clientSetBits)
-  val tgt_off = full_addr.tail(clientTagBits).tail(clientSetBits)
+  val tgt_tag = full_addr.head(tagBits)
+  val tgt_set = full_addr.tail(tagBits).head(setBits)
+  val tgt_off = full_addr.tail(tagBits).tail(setBits)
 
   req.fromProbeHelper := true.B
   req.opcode := TLMessages.Probe

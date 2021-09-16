@@ -424,9 +424,16 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       val dirResult = Wire(Valid(directory.io.results.head.bits.cloneType))
       dirResult.valid := Cat(dirResultMatch).orR()
       dirResult.bits := Mux1H(dirResultMatch.zip(directory.io.results.map(_.bits)))
-      probeHelperOpt.foreach(_.io.dirResult := dirResult)
       mshr.io.dirResult := regFn(dirResult)
   }
+  probeHelperOpt.foreach(h => {
+    h.io.dirResult.valid := Cat(directory.io.results.map(_.valid)).orR()
+    h.io.dirResult.bits := Mux1H(
+      directory.io.results.zipWithIndex.map{
+        case (r, i) => (r.valid && r.bits.idOH(i)) -> r.bits
+      }
+    )
+  })
 
   // Provide MSHR info for sinkC, sinkD
   sinkC.io.way := Mux(

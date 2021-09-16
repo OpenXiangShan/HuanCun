@@ -13,8 +13,8 @@ trait HasClientInfo { this: HasHuanCunParameters =>
   val clientCacheParams = cacheParams.clientCaches.head
   val aliasBits = aliasBitsOpt.getOrElse(0)
 
-  val clientSets = clientCacheParams.sets >> aliasBits
-  val clientWays = clientCacheParams.ways << aliasBits
+  val clientSets = clientCacheParams.sets
+  val clientWays = clientCacheParams.ways
   val clientSetBits = log2Ceil(clientSets)
   val clientWayBits = log2Ceil(clientWays)
   val clientTagBits = addressBits - clientSetBits - offsetBits
