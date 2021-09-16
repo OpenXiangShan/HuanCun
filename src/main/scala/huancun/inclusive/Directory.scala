@@ -7,6 +7,8 @@ import freechips.rocketchip.util.SetAssocLRU
 import huancun._
 import huancun.utils._
 
+// TODO: inclusive may have cache aliase too
+
 class TagWrite(implicit p: Parameters) extends BaseTagWrite {
   val set = UInt(setBits.W)
   val way = UInt(wayBits.W)

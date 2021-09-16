@@ -37,10 +37,11 @@ case class CacheParameters(
   physicalIndex: Boolean = true,
   inner:         Seq[CacheParameters] = Nil) {
   val capacity = sets * ways * blockBytes
-  val virtualIndexBits = log2Ceil(pageBytes)
+  val pageOffsetBits = log2Ceil(pageBytes)
   val setBits = log2Ceil(sets)
-  val needResolveAlias = !physicalIndex && setBits > virtualIndexBits
-  val aliasBitsOpt = if (needResolveAlias) Some(setBits - virtualIndexBits) else None
+  val offsetBits = log2Ceil(blockBytes)
+  val needResolveAlias = !physicalIndex && (setBits + offsetBits) > pageOffsetBits
+  val aliasBitsOpt = if (needResolveAlias) Some(setBits + offsetBits - pageOffsetBits) else None
 }
 
 case object PrefetchKey extends ControlKey[Bool](name ="needHint")
@@ -50,6 +51,12 @@ case class PrefetchField() extends BundleField(PrefetchKey) {
   override def default(x: Bool): Unit = false.B
 }
 
+case object AliasKey extends ControlKey[UInt]("alias")
+case class AliasField() extends BundleField(AliasKey) {
+  override def data: UInt = UInt()
+
+  override def default(x: UInt): Unit = 0.U
+}
 // try to keep data in cache is true
 // now it only works for non-inclusive cache (ignored in inclusive cache)
 case object PreferCacheKey extends ControlKey[Bool](name = "preferCache")
@@ -74,6 +81,7 @@ case class HCCacheParameters(
   ways:              Int = 4,
   sets:              Int = 128,
   blockBytes:        Int = 64,
+  pageBytes:         Int = 4096,
   replacement:       String = "plru",
   mshrs:             Int = 16,
   dirReadPorts:      Int = 1,
@@ -88,7 +96,7 @@ case class HCCacheParameters(
   echoField:         Seq[BundleFieldBase] = Nil,
   reqField:          Seq[BundleFieldBase] = Nil, // master
   respKey:           Seq[BundleKeyBase] = Nil,
-  reqKey:            Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, DirtyKey), // slave
+  reqKey:            Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, DirtyKey, AliasKey), // slave
   respField:         Seq[BundleFieldBase] = Nil) {
   require(ways > 0)
   require(sets > 0)
@@ -103,6 +111,7 @@ case class HCCacheParameters(
     sets = sets,
     ways = ways,
     blockBytes = blockBytes,
+    pageBytes = pageBytes,
     inner = clientCaches
   )
 }

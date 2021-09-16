@@ -226,7 +226,7 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
 
   val req = Reg(new PrefetchReq)
   val req_valid = RegInit(false.B)
-  val crossPage = parseAddress(newAddr)._1 =/= parseAddress(oldAddr)._1 // unequal tags
+  val crossPage = getPPN(newAddr) =/= getPPN(oldAddr) // unequal tags
   when(io.req.fire()) {
     req_valid := false.B
   }
@@ -235,6 +235,7 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
     req.set := parseAddress(newAddr)._2
     req.needT := io.train.bits.needT
     req.source := io.train.bits.source
+    req.alias.foreach(_ := io.train.bits.alias.get)
     req_valid := !crossPage // stop prefetch when prefetch req crosses pages
   }
 

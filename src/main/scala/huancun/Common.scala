@@ -39,6 +39,7 @@ class SourceBReq(implicit p: Parameters) extends HuanCunBundle {
   val tag = UInt(tagBits.W)
   val param = UInt(3.W)
   val clients = UInt(clientBits.W)
+  val alias = aliasBitsOpt.map(w => UInt(w.W))
 }
 class SinkCReq(implicit p: Parameters) extends InnerTask {
   val size = UInt(msgSizeBits.W)
@@ -123,10 +124,12 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val tag = UInt(tagBits.W)
   val off = UInt(offsetBits.W)
   val bufIdx = UInt(bufIdxBits.W)
-  val needHint = Bool()
+  val needHint = prefetchOpt.map(_ => Bool())
+  val isPrefetch = prefetchOpt.map(_ => Bool())
+  val alias = aliasBitsOpt.map(_ => UInt(aliasBitsOpt.get.W))
   val preferCache = Bool()
-  val isPrefetch = Bool()
   val dirty = Bool()
+  val fromProbeHelper = Bool()
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {

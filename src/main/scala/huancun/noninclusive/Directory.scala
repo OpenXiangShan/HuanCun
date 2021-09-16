@@ -11,6 +11,8 @@ trait HasClientInfo { this: HasHuanCunParameters =>
   // assume all clients have same params
   // TODO: check client params to ensure they are same
   val clientCacheParams = cacheParams.clientCaches.head
+  val aliasBits = aliasBitsOpt.getOrElse(0)
+
   val clientSets = clientCacheParams.sets
   val clientWays = clientCacheParams.ways
   val clientSetBits = log2Ceil(clientSets)
@@ -27,6 +29,7 @@ class SelfDirEntry(implicit p: Parameters) extends HuanCunBundle {
 
 class ClientDirEntry(implicit p: Parameters) extends HuanCunBundle {
   val state = UInt(stateBits.W)
+  val alias = aliasBitsOpt.map(bits => UInt(bits.W))
 }
 
 class SelfDirResult(implicit p: Parameters) extends SelfDirEntry {
@@ -48,6 +51,9 @@ class ClientDirResult(implicit p: Parameters) extends ClientDirEntry with HasCli
 class DirResult(implicit p: Parameters) extends BaseDirResult {
   val self = new SelfDirResult
   val clients = Vec(clientBits, new ClientDirResult)
+  val sourceId = UInt(sourceIdBits.W)
+  val set = UInt(setBits.W)
+  val replacerInfo = new ReplacerInfo
 }
 
 class SelfTagWrite(implicit p: Parameters) extends BaseTagWrite {
@@ -79,10 +85,10 @@ class ClientDirWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
   val way = UInt(clientWayBits.W)
   val data = new ClientDirEntry()
 
-  def apply(lineAddr: UInt, way: UInt, data: UInt) = {
+  def apply(lineAddr: UInt, way: UInt, data: ClientDirEntry) = {
     this.set := lineAddr(clientSetBits - 1, 0)
     this.way := way
-    this.data.state := data
+    this.data := data
   }
 }
 
@@ -163,6 +169,7 @@ class Directory(implicit p: Parameters)
         dir_init_fn = () => {
           val init = Wire(new ClientDirEntry)
           init.state := MetaData.INVALID
+          init.alias.foreach( _ := DontCare)
           init
         },
         dir_hit_fn = clientHitFn,
@@ -208,6 +215,9 @@ class Directory(implicit p: Parameters)
     }
     req.ready := Cat(rports.map(_.ready)).andR()
     val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
+    val sourceIdReg = RegEnable(req.bits.source, req.fire())
+    val setReg = RegEnable(req.bits.set, req.fire())
+    val replacerInfoReg = RegEnable(req.bits.replacerInfo, req.fire())
     val resp = io.results(i)
     val clientResps = clientDirs.map(_.io.resps(i))
     val selfResp = selfDir.io.resps(i)
@@ -215,6 +225,9 @@ class Directory(implicit p: Parameters)
     val valids = Cat(clientResps.map(_.valid) :+ selfResp.valid)
     assert(valids.andR() || !valids.orR(), "valids must be all 1s or 0s")
     resp.bits.idOH := reqIdOHReg
+    resp.bits.sourceId := sourceIdReg
+    resp.bits.set := setReg
+    resp.bits.replacerInfo := replacerInfoReg
     resp.bits.self.hit := selfResp.bits.hit
     resp.bits.self.way := selfResp.bits.way
     resp.bits.self.tag := selfResp.bits.tag
@@ -228,6 +241,7 @@ class Directory(implicit p: Parameters)
         resp.way := clientResp.bits.way
         resp.tag := clientResp.bits.tag
         resp.state := clientResp.bits.dir.state
+        resp.alias.foreach(_ := clientResp.bits.dir.alias.get)
     }
   }
 

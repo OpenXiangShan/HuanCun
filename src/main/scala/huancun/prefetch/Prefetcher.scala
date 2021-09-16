@@ -12,6 +12,7 @@ class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val set = UInt(setBits.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
+  val alias = if (hasAliasBits) Some(UInt(aliasBitsOpt.get.W)) else None
   // val id = UInt(sourceIdBits.W)
 }
 
@@ -28,6 +29,7 @@ class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
   val set = UInt(setBits.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
+  val alias = if (hasAliasBits) Some(UInt(aliasBitsOpt.get.W)) else None
   // prefetch only when L2 receives a miss or prefetched hit req
   // val miss = Bool()
   // val prefetched = Bool()
@@ -64,8 +66,8 @@ class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
 
   when(io.enq.valid) {
     queue(tail) := io.enq.bits
-    valids(tail) := !empty // true.B
-    tail := tail + (!empty).asUInt
+    valids(tail) := !empty || !io.deq.ready // true.B
+    tail := tail + (!empty || !io.deq.ready).asUInt
     when(full && !io.deq.ready) {
       head := head + 1.U
     }
@@ -101,8 +103,9 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       io.req.bits.tag := pftQueue.io.deq.bits.tag
       io.req.bits.off := 0.U
       io.req.bits.channel := "b001".U
-      io.req.bits.needHint := false.B
-      io.req.bits.isPrefetch := true.B
+      io.req.bits.needHint.foreach(_ := false.B)
+      io.req.bits.isPrefetch.foreach(_ := true.B)
+      io.req.bits.alias.foreach(_ := pftQueue.io.deq.bits.alias.get)
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }

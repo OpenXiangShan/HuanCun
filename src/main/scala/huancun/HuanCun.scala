@@ -31,6 +31,7 @@ trait HasHuanCunParameters {
   val cacheParams = p(HCCacheParamsKey)
   val prefetchOpt = cacheParams.prefetch
   val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
+  val hasAliasBits = cacheParams.clientCaches.head.needResolveAlias
 
   val blockBytes = cacheParams.blockBytes
   val beatBytes = cacheParams.channelBytes.d.get
@@ -47,8 +48,11 @@ trait HasHuanCunParameters {
   val setBits = log2Ceil(cacheParams.sets)
   val offsetBits = log2Ceil(blockBytes)
   val beatBits = offsetBits - log2Ceil(beatBytes)
+  val pageOffsetBits = log2Ceil(cacheParams.pageBytes)
 
   val stateBits = MetaData.stateBits
+
+  val aliasBitsOpt = cacheParams.clientCaches.head.aliasBitsOpt
 
   val bufBlocks = mshrs
   val bufIdxBits = log2Ceil(bufBlocks)
@@ -100,6 +104,10 @@ trait HasHuanCunParameters {
     val set = offset >> offsetBits
     val tag = set >> setBits
     (tag(tagBits - 1, 0), set(setBits - 1, 0), offset(offsetBits - 1, 0))
+  }
+
+  def getPPN(x: UInt): UInt = {
+    x(x.getWidth - 1, pageOffsetBits)
   }
 
   def startBeat(offset: UInt): UInt = {
@@ -186,6 +194,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
     println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr) $prefetch ======")
+    aliasBitsOpt.foreach(bits => println(s"aliasBits: $bits"))
     node.in.zip(node.out).foreach {
       case ((in, edgeIn), (out, edgeOut)) =>
         require(in.params.dataBits == out.params.dataBits)
