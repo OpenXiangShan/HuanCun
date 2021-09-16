@@ -136,6 +136,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s2_d.bits.denied := false.B
   s2_d.bits.data := s1_queue.io.deq.bits.data
   s2_d.bits.corrupt := false.B
+  s2_d.bits.echo.lift(DirtyKey).foreach(_ := s2_req.dirty)
 
   val s2_can_go = Mux(s2_d.valid, s2_d.ready, s3_ready)
   when(s2_full && s2_can_go) { s2_full := false.B }
@@ -174,6 +175,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s3_d.bits.denied := false.B
   s3_d.bits.data := s3_rdata
   s3_d.bits.corrupt := false.B
+  s3_d.bits.echo.lift(DirtyKey).foreach(_ := s3_req.dirty)
 
   s3_queue.io.enq.valid := RegNext(RegNext(
     io.bs_raddr.fire() && !Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire),

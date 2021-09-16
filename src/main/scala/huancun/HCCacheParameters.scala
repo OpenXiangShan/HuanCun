@@ -93,10 +93,10 @@ case class HCCacheParameters(
   clientCaches:      Seq[CacheParameters] = Nil,
   inclusive:         Boolean = true,
   alwaysReleaseData: Boolean = false,
-  echoField:         Seq[BundleFieldBase] = Nil,
+  echoField:         Seq[BundleFieldBase] = Seq(DirtyField()),
   reqField:          Seq[BundleFieldBase] = Nil, // master
   respKey:           Seq[BundleKeyBase] = Nil,
-  reqKey:            Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, DirtyKey, AliasKey), // slave
+  reqKey:            Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey), // slave
   respField:         Seq[BundleFieldBase] = Nil) {
   require(ways > 0)
   require(sets > 0)

@@ -62,6 +62,7 @@ class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val off = UInt(offsetBits.W)
   val denied = Bool()
   val sinkId = UInt(mshrBits.W)
+  val dirty = Bool()
 }
 
 class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
@@ -102,6 +103,7 @@ class SinkDResp(implicit p: Parameters) extends HuanCunBundle {
   val sink = UInt(outerSinkBits.W)
   val last = Bool() // last beat
   val denied = Bool()
+  val dirty = Bool()
 }
 class SinkEResp(implicit p: Parameters) extends HuanCunBundle {
   // GrantAck

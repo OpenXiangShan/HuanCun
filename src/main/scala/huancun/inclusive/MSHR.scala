@@ -418,6 +418,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   od.way := meta.way
   od.off := req.off
   od.denied := bad_grant
+  od.dirty := false.B // TODO
 
   oe.sink := sink
 

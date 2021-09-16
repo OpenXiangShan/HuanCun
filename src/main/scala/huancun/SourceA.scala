@@ -44,5 +44,5 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a.bits.data := DontCare
   a.bits.corrupt := false.B
   a.bits.user.lift(PreferCacheKey).map( _ := false.B)
-  a.bits.user.lift(DirtyKey).map(_ := true.B)
+  a.bits.echo.lift(DirtyKey).map(_ := true.B)
 }

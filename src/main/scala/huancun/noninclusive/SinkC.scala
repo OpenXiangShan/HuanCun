@@ -45,7 +45,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.needHint.foreach(_ := false.B)
   io.alloc.bits.alias.foreach(_ := 0.U)
   io.alloc.bits.preferCache := true.B
-  io.alloc.bits.dirty := c.bits.user.lift(DirtyKey).getOrElse(true.B)
+  io.alloc.bits.dirty := c.bits.echo.lift(DirtyKey).getOrElse(true.B)
   io.alloc.bits.fromProbeHelper := false.B
   assert(!io.alloc.fire() || c.fire() && first, "alloc fire, but c channel not fire!")
 
@@ -96,7 +96,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.release.bits.size := task_r.size
   io.release.bits.corrupt := false.B
   io.release.bits.user.lift(PreferCacheKey).foreach(_ := true.B)
-  io.release.bits.user.lift(DirtyKey).foreach(_ := task_r.dirty)
+  io.release.bits.echo.lift(DirtyKey).foreach(_ := task_r.dirty)
 
   val w_fire = io.bs_waddr.fire() && !io.bs_waddr.bits.noop || io.release.fire()
   when(w_fire) {
