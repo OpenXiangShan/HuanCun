@@ -166,6 +166,7 @@ class Directory(implicit p: Parameters)
         dir_init_fn = () => {
           val init = Wire(new ClientDirEntry)
           init.state := MetaData.INVALID
+          init.alias.foreach( _ := DontCare)
           init
         },
         dir_hit_fn = clientHitFn,
