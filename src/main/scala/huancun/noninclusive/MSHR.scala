@@ -474,17 +474,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // Probe
     // TODO: probe a non-existing block is possible?
     // assert(self_meta.hit || clients_meta.map(_.hit).reduce(_ || _), "Trying to probe a non-existing block")
-    when(will_save_probeack) {
-      // if through/drop, probeack will be sent by s_writeprobe
-      // if fromProbeHelper, no need to send probeack
-      when(!req.fromProbeHelper) {
-        s_probeack := false.B
-      }
-      when(self_meta.hit) {
-        // TODO: consider Report?
-        assert(probe_shrink_perm(self_meta.state, req.param), "Probe should always shrink perm")
-        s_wbselfdir := false.B
-      }
+    when(!will_probeack_through && !req.fromProbeHelper) {
+      s_probeack := false.B
+    }
+    when(self_meta.hit) {
+      // TODO: consider Report?
+      assert(probe_shrink_perm(self_meta.state, req.param), "Probe should always shrink perm")
+      s_wbselfdir := false.B
     }
     clients_meta.zipWithIndex.foreach {
       case (meta, i) =>
@@ -775,7 +771,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   od.channel := Cat(req.fromC.asUInt, 0.U(1.W), req.fromA.asUInt)
 
   def odOpGen(r: MSHRRequest) = {
-    val grantOp = Mux(req.param === BtoT, Grant, GrantData) // AcquireBlock BtoT -> Grant
+    // for L3: AcquireBlock BtoT -> Grant
+    // for L2: our L1D requrire us always grant data
+    val grantOp = if(cacheParams.level == 2) GrantData else Mux(req.param === BtoT, Grant, GrantData)
     val opSeq = Seq(AccessAck, AccessAck, AccessAckData, AccessAckData, AccessAckData, HintAck, grantOp, Grant)
     val opToA = VecInit(opSeq)(r.opcode)
     Mux(r.fromA, opToA, ReleaseAck)

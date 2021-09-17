@@ -54,9 +54,9 @@ case class PrefetchField() extends BundleField(PrefetchKey) {
 
 case object AliasKey extends ControlKey[UInt]("alias")
 case class AliasField() extends BundleField(AliasKey) {
-  override def data: UInt = UInt()
+  override def data: UInt = Output(UInt(2.W))
 
-  override def default(x: UInt): Unit = 0.U
+  override def default(x: UInt): Unit = {x := 0.U(2.W)}
 }
 // try to keep data in cache is true
 // now it only works for non-inclusive cache (ignored in inclusive cahce)

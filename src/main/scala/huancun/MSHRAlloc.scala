@@ -86,7 +86,9 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     io.status.map(s => s.valid && s.bits.nestC).init :+ false.B
   )
   val nestB_vec = VecInit(
-    io.status.map(s => s.valid && s.bits.nestB).init.init ++ Seq(false.B, false.B)
+    io.status.map(s =>
+      s.valid && (s.bits.nestB || io.b_req.bits.fromProbeHelper)
+    ).init.init ++ Seq(false.B, false.B)
   )
 
   val conflict_c = c_match_vec.asUInt().orR()
