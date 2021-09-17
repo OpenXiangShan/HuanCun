@@ -303,7 +303,19 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
-  directory.io.dirWReqs.zip(ms.map(_.io.tasks.dir_write)).foreach(w => w._1 <> w._2)
+  def block_b_c[T <: Data](sinks: Seq[DecoupledIO[T]], sources: Seq[DecoupledIO[T]]): Unit = {
+    val c_src = sources.last
+    val b_src = sources.init.last
+    val abc_src = sources.init.init
+    for ((src, sink) <- abc_src.zip(sinks.dropRight(2))){
+      sink <> src
+    }
+    block_decoupled(sinks.init.last, b_src, select_c)
+    sinks.last <> c_src
+  }
+
+  // don't allow b write back when c is valid to simplify 'NestedWriteBack'
+  block_b_c(directory.io.dirWReqs, ms.map(_.io.tasks.dir_write))
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
@@ -319,7 +331,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
       for ((dirW, idx) <- dir.io.clientDirWReqs.zipWithIndex) {
-        dirW <> ms.map(_.io.tasks.client_dir_write(idx))
+        block_b_c(dirW, ms.map(_.io.tasks.client_dir_write(idx)))
       }
       for ((tagW, idx) <- dir.io.clientTagWreq.zipWithIndex) {
         arbTasks(
