@@ -626,14 +626,29 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
-  when(io_releaseThrough && io.dirResult.valid) {
+  when(io_releaseThrough && io.dirResult.valid && req.fromC) {
     assert(req_valid)
-    will_release_through := req.fromC && (!other_clients_hit || isShrink(req.param) && !req.param === TtoB)
+    // TtoN or BtoN should release through
+    will_release_through := !other_clients_hit || (isShrink(req.param) && req.param =/= TtoB)
     // report or TtoB will be dropped
-    will_drop_release := req.fromC && (other_clients_hit || !isShrink(req.param) || req.param === TtoB)
-    will_save_release := !(will_release_through || will_drop_release)
+    will_drop_release := !will_release_through
+    // if enter this part, we must NOT save release
+    // since there is a refill want to replace us
+    will_save_release := false.B
     releaseThrough := will_release_through
     releaseDrop := will_drop_release
+  }
+
+  when(io.dirResult.valid && req.fromC) {
+    assert(
+      PopCount(
+        Seq(will_release_through, will_drop_release, will_save_release)
+      ) === 1.U,
+      "release ploicy conflict! [through drop save]: [%b %b %b]",
+      will_release_through,
+      will_drop_release,
+      will_save_release
+    )
   }
 
   when(req.fromB && io.dirResult.valid) {
