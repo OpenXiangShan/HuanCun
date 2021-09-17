@@ -73,6 +73,7 @@ case class HCCacheParameters(
   ways:         Int = 4,
   sets:         Int = 128,
   blockBytes:   Int = 64,
+  pageBytes:    Int = 4096,
   replacement:  String = "plru",
   mshrs:        Int = 16,
   dirReadPorts: Int = 1,
@@ -101,6 +102,7 @@ case class HCCacheParameters(
     sets = sets,
     ways = ways,
     blockBytes = blockBytes,
+    pageBytes = pageBytes,
     inner = clientCaches
   )
 }

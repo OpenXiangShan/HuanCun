@@ -66,8 +66,8 @@ class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
 
   when(io.enq.valid) {
     queue(tail) := io.enq.bits
-    valids(tail) := !empty // true.B
-    tail := tail + (!empty).asUInt
+    valids(tail) := !empty || !io.deq.ready // true.B
+    tail := tail + (!empty || !io.deq.ready).asUInt
     when(full && !io.deq.ready) {
       head := head + 1.U
     }
