@@ -474,6 +474,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // Probe
     // TODO: probe a non-existing block is possible?
     // assert(self_meta.hit || clients_meta.map(_.hit).reduce(_ || _), "Trying to probe a non-existing block")
+
+    // if save/drop, read data from sourceC (s_probeack)
+    // if through, read data from sinkC (s_writeprobe)
     when(!will_probeack_through && !req.fromProbeHelper) {
       s_probeack := false.B
     }
@@ -735,7 +738,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   oc.opcode := Mux(
     req.fromB,
-    Cat(ProbeAck(2, 1), (probe_dirty || self_meta.hit && self_meta.dirty).asUInt),
+    Cat(
+      Mux(req.fromProbeHelper, Release(2, 1), ProbeAck(2, 1)),
+      (probe_dirty || self_meta.hit && self_meta.dirty).asUInt
+    ),
     Cat(Release(2, 1), self_meta.dirty.asUInt)
   )
   oc.tag := Mux(req.fromB, req.tag, self_meta.tag)
@@ -916,15 +922,24 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
   val probeack_last = (probes_done | probeack_bit) === probe_clients // This is the last client sending probeack
-  when(req_valid && io.resps.sink_c.valid && io.resps.sink_c.bits.hasData) {
-    when(probeack_last && io.resps.sink_c.bits.last) {
+  when(req_valid && io.resps.sink_c.valid && probeack_last && io.resps.sink_c.bits.last){
+    when(io.resps.sink_c.bits.hasData){
       // TODO: this is slow, optimize this
       s_writeprobe := false.B
       when(req.fromProbeHelper && probeAckDataThrough){
-        // inner ProbeAck -> outer ReleaseData
-        w_releaseack := false.B
+        w_releaseack := false.B // inner ProbeAck -> outer Release
       }
-    }
+    }.otherwise({
+      when(probeAckDataThrough || !req.fromProbeHelper){
+        // client didn't response data
+        // but we still need to send probeack
+        // let sourceC do this
+        s_probeack := false.B
+        when(req.fromProbeHelper){
+          w_releaseack := false.B
+        }
+      }
+    })
   }
   val a_need_data = req.fromA && (req.opcode === Get || req.opcode === AcquireBlock || req.opcode === Hint)
   when(io.resps.sink_c.valid) {
