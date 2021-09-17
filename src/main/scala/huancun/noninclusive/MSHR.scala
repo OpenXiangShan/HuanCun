@@ -512,6 +512,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     s_wbselfdir := false.B
     when (!self_meta.hit) { s_wbselftag := false.B }
   }
+  val acquirePermMiss = req.opcode === AcquirePerm && !self_meta.hit
   def a_schedule(): Unit = {
     // A channel requests
     // TODO: consider parameterized write-through policy for put/atomics
@@ -531,7 +532,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
 
     // need Acquire downwards
-    val acquirePermMiss = req.opcode === AcquirePerm && !self_meta.hit
     when(Mux(req_needT, !isT(highest_perm), highest_perm === INVALID)) {
       s_acquire := false.B
       w_grantfirst := false.B
@@ -1022,7 +1022,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.reload := false.B // TODO
   io.status.bits.way := self_meta.way
   io.status.bits.will_grant_data := req.fromA && od.opcode(0)
-  io.status.bits.will_save_data := req.fromA && (preferCache || self_meta.hit)
+  io.status.bits.will_save_data := req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
   io.status.bits.blockB := true.B
   // B nest A
   io.status.bits.nestB := meta_valid && w_releaseack && w_probeacklast && !w_grantfirst
@@ -1039,11 +1039,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io_c_status.releaseThrough := req_valid &&
     io_c_status.set === req.set && io_c_status.tag =/= req.tag &&
     io_c_status.way === self_meta.way && io_c_status.nestedReleaseData &&
-    req.fromA && (preferCache || self_meta.hit)
+    req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
   // B nest A (A -> B)
   io_b_status.probeAckDataThrough := req_valid &&
     io_b_status.set === req.set && io_c_status.tag =/= req.tag &&
     io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData &&
-    req.fromA && (preferCache || self_meta.hit)
+    req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
 }
