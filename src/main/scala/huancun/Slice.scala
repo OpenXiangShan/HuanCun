@@ -147,6 +147,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io_b_status.way := bc_mshr.io.status.bits.way
       mshr.io_b_status.nestedProbeAckData :=
         bc_mshr.io.status.valid && non_inclusive(bc_mshr).io_is_nestedProbeAckData
+      mshr.io_b_status.probeHelperFinish :=
+        bc_mshr.io.status.valid && non_inclusive(bc_mshr).io_probeHelperFinish
       mshr.io_releaseThrough := false.B
       mshr.io_probeAckDataThrough := false.B
     case _: inclusive.MSHR =>
@@ -163,6 +165,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io_b_status.tag := 0.U
       mshr.io_b_status.way := 0.U
       mshr.io_b_status.nestedProbeAckData := false.B
+      mshr.io_b_status.probeHelperFinish := false.B
   }
 
   c_mshr match
@@ -176,6 +179,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io_b_status.tag := 0.U
       mshr.io_b_status.way := 0.U
       mshr.io_b_status.nestedProbeAckData := false.B
+      mshr.io_b_status.probeHelperFinish := false.B
     case _: inclusive.MSHR =>
   }
 
