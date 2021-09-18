@@ -24,6 +24,7 @@ class B_Status(implicit p: Parameters) extends HuanCunBundle {
   val tag = Input(UInt(tagBits.W))
   val way = Input(UInt(wayBits.W))
   val nestedProbeAckData = Input(Bool())
+  val probeHelperFinish = Input(Bool())
   val probeAckDataThrough = Output(Bool())
 }
 
@@ -44,6 +45,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val io_probeAckDataThrough = IO(Input(Bool()))
   val io_is_nestedReleaseData = IO(Output(Bool()))
   val io_is_nestedProbeAckData = IO(Output(Bool()))
+  val io_probeHelperFinish = IO(Output(Bool()))
 
   val req = Reg(new MSHRRequest)
   val req_valid = RegInit(false.B)
@@ -660,10 +662,24 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   val no_wait = w_probeacklast && w_grantlast && w_releaseack && w_grantack
-  val can_start = Mux(req.fromA && req_acquire,
-    clients_meta(iam).hit || clients_meta(iam).state === INVALID,
-    true.B
+
+  val client_dir_conflict = RegEnable(
+    req.fromA && req_acquire && !clients_meta(iam).hit && clients_meta(iam).state =/= INVALID,
+    io.dirResult.valid
   )
+  val probe_helper_finish = RegInit(false.B)
+  val client_set_match = req.set(clientSetBits - 1, 0) === io_b_status.set(clientSetBits - 1, 0)
+  when(req_valid && io_b_status.probeHelperFinish && client_set_match){
+    probe_helper_finish := true.B
+  }
+  when(req_valid && req.fromA && req_acquire && client_dir_conflict && probe_helper_finish){
+    assert(RegNext(clients_meta(iam).state === INVALID, true.B),
+      s"Error ${cacheParams.name}: meta still conflict when probe helper finish! mshrId: %d",
+      io.id
+    )
+  }
+
+  val can_start = Mux(client_dir_conflict, probe_helper_finish, true.B)
   io.tasks.source_a.valid := !s_acquire && s_release && s_probe && can_start
   io.tasks.source_b.valid := !s_probe && can_start
   io.tasks.source_c.valid := !s_release && can_start && w_probeack && s_writeprobe || !s_probeack && s_writerelease // && w_probeackfirst
@@ -1008,6 +1024,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     releaseDrop := false.B
     probeAckDataThrough := false.B
     probeAckDataDrop := false.B
+    probe_helper_finish := false.B
   }
 
   // Alloc MSHR (alloc has higher priority than release)
@@ -1038,6 +1055,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io_is_nestedReleaseData := req.fromC && !other_clients_hit /*&& isToN(req.param) */ && req_valid
   // B nest A (B -> A)
   io_is_nestedProbeAckData := req.fromB && clients_hit && req_valid
+  io_probeHelperFinish := req.fromB && req.fromProbeHelper && no_schedule && no_wait
 
   // C nest A (A -> C)
   io_c_status.releaseThrough := req_valid &&
