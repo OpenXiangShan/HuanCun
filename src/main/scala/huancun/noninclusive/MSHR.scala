@@ -1043,7 +1043,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io_c_status.releaseThrough := req_valid &&
     io_c_status.set === req.set && io_c_status.tag =/= req.tag &&
     io_c_status.way === self_meta.way && io_c_status.nestedReleaseData &&
-    req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
+    (
+      (req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss) ||
+        (req.fromB && self_meta.hit)
+      )
   // B nest A (A -> B)
   io_b_status.probeAckDataThrough := req_valid &&
     io_b_status.set === req.set && io_c_status.tag =/= req.tag &&
