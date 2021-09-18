@@ -99,7 +99,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // self cache does not have the acquired block, but some other client owns the block
   val transmit_from_other_client = !self_meta.hit && VecInit(clients_meta.zipWithIndex.map {
     case (meta, i) =>
-      i.U =/= iam && meta.hit
+      (req.opcode === Get || i.U =/= iam) && meta.hit
   }).asUInt.orR
 
   val need_block_downwards = RegInit(false.B)
@@ -205,12 +205,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         TIP
       ),
       Mux(!self_meta.hit,
-        Mux(gotT,
-          Mux(req_acquire, TRUNK, TIP),
-          // for prefetch, if client already hit, self meta won't update,
-          // so we don't care new_self_meta.state.
-          // if client miss, we will be BRANCH
-          BRANCH
+        Mux(
+          transmit_from_other_client,
+          highest_perm,
+          Mux(gotT,
+            Mux(req_acquire, TRUNK, TIP),
+            // for prefetch, if client already hit, self meta won't update,
+            // so we don't care new_self_meta.state.
+            // if client miss, we will be BRANCH
+            BRANCH
+          ),
         ),
         MuxLookup(self_meta.state, INVALID, Seq(
           INVALID -> BRANCH,
@@ -230,7 +234,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         when(iam === i.U) {
           state := Mux(req_acquire,
             Mux(req_needT || req_promoteT, TIP, BRANCH),
-            Mux(clients_meta(i).hit, clients_meta(i).state, INVALID)
+            Mux(
+              req.opcode === Get,
+              Mux(clients_meta(i).hit, BRANCH, INVALID),
+              Mux(clients_meta(i).hit, clients_meta(i).state, INVALID)
+            )
           )
         }.otherwise {
           state := Mux(
@@ -240,7 +248,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
               INVALID,
               Mux(clients_meta(i).hit, BRANCH, INVALID)
             ),
-            Mux(clients_meta(i).hit, clients_meta(i).state, INVALID)
+            Mux(
+              req.opcode === Get,
+              Mux(clients_meta(i).hit, BRANCH, INVALID),
+              Mux(clients_meta(i).hit, clients_meta(i).state, INVALID)
+            )
           )
         }
     }
@@ -264,6 +276,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             ),
             clients_meta(i).state
           )
+          m.alias.foreach(_ := clients_meta(i).alias.get)
+        }
+
+        when (req.opcode === Get) {
+          m.state := Mux(clients_meta(i).hit, BRANCH, clients_meta(i).state)
           m.alias.foreach(_ := clients_meta(i).alias.get)
         }
     }
