@@ -319,7 +319,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
-  assert(RegNext(!meta_valid || !req.fromC || self_meta.hit || clients_meta(iam).hit)) // Release should always hit
+  val debug_addr = Cat(req.tag, req.set, 0.U(offsetBits.W))
+  assert(RegNext(!meta_valid || !req.fromC || self_meta.hit || clients_meta(iam).hit),
+    s"${cacheParams.name} Release should always hit: mshrId:[%d] addr: [%x]",
+    io.id, debug_addr
+  ) // Release should always hit
 
   // nested writeback to meta_reg
   val change_self_meta = meta_valid && self_meta.state =/= INVALID &&
@@ -1084,7 +1088,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       )
   // B nest A (A -> B)
   io_b_status.probeAckDataThrough := req_valid &&
-    io_b_status.set === req.set && io_c_status.tag =/= req.tag &&
+    io_b_status.set === req.set && io_b_status.tag =/= req.tag &&
     io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData &&
     req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
