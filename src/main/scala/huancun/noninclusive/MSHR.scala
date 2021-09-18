@@ -93,6 +93,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
       clients_meta.map(m => Mux(m.hit, m.state, INVALID))
   ) // the highest perm of this whole level, including self and clients
+  val highest_perm_except_me = ParallelMax(
+    Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
+      clients_meta.zipWithIndex.map {
+        case (m, i) =>
+          Mux(!(req_acquire && iam === i.U) && m.hit, m.state, INVALID)
+      }
+  )
 
   // self cache does not have the acquired block, but some other client owns the block
   val transmit_from_other_client = !self_meta.hit && VecInit(clients_meta.zipWithIndex.map {
@@ -549,7 +556,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
 
     // need Acquire downwards
-    when(Mux(req_needT, !isT(highest_perm), highest_perm === INVALID)) {
+    when (
+      Mux(
+        req_acquire,
+        Mux(req_needT, !isT(highest_perm_except_me), highest_perm_except_me === INVALID),
+        Mux(req_needT, !isT(highest_perm), highest_perm === INVALID)
+      )
+    ) {
       s_acquire := false.B
       w_grantfirst := false.B
       w_grantlast := false.B
