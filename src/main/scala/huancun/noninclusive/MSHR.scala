@@ -719,12 +719,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.tasks.source_c.valid := !s_release && can_start && w_probeack && s_writeprobe || !s_probeack && s_writerelease // && w_probeackfirst
   io.tasks.source_d.valid := !s_execute && w_grant && s_writeprobe && w_probeacklast // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
-  io.tasks.dir_write.valid := !s_wbselfdir && no_wait
-  io.tasks.tag_write.valid := !s_wbselftag && no_wait
+  io.tasks.dir_write.valid := !s_wbselfdir && no_wait && can_start
+  io.tasks.tag_write.valid := !s_wbselftag && no_wait && can_start
   for(i <- 0 until clientBits){
-    val can_write = clients_meta(i).hit || clients_meta(i).state === INVALID
-    io.tasks.client_dir_write(i).valid := !s_wbclientsdir(i) && no_wait && can_write
-    io.tasks.client_tag_write(i).valid := !s_wbclientstag(i) && no_wait && can_write
+    io.tasks.client_dir_write(i).valid := !s_wbclientsdir(i) && no_wait && can_start
+    io.tasks.client_tag_write(i).valid := !s_wbclientstag(i) && no_wait && can_start
   }
   io.tasks.sink_a.valid := !s_writeput && w_grant && s_writeprobe && w_probeacklast // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.sink_c.valid := (!s_writerelease && (!releaseSave || s_release)) || (!s_writeprobe)
