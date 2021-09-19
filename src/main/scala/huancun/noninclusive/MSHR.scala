@@ -738,10 +738,40 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val ia = io.tasks.sink_a.bits
   val ic = io.tasks.sink_c.bits
 
+  // if we think a client is T,
+  // but client acquire NtoB/NtoT/BtoT
+  // this means T block is missing from client,
+  // then we must grant data
+  val client_dir_error = req_acquire && clients_meta(iam).hit &&
+    (growFrom(req.param) < clients_meta(iam).state)
+  val client_hit_acquire_prem = if(cacheParams.level == 2) {
+    // L2 is special:
+    // we always grant data to L1,
+    // so we can only acquire perm when we hit (have data)
+    false.B
+  } else {
+    clients_hit && !need_block_downwards && !client_dir_error
+  }
   oa.tag := req.tag
   oa.set := req.set
-  oa.opcode := Mux((clients_hit || self_meta.hit) && !need_block_downwards, AcquirePerm, AcquireBlock)
-  oa.param := Mux(req_needT, Mux(clients_hit || self_meta.hit, BtoT, NtoT), NtoB)
+  oa.opcode := Mux(self_meta.hit, AcquirePerm,
+    Mux(client_hit_acquire_prem,
+      AcquirePerm,
+      AcquireBlock
+    )
+  )
+  oa.param := Mux(req_needT,
+    Mux(self_meta.hit,
+      BtoT,
+      Mux(client_hit_acquire_prem,
+        // if we send BtoT, outer cache may not grant data even we are acquiring block,
+        // so we should only acquire BtoT when we are sure to not requiring data
+        BtoT,
+        NtoT
+      )
+    ),
+    NtoB
+  )
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U
 

@@ -58,4 +58,10 @@ object MetaData {
     param === TLHints.PREFETCH_WRITE && !isT(state) ||
     param === TLHints.PREFETCH_READ && state === INVALID
   }
+  def growFrom(param: UInt): UInt = {
+    Mux1H(
+      Seq(TLPermissions.NtoB, TLPermissions.NtoT, TLPermissions.BtoT).map(param === _),
+      Seq(INVALID, INVALID, BRANCH)
+    )
+  }
 }
