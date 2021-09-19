@@ -91,6 +91,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     case meta => meta.hit && isT(meta.state)
   }).asUInt.orR
 
+
+  val req_client_meta = clients_meta(iam)
+  val cache_alias = req_client_meta.hit && req_acquire &&
+    req_client_meta.alias.getOrElse(0.U) =/= req.alias.getOrElse(0.U)
   val highest_perm = ParallelMax(
     Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
       clients_meta.map(m => Mux(m.hit, m.state, INVALID))
@@ -99,7 +103,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
       clients_meta.zipWithIndex.map {
         case (m, i) =>
-          Mux(!(req_acquire && iam === i.U) && m.hit, m.state, INVALID)
+          Mux(req_acquire && iam === i.U && !cache_alias,
+            INVALID,
+            Mux(m.hit, m.state, INVALID)
+          )
       }
   )
 
@@ -530,9 +537,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
 
   val preferCache = req.preferCache
-  val req_client_meta = clients_meta(iam)
-  val cache_alias = req_client_meta.hit && req_acquire &&
-    req_client_meta.alias.getOrElse(0.U) =/= req.alias.getOrElse(0.U)
 
   def set_probe(): Unit = {
     s_probe := false.B
@@ -1024,11 +1028,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(io.resps.sink_c.bits.hasData){
       // TODO: this is slow, optimize this
       s_writeprobe := false.B
-      when(req.fromProbeHelper && probeAckDataThrough){
+      when(req.fromB && req.fromProbeHelper && probeAckDataThrough){
         w_releaseack := false.B // inner ProbeAck -> outer Release
       }
     }.otherwise({
-      when(probeAckDataThrough || !req.fromProbeHelper){
+      when(req.fromB && (probeAckDataThrough || !req.fromProbeHelper)){
         // client didn't response data
         // but we still need to send probeack
         // let sourceC do this
