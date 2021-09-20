@@ -47,9 +47,9 @@ case class CacheParameters(
 case object PrefetchKey extends ControlKey[Bool]("needHint")
 
 case class PrefetchField() extends BundleField(PrefetchKey) {
-  override def data: Bool = Bool()
+  override def data: Bool = Output(Bool())
 
-  override def default(x: Bool): Unit = false.B
+  override def default(x: Bool): Unit = { x := false.B }
 }
 
 case object AliasKey extends ControlKey[UInt]("alias")
@@ -63,8 +63,8 @@ case class AliasField() extends BundleField(AliasKey) {
 case object PreferCacheKey extends ControlKey[Bool](name = "preferCache")
 
 case class PreferCacheField() extends BundleField(PreferCacheKey) {
-  override def data: Bool = Bool()
-  override def default(x: Bool): Unit = true.B
+  override def data: Bool = Output(Bool())
+  override def default(x: Bool): Unit = { x := false.B }
 }
 
 case class HCCacheParameters(
