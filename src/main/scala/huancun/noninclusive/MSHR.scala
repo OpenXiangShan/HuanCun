@@ -719,8 +719,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val can_start = Mux(client_dir_conflict, probe_helper_finish, true.B)
   io.tasks.source_a.valid := !s_acquire && s_release && s_probe && can_start
-  io.tasks.source_b.valid := !s_probe && can_start
-  io.tasks.source_c.valid := !s_release && can_start && w_probeack && s_writeprobe || !s_probeack && s_writerelease // && w_probeackfirst
+  io.tasks.source_b.valid := !s_probe
+  io.tasks.source_c.valid := !s_release && w_probeack && s_writeprobe || !s_probeack && s_writerelease // && w_probeackfirst
   io.tasks.source_d.valid := !s_execute && w_grant && s_writeprobe && w_probeacklast // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
   io.tasks.dir_write.valid := !s_wbselfdir && no_wait && can_start
@@ -1113,10 +1113,14 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.will_save_data := req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
   io.status.bits.blockB := true.B
   // B nest A
-  io.status.bits.nestB := meta_valid && w_releaseack && w_probeacklast && !w_grantfirst
+  io.status.bits.nestB := meta_valid &&
+    (w_releaseack && w_probeacklast && !w_grantfirst) ||
+    (client_dir_conflict && !probe_helper_finish)
   io.status.bits.blockC := true.B
   // C nest B | C nest A
-  io.status.bits.nestC := meta_valid && w_releaseack && (!w_probeackfirst || !w_grantfirst)
+  io.status.bits.nestC := meta_valid &&
+    (w_releaseack && !w_probeackfirst || !w_grantfirst) ||
+    (client_dir_conflict && !probe_helper_finish)
 
   // C nest A (C -> A)
   io_is_nestedReleaseData := req.fromC && !other_clients_hit /*&& isToN(req.param) */ && req_valid
