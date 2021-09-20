@@ -543,8 +543,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_probeackfirst := false.B
     w_probeacklast := false.B
     w_probeack := false.B
-    s_wbselfdir := false.B
-    when (!self_meta.hit) { s_wbselftag := false.B }
+    when(!self_meta.hit){
+      s_wbselfdir := false.B
+      s_wbselftag := false.B
+    }
   }
   val acquirePermMiss = req.opcode === AcquirePerm && !self_meta.hit
   def a_schedule(): Unit = {
@@ -720,7 +722,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val can_start = Mux(client_dir_conflict, probe_helper_finish, true.B)
   io.tasks.source_a.valid := !s_acquire && s_release && s_probe && can_start
   io.tasks.source_b.valid := !s_probe
-  io.tasks.source_c.valid := !s_release && w_probeack && s_writeprobe || !s_probeack && s_writerelease // && w_probeackfirst
+  io.tasks.source_c.valid := !s_release && w_probeack && s_writeprobe || !s_probeack && s_writerelease && w_probeack
   io.tasks.source_d.valid := !s_execute && w_grant && s_writeprobe && w_probeacklast // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
   io.tasks.dir_write.valid := !s_wbselfdir && no_wait && can_start
@@ -1059,6 +1061,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grant := false.B
       s_grantack := false.B
       need_block_downwards := true.B
+      // we assume clients will ack data for us at first,
+      // if they only ack perm, we should change our schedule
+      when(!(preferCache || self_meta.hit)) {
+        // if we don't save grant data, we should not write dir/tag
+        s_wbselftag := true.B
+        s_wbselfdir := true.B
+      }
     }
   }
   when(io.resps.sink_d.valid) {
