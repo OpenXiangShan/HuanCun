@@ -1122,15 +1122,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.will_save_data := req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
   io.status.bits.blockB := true.B
   // B nest A
+  // if we are waitting for probeack,
+  // we should not let B req in (avoid multi-probe to client)
   io.status.bits.nestB := meta_valid &&
-    (w_releaseack && w_probeacklast && !w_grantfirst) ||
-    (client_dir_conflict && !probe_helper_finish)
+    (w_releaseack && w_probeacklast) &&
+    (!w_grantfirst || (client_dir_conflict && !probe_helper_finish))
   io.status.bits.blockC := true.B
   // C nest B | C nest A
   io.status.bits.nestC := meta_valid &&
-    (w_releaseack && !w_probeackfirst || !w_grantfirst) ||
-    (client_dir_conflict && !probe_helper_finish)
-
+    w_releaseack &&
+    (
+      !w_probeackfirst || !w_grantfirst || (client_dir_conflict && !probe_helper_finish)
+    )
   // C nest A (C -> A)
   io_is_nestedReleaseData := req.fromC && !other_clients_hit /*&& isToN(req.param) */ && req_valid
   // B nest A (B -> A)
