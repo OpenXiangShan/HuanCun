@@ -145,7 +145,7 @@ class Directory(implicit p: Parameters)
         this.reset
       )
     }
-    DirectoryLogger(cacheParams.name, TypeId.self_tag)(
+    DirectoryLogger(cacheParams.name, TypeId.client_tag)(
       cTag.bits.set,
       cTag.bits.way,
       cTag.bits.tag,
