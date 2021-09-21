@@ -193,10 +193,25 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   def onBReq(): Unit = {
-    // Probe
-    //    new_self_meta.dirty := Mux(self_meta.hit, req.param === toT && self_meta.dirty || probe_dirty, self_meta.dirty)
+    /*
+      if this request is from probe helper, the req param must be toN,
+      but self state should not change to INVALID
+      --------------------------
+      self state   |  after probe
+      --------------------------
+        TIP       ->    TIP
+        TRUNK     ->    TIP
+        BRANCH    ->    BRANCH
+      --------------------------
+    */
     new_self_meta.dirty := !self_meta.hit && self_meta.dirty
-    new_self_meta.state := Mux(self_meta.hit, probe_next_state(self_meta.state, req.param), self_meta.state)
+    new_self_meta.state := Mux(self_meta.hit,
+      Mux(req.fromProbeHelper,
+        Mux(isT(self_meta.state), TIP, BRANCH),
+        probe_next_state(self_meta.state, req.param)
+      ),
+      self_meta.state
+    )
     new_self_meta.clientStates.zipWithIndex.foreach {
       case (state, i) =>
         state := Mux(self_meta.hit, probe_next_state(self_meta.clientStates(i), req.param), self_meta.clientStates(i))
