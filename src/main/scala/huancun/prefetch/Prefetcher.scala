@@ -94,7 +94,6 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       pftQueue.io.enq <> pft.io.req
       pftQueue.io.deq.ready := io.req.ready
       io.req.valid := pftQueue.io.deq.valid
-      io.req.bits := DontCare
       io.req.bits.opcode := TLMessages.Hint
       io.req.bits.param := Mux(pftQueue.io.deq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
       io.req.bits.size := log2Up(blockBytes).U
@@ -106,6 +105,9 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       io.req.bits.needHint.foreach(_ := false.B)
       io.req.bits.isPrefetch.foreach(_ := true.B)
       io.req.bits.alias.foreach(_ := pftQueue.io.deq.bits.alias.get)
+      io.req.bits.preferCache := true.B
+      io.req.bits.fromProbeHelper := false.B
+      io.req.bits.bufIdx := DontCare
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }
