@@ -61,8 +61,6 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   /* Select one request from a_req/b_req/c_req */
   val request = Wire(ValidIO(new MSHRRequest()))
-  request.valid := io.c_req.valid || io.b_req.valid || io.a_req.valid
-  request.bits := Mux(io.c_req.valid, io.c_req.bits, Mux(io.b_req.valid, io.b_req.bits, io.a_req.bits))
 
   /* Whether selected request can be accepted */
 
@@ -111,12 +109,19 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val mshrFree = Cat(abc_mshr_status.map(s => !s.valid)).orR()
 
   val can_accept_c = (mshrFree && !conflict_c) || nestC
-  val can_accept_b = ((mshrFree && !conflict_b) || nestB) && !io.c_req.valid
-  val can_accept_a = mshrFree && !conflict_a && !io.c_req.valid && !io.b_req.valid
-
   val accept_c = io.c_req.valid && can_accept_c
+
+  val can_accept_b = ((mshrFree && !conflict_b) || nestB) && !io.c_req.valid
   val accept_b = io.b_req.valid && can_accept_b
+
+  val can_accept_a = mshrFree && !conflict_a && !io.c_req.valid && !io.b_req.valid
   val accept_a = io.a_req.valid && can_accept_a
+
+  request.valid := io.c_req.valid || io.b_req.valid || io.a_req.valid
+  request.bits := Mux(io.c_req.valid,
+    io.c_req.bits,
+    Mux(io.b_req.valid, io.b_req.bits, io.a_req.bits)
+  )
 
   /* Provide signals for outer components*/
   io.c_req.ready := dirRead.ready && can_accept_c
@@ -141,9 +146,9 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val nestC_valid = io.c_req.valid && nestC
 
   bc_mshr_alloc.valid := nestB_valid && dirRead.ready
-  bc_mshr_alloc.bits := request.bits
+  bc_mshr_alloc.bits := io.b_req.bits
   c_mshr_alloc.valid := nestC_valid && dirRead.ready
-  c_mshr_alloc.bits := request.bits
+  c_mshr_alloc.bits := io.c_req.bits
 
   dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR() && dirRead.ready
   dirRead.bits.source := request.bits.source

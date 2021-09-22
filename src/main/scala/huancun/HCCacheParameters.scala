@@ -47,23 +47,24 @@ case class CacheParameters(
 case object PrefetchKey extends ControlKey[Bool](name ="needHint")
 
 case class PrefetchField() extends BundleField(PrefetchKey) {
-  override def data: Bool = Bool()
-  override def default(x: Bool): Unit = false.B
+  override def data: Bool = Output(Bool())
+
+  override def default(x: Bool): Unit = { x := false.B }
 }
 
 case object AliasKey extends ControlKey[UInt]("alias")
 case class AliasField() extends BundleField(AliasKey) {
-  override def data: UInt = UInt()
+  override def data: UInt = Output(UInt(2.W))
 
-  override def default(x: UInt): Unit = 0.U
+  override def default(x: UInt): Unit = {x := 0.U(2.W)}
 }
 // try to keep data in cache is true
 // now it only works for non-inclusive cache (ignored in inclusive cache)
 case object PreferCacheKey extends ControlKey[Bool](name = "preferCache")
 
 case class PreferCacheField() extends BundleField(PreferCacheKey) {
-  override def data: Bool = Bool()
-  override def default(x: Bool): Unit = true.B
+  override def data: Bool = Output(Bool())
+  override def default(x: Bool): Unit = { x := false.B }
 }
 
 // indicate whether this block is dirty or not (only used in handle Release/ReleaseData)
@@ -71,8 +72,8 @@ case class PreferCacheField() extends BundleField(PreferCacheKey) {
 case object DirtyKey extends ControlKey[Bool](name = "blockisdirty")
 
 case class DirtyField() extends BundleField(DirtyKey) {
-  override def data: Bool = Bool()
-  override def default(x: Bool): Unit = true.B
+  override def data: Bool = Output(Bool())
+  override def default(x: Bool): Unit = { x := true.B }
 }
 
 case class HCCacheParameters(

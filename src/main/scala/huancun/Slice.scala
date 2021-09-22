@@ -147,11 +147,29 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io_b_status.way := bc_mshr.io.status.bits.way
       mshr.io_b_status.nestedProbeAckData :=
         bc_mshr.io.status.valid && non_inclusive(bc_mshr).io_is_nestedProbeAckData
+      mshr.io_b_status.probeHelperFinish :=
+        bc_mshr.io.status.valid && non_inclusive(bc_mshr).io_probeHelperFinish
       mshr.io_releaseThrough := false.B
       mshr.io_probeAckDataThrough := false.B
     case _: inclusive.MSHR =>
   }
-  Seq(bc_mshr, c_mshr).foreach {
+
+  bc_mshr match {
+    case mshr: noninclusive.MSHR =>
+      mshr.io_c_status.set := c_mshr.io.status.bits.set
+      mshr.io_c_status.tag := c_mshr.io.status.bits.tag
+      mshr.io_c_status.way := c_mshr.io.status.bits.way
+      mshr.io_c_status.nestedReleaseData :=
+        c_mshr.io.status.valid && non_inclusive(c_mshr).io_is_nestedReleaseData
+      mshr.io_b_status.set := 0.U
+      mshr.io_b_status.tag := 0.U
+      mshr.io_b_status.way := 0.U
+      mshr.io_b_status.nestedProbeAckData := false.B
+      mshr.io_b_status.probeHelperFinish := false.B
+  }
+
+  c_mshr match
+  {
     case mshr: noninclusive.MSHR =>
       mshr.io_c_status.set := 0.U
       mshr.io_c_status.tag := 0.U
@@ -161,6 +179,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io_b_status.tag := 0.U
       mshr.io_b_status.way := 0.U
       mshr.io_b_status.nestedProbeAckData := false.B
+      mshr.io_b_status.probeHelperFinish := false.B
     case _: inclusive.MSHR =>
   }
 
@@ -255,9 +274,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     case mshr: noninclusive.MSHR =>
       mshr.io_releaseThrough := false.B
       mshr.io_probeAckDataThrough := Cat(
-        abc_mshr
-          .map(_.asInstanceOf[noninclusive.MSHR].io_b_status.probeAckDataThrough)
-      ).orR
+        abc_mshr.map(non_inclusive).map(_.io_b_status.probeAckDataThrough)
+      ).orR()
     case _ => // skip
   }
 
@@ -273,8 +291,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     case mshr: noninclusive.MSHR =>
       mshr.io_probeAckDataThrough := false.B
       mshr.io_releaseThrough := Cat(
-        abc_mshr.map(_.asInstanceOf[noninclusive.MSHR].io_c_status.releaseThrough)
-      ).orR
+        (abc_mshr :+ bc_mshr).map(non_inclusive).map(_.io_c_status.releaseThrough)
+      ).orR()
     case _: inclusive.MSHR =>
   }
 
@@ -303,7 +321,19 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
-  directory.io.dirWReqs.zip(ms.map(_.io.tasks.dir_write)).foreach(w => w._1 <> w._2)
+  def block_b_c[T <: Data](sinks: Seq[DecoupledIO[T]], sources: Seq[DecoupledIO[T]]): Unit = {
+    val c_src = sources.last
+    val b_src = sources.init.last
+    val abc_src = sources.init.init
+    for ((src, sink) <- abc_src.zip(sinks.dropRight(2))){
+      sink <> src
+    }
+    block_decoupled(sinks.init.last, b_src, select_c)
+    sinks.last <> c_src
+  }
+
+  // don't allow b write back when c is valid to simplify 'NestedWriteBack'
+  block_b_c(directory.io.dirWReqs, ms.map(_.io.tasks.dir_write))
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
@@ -319,7 +349,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
       for ((dirW, idx) <- dir.io.clientDirWReqs.zipWithIndex) {
-        dirW <> ms.map(_.io.tasks.client_dir_write(idx))
+        block_b_c(dirW, ms.map(_.io.tasks.client_dir_write(idx)))
       }
       for ((tagW, idx) <- dir.io.clientTagWreq.zipWithIndex) {
         arbTasks(

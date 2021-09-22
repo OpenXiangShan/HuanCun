@@ -78,6 +78,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     s1_bypass_hit_wire
   )
   val s1_bypass_data = io.bypass_read.buffer_data
+  val data_from_refill_buffer = Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire)
 
   val s1_queue = Module(new Queue(new DSData, 2, flow = false, pipe = false))
   s1_queue.io.enq.valid := s1_bypass_hit
@@ -99,7 +100,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     busy := true.B
     s1_bypass_hit_reg := s1_bypass_hit_wire
   }
-  when(io.bs_raddr.fire() || s1_bypass_hit) {
+  when(Mux(data_from_refill_buffer, s1_bypass_hit, io.bs_raddr.fire())){
     s1_block_r := true.B
   }
   when(s1_valid && s2_ready) {
@@ -112,7 +113,13 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     }
   }
   io.task.ready := !busy
-  s1_valid := (busy || io.task.valid) && (!s1_valid_r || s1_bypass_hit || io.bs_raddr.ready)
+  s1_valid := (busy || io.task.valid) && (
+    !s1_valid_r ||
+      Mux(data_from_refill_buffer,
+        s1_bypass_hit,                    // wait data from refill buffer
+        io.bs_raddr.ready                 // wait data from bankedstore
+      )
+    )
 
   // stage2
   val s2_latch = s1_valid && s2_ready
@@ -127,7 +134,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s2_d = Wire(io.d.cloneType)
 
   s1_queue.io.deq.ready := s2_full && s2_bypass_hit && s2_d.ready
-  s2_d.valid := s2_full && (s2_bypass_hit || !s2_needData)
+  s2_d.valid := s2_full && ((s2_bypass_hit && s1_queue.io.deq.valid) || !s2_needData)
   s2_d.bits.opcode := s2_req.opcode
   s2_d.bits.param := Mux(s2_releaseAck, 0.U, s2_req.param)
   s2_d.bits.sink := s2_req.sinkId
