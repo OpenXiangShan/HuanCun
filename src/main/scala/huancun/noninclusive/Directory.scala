@@ -3,9 +3,10 @@ package huancun.noninclusive
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import huancun.MetaData._
 import huancun._
 import huancun.debug.{DirectoryLogger, TypeId}
-import huancun.utils.{GTimer}
+import huancun.utils._
 
 trait HasClientInfo { this: HasHuanCunParameters =>
   // assume all clients have same params
@@ -279,4 +280,13 @@ class Directory(implicit p: Parameters)
     }
   }
 
+  assert(dirReadPorts == 1)
+  val resp = io.results.head
+  XSPerfAccumulate(cacheParams, "selfdir_req", resp.valid)
+  XSPerfAccumulate(cacheParams, "selfdir_hit", resp.valid && resp.bits.self.hit)
+  XSPerfAccumulate(cacheParams, "selfdir_dirty", resp.valid && resp.bits.self.dirty)
+  XSPerfAccumulate(cacheParams, "selfdir_TIP", resp.valid && resp.bits.self.state === TIP)
+  XSPerfAccumulate(cacheParams, "selfdir_BRANCH", resp.valid && resp.bits.self.state === BRANCH)
+  XSPerfAccumulate(cacheParams, "selfdir_TRUNK", resp.valid && resp.bits.self.state === TRUNK)
+  XSPerfAccumulate(cacheParams, "selfdir_INVALID", resp.valid && resp.bits.self.state === INVALID)
 }
