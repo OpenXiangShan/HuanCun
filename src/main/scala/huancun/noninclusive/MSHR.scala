@@ -628,6 +628,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   when(io.dirResult.valid) {
 
+    // If client miss, an invalid dir entry must be assigned
+    clients_meta.foreach{
+      m => assert(m.hit || m.state === INVALID)
+    }
     reset_all_flags()
 
     when(req.fromC) {
