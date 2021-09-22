@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink.{TLMessages, TLPermissions}
 import huancun.{HuanCunModule, MSHRRequest, MetaData}
+import huancun.utils.XSPerfAccumulate
 
 class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   extends HuanCunModule with HasClientInfo
@@ -53,4 +54,6 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   when(queue.io.enq.valid){ assert(queue.io.enq.ready) }
 
   io.probe <> queue.io.deq
+
+  XSPerfAccumulate(cacheParams, "client_dir_conflict", queue.io.enq.fire())
 }
