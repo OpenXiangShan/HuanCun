@@ -117,6 +117,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }).asUInt.orR
 
   val need_block_downwards = RegInit(false.B)
+  val inv_self_dir = RegInit(false.B)
 
   // When replacing a block in data array, it is not always necessary to send Release,
   // but only when state perm > clientStates' perm or replacing a dirty block
@@ -258,6 +259,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         ))
       )
     )
+    when(inv_self_dir){
+      new_self_meta.state := INVALID
+    }
     new_self_meta.clientStates.zipWithIndex.foreach {
       case (state, i) =>
         when(iam === i.U) {
@@ -479,6 +483,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probes_done := 0.U
     bad_grant := false.B
     need_block_downwards := false.B
+    inv_self_dir := false.B
     nested_c_hit_reg := false.B
 
   }
@@ -1081,9 +1086,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       // we assume clients will ack data for us at first,
       // if they only ack perm, we should change our schedule
       when(!(preferCache || self_meta.hit)) {
-        // if we don't save grant data, we should not write dir/tag
+        // if we don't save grant data, we should not write tag
         s_wbselftag := true.B
-        s_wbselfdir := true.B
+        // we may have released the original block at first,
+        // so we need to invalidate that block
+        inv_self_dir := true.B
       }
     }
   }
