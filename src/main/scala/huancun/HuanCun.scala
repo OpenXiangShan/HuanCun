@@ -24,7 +24,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util.UIntToOH1
+import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -189,10 +189,17 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case _ if sizeBytes > 1024        => (sizeBytes / 1024) + "KB"
       case _                            => "B"
     }
+    val banks = node.in.size
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
-    println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr) $prefetch ======")
-    aliasBitsOpt.foreach(bits => println(s"aliasBits: $bits"))
+    println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) $prefetch ======")
+    def print_bundle_fields(fs: Seq[BundleFieldBase], prefix: String) = {
+      if(fs.nonEmpty){
+        println(fs.map{f => s"$prefix/${f.key.name}: (${f.data.getWidth}-bit)"}.mkString("\n"))
+      }
+    }
+    print_bundle_fields(node.in.head._2.bundle.requestFields, "usr")
+    print_bundle_fields(node.in.head._2.bundle.echoFields, "echo")
     node.in.zip(node.out).foreach {
       case ((in, edgeIn), (out, edgeOut)) =>
         require(in.params.dataBits == out.params.dataBits)

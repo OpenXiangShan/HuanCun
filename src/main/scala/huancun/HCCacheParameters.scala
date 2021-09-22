@@ -33,15 +33,12 @@ case class CacheParameters(
   sets:          Int,
   ways:          Int,
   blockBytes:    Int = 64,
-  pageBytes:     Int = 4096,
-  physicalIndex: Boolean = true,
+  aliasBitsOpt:  Option[Int] = None,
   inner:         Seq[CacheParameters] = Nil) {
   val capacity = sets * ways * blockBytes
-  val pageOffsetBits = log2Ceil(pageBytes)
   val setBits = log2Ceil(sets)
   val offsetBits = log2Ceil(blockBytes)
-  val needResolveAlias = !physicalIndex && (setBits + offsetBits) > pageOffsetBits
-  val aliasBitsOpt = if (needResolveAlias) Some(setBits + offsetBits - pageOffsetBits) else None
+  val needResolveAlias = aliasBitsOpt.nonEmpty
 }
 
 case object PrefetchKey extends ControlKey[Bool]("needHint")
@@ -53,10 +50,10 @@ case class PrefetchField() extends BundleField(PrefetchKey) {
 }
 
 case object AliasKey extends ControlKey[UInt]("alias")
-case class AliasField() extends BundleField(AliasKey) {
-  override def data: UInt = Output(UInt(2.W))
+case class AliasField(width: Int) extends BundleField(AliasKey) {
+  override def data: UInt = Output(UInt(width.W))
 
-  override def default(x: UInt): Unit = {x := 0.U(2.W)}
+  override def default(x: UInt): Unit = {x := 0.U(width.W)}
 }
 // try to keep data in cache is true
 // now it only works for non-inclusive cache (ignored in inclusive cahce)
@@ -102,7 +99,6 @@ case class HCCacheParameters(
     sets = sets,
     ways = ways,
     blockBytes = blockBytes,
-    pageBytes = pageBytes,
     inner = clientCaches
   )
 }
