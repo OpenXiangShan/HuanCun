@@ -145,12 +145,27 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           req.param === PREFETCH_READ && meta.hit && !self_meta.hit && !clients_meta(iam).hit)
   })
   val prefetch_miss_need_probe = prefetch_miss_need_probe_vec.asUInt.orR
-  val prefetch_miss = prefetch_miss_need_acquire || prefetch_miss_need_probe
-  val prefetch_need_data = !self_meta.hit
+  val prefetch_miss = req.opcode === Hint && (prefetch_miss_need_acquire || prefetch_miss_need_probe)
+  val prefetch_need_data = prefetch_miss && !self_meta.hit
 
-//  assert(RegNext(!req_valid || !meta_valid || !req.fromA || !req_acquire ||
-//    clients_meta(iam).hit || clients_meta(iam).state === INVALID
-//  )) // If assert fails, we need more redundant ways
+  // 1 cycle ahead its' corresponding register defs
+  // these signals are used to decide mshr actions when dirResult.valid on c_schedule
+  val will_release_through = WireInit(false.B)
+  val will_drop_release = WireInit(false.B)
+  val will_save_release = WireInit(true.B)
+
+  val releaseThrough = RegInit(false.B)
+  val releaseDrop = RegInit(false.B)
+  val releaseSave = !releaseThrough && !releaseDrop
+
+  // these signals are used to decide mshr actions when dirResult.valid on b_schedule
+  val will_probeack_through = WireInit(false.B)
+  val will_drop_probeack = WireInit(false.B)
+  val will_save_probeack = WireInit(true.B)
+
+  val probeAckDataThrough = RegInit(false.B)
+  val probeAckDataDrop = RegInit(false.B)
+  val probeAckDataSave = !probeAckDataThrough && !probeAckDataDrop
 
   def probe_next_state(state: UInt, param: UInt): UInt = Mux(
     isT(state) && param === toT,
@@ -205,9 +220,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         BRANCH    ->    BRANCH
       --------------------------
     */
-    new_self_meta.dirty := !self_meta.hit && self_meta.dirty
+    new_self_meta.dirty := self_meta.hit && self_meta.dirty || probe_dirty
     new_self_meta.state := Mux(self_meta.hit,
-      Mux(req.fromProbeHelper,
+      Mux(req.fromProbeHelper && !probeAckDataThrough,
         Mux(isT(self_meta.state), TIP, BRANCH),
         probe_next_state(self_meta.state, req.param)
       ),
@@ -332,7 +347,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   new_self_dir.dirty := new_self_meta.dirty
   new_self_dir.state := new_self_meta.state
   new_self_dir.clientStates := new_self_meta.clientStates
-  new_self_dir.prefetch.foreach(_ := self_meta.prefetch.get || prefetch_miss && req.opcode === Hint)
+  new_self_dir.prefetch.foreach(_ := self_meta.prefetch.get || prefetch_miss)
   new_clients_dir.zip(new_clients_meta).foreach {
     case (dir, meta) =>
       dir.state := meta.state
@@ -432,24 +447,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_releaseack = RegInit(true.B)
   val w_grantack = RegInit(true.B)
 
-  // 1 cycle ahead its' corresponding register defs
-  // these signals are used to decide mshr actions when dirResult.valid on c_schedule
-  val will_release_through = WireInit(false.B)
-  val will_drop_release = WireInit(false.B)
-  val will_save_release = WireInit(true.B)
-
-  val releaseThrough = RegInit(false.B)
-  val releaseDrop = RegInit(false.B)
-  val releaseSave = !releaseThrough && !releaseDrop
-
-  // these signals are used to decide mshr actions when dirResult.valid on b_schedule
-  val will_probeack_through = WireInit(false.B)
-  val will_drop_probeack = WireInit(false.B)
-  val will_save_probeack = WireInit(true.B)
-
-  val probeAckDataThrough = RegInit(false.B)
-  val probeAckDataDrop = RegInit(false.B)
-  val probeAckDataSave = !probeAckDataThrough && !probeAckDataDrop
 
   def reset_all_flags(): Unit = {
     // Default value
@@ -577,7 +574,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       (
         (preferCache && (req.opcode === AcquireBlock || req.opcode === Get)) ||
           (
-            req.opcode === Hint ||
+            prefetch_need_data ||
               transmit_from_other_client || // inner probe -> replace -> release
               cache_alias                   // inner probe -> replace -> release
             )
@@ -651,13 +648,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_wbselfdir := false.B
     }
     // need to write self tag
-    val prefetchMiss = req.opcode === Hint && Mux(req.param === PREFETCH_WRITE,
-      !clients_meta(iam).hit || !isT(clients_meta(iam).state),
-      !clients_meta(iam).hit
-    )
     when(
       !self_meta.hit && preferCache &&
-        (req.opcode === Get || req.opcode === AcquireBlock || prefetchMiss)
+        (req.opcode === Get || req.opcode === AcquireBlock || prefetch_need_data)
     ) {
       s_wbselftag := false.B
     }
@@ -776,7 +769,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // so we can only acquire perm when we hit (have data)
     false.B
   } else {
-    clients_hit && !need_block_downwards && !client_dir_error
+    // for Hint reqs, we can only acquire perm when we have data
+    clients_hit && !need_block_downwards && !client_dir_error && req.opcode =/= Hint
   }
   oa.tag := req.tag
   oa.set := req.set
