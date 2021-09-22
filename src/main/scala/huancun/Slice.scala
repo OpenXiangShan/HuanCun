@@ -31,6 +31,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
     val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
+    val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
   })
 
   // Inner channels
@@ -89,7 +90,6 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   dataStorage.io.sinkC_wdata <> sinkC.io.bs_wdata
 
   val mshrAlloc = Module(new MSHRAlloc)
-  val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher))
   val probeHelperOpt = if(cacheParams.inclusive) None else Some(Module(new ProbeHelper))
 
   val a_req = Wire(DecoupledIO(new MSHRRequest()))
@@ -104,10 +104,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     b_arb.io.in(1) <> sinkB.io.alloc
     mshrAlloc.io.b_req <> b_arb.io.out
   }
-  if(prefetcher.nonEmpty){
+  if(prefetchOpt.nonEmpty){
     val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
     alloc_A_arb.io.in(0) <> a_req
-    alloc_A_arb.io.in(1) <> prefetcher.get.io.req
+    alloc_A_arb.io.in(1) <> io.prefetch.get.req
     mshrAlloc.io.a_req <> alloc_A_arb.io.out
   } else {
     mshrAlloc.io.a_req <> a_req
@@ -405,16 +405,16 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
-  prefetcher.foreach { pft =>
+  io.prefetch.foreach { pft =>
 
     // connect abc mshrs to prefetcher
     arbTasks(
-      pft.io.train,
+      pft.train,
       abc_mshr.map(_.io.tasks.prefetch_train.get),
       Some("prefetchTrain")
     )
     arbTasks(
-      pft.io.resp,
+      pft.resp,
       abc_mshr.map(_.io.tasks.prefetch_resp.get),
       Some("prefetchResp")
     )

@@ -25,6 +25,7 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
+import huancun.prefetch._
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -190,6 +191,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case _                            => "B"
     }
     val banks = node.in.size
+    val bankBits = log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
     println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) $prefetch ======")
@@ -200,8 +202,35 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
     print_bundle_fields(node.in.head._2.bundle.requestFields, "usr")
     print_bundle_fields(node.in.head._2.bundle.echoFields, "echo")
-    node.in.zip(node.out).foreach {
-      case ((in, edgeIn), (out, edgeOut)) =>
+
+    val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(p.alterPartial {
+      case EdgeInKey => node.in.head._2
+      case EdgeOutKey => node.out.head._2
+    })))
+
+    def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
+      val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), in.size))
+      if (name.nonEmpty) {
+        arbiter.suggestName(s"${name.get}_arb")
+      }
+      for ((arb, req) <- arbiter.io.in.zip(in)) {
+        arb <> req
+      }
+      out <> arbiter.io.out
+    }
+    val prefetchTrains = Wire(Vec(banks, DecoupledIO(new PrefetchTrain)))
+    val prefetchResps = Wire(Vec(banks, DecoupledIO(new PrefetchResp)))
+    val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
+    prefetchTrains <> DontCare
+    prefetchResps <> DontCare
+    prefetcher.foreach { pft =>
+      arbTasks(pft.io.train, prefetchTrains, Some("prefetch_train"))
+      pft.io.req.ready := Cat(prefetchReqsReady).orR
+      arbTasks(pft.io.resp, prefetchResps, Some("prefetch_resp"))
+    }
+
+    node.in.zip(node.out).zipWithIndex.foreach {
+      case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
         val slice = Module(new Slice()(p.alterPartial {
           case EdgeInKey  => edgeIn
@@ -209,6 +238,15 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         }))
         slice.io.in <> in
         out <> slice.io.out
+
+        slice.io.prefetch.zip(prefetcher).foreach {
+          case (s, p) =>
+            prefetchTrains(i) <> s.train
+            s.req.valid := p.io.req.valid && p.io.req.bits.set(bankBits - 1, 0) === i.U
+            s.req.bits := p.io.req.bits
+            prefetchReqsReady(i) := s.req.ready && p.io.req.bits.set(bankBits - 1, 0) === i.U
+            prefetchResps(i) <> s.resp
+        }
     }
     node.edges.in.headOption.foreach { n =>
       n.client.clients.zipWithIndex.foreach {

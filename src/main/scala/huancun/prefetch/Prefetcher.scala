@@ -38,7 +38,7 @@ class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
 
 class PrefetchIO(implicit p: Parameters) extends PrefetchBundle {
   val train = Flipped(DecoupledIO(new PrefetchTrain))
-  val req = DecoupledIO(new PrefetchReq)
+  val req = DecoupledIO(new MSHRRequest)
   val resp = Flipped(DecoupledIO(new PrefetchResp))
 }
 
@@ -79,11 +79,7 @@ class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
 }
 
 class Prefetcher(implicit p: Parameters) extends PrefetchModule {
-  val io = IO(new Bundle {
-    val train = Flipped(DecoupledIO(new PrefetchTrain))
-    val req = DecoupledIO(new MSHRRequest)
-    val resp = Flipped(DecoupledIO(new PrefetchResp))
-  })
+  val io = IO(new PrefetchIO)
 
   prefetchOpt.get match {
     case bop: BOPParameters =>
