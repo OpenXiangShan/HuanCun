@@ -225,6 +225,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
 
       when(req.opcode(0)) { // has data
         s_writerelease := false.B
+        // when (req.opcode === ReleaseData) {
+        //  assert(req.dirty === true.B) // for inclusive data, we assume releaseData as dirty
+        // }
       }
 
     }.elsewhen(req.fromB) {
@@ -365,7 +368,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   ob.param := Mux(!s_rprobe, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
   ob.clients := meta.clients & ~probe_exclude // TODO: Provides all clients needing probe
 
-  oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), Cat(Release(2, 1), 1.U(1.W)))
+  oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), meta.dirty.asUInt))
   oc.tag := meta.tag
   oc.set := req.set
   oc.param := Mux(
@@ -389,6 +392,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   )
   oc.source := io.id
   oc.way := meta.way
+  oc.dirty := meta.dirty
 
   od.sinkId := io.id
   od.sourceId := req.source
@@ -414,6 +418,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   od.way := meta.way
   od.off := req.off
   od.denied := bad_grant
+  od.dirty := false.B // TODO
 
   oe.sink := sink
 
@@ -436,6 +441,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   ic.save := true.B // inclusive always save
   ic.drop := false.B
   ic.release := false.B
+  ic.dirty := false.B // ignored
 
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := meta.way

@@ -77,6 +77,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val req_acquire = req.opcode === AcquireBlock || req.opcode === AcquirePerm
   val req_needT = needT(req.opcode, req.param)
   val gotT = RegInit(false.B)
+  val gotDirty = RegInit(false.B)
   val meta_no_clients = Cat(self_meta.clientStates.map(_ === INVALID)).andR()
   val req_promoteT = req_acquire && Mux(self_meta.hit, meta_no_clients && self_meta.state === TIP, gotT)
   val probe_dirty = RegInit(false.B) // probe a block that is dirty
@@ -179,7 +180,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   def onCReq(): Unit = {
     // Release / ReleaseData
-    new_self_meta.dirty := self_meta.hit && self_meta.dirty || req.opcode(0) && isParamFromT(req.param)
+    new_self_meta.dirty := self_meta.hit && self_meta.dirty || req.dirty && isParamFromT(req.param)
     new_self_meta.state := MuxLookup(
       req.param,
       self_meta.state,
@@ -242,7 +243,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   def onAReq(): Unit = {
     // reqs: Acquire / Intent / Put / Get / Atomics
-    new_self_meta.dirty := self_meta.hit && self_meta.dirty || probe_dirty || !req.opcode(2)
+    // new_self_meta.dirty := self_meta.hit && self_meta.dirty || probe_dirty || !req.opcode(2)
+    new_self_meta.dirty := Mux(
+      req_acquire,
+      Mux(req_needT,
+        false.B,
+        Mux(self_meta.hit,
+          Mux(req_promoteT, false.B, self_meta.dirty),
+          gotDirty
+        )
+      ),
+      gotDirty // Hint
+    )
     new_self_meta.state := Mux(
       req_needT,
       Mux(req_acquire,
@@ -866,7 +878,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       (probe_dirty || self_meta.hit && self_meta.dirty ||
         req.needProbeAckData.getOrElse(false.B)) && highest_perm =/= INVALID
     ),
-    Cat(Release(2, 1), self_meta.dirty.asUInt)
+    if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), self_meta.dirty.asUInt)
   )
   oc.tag := Mux(req.fromB, req.tag, self_meta.tag)
   oc.set := req.set
@@ -893,6 +905,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
   oc.source := io.id
   oc.way := self_meta.way
+  oc.dirty := Mux(req.fromB, probe_dirty || self_meta.hit && self_meta.dirty, self_meta.dirty)
 
   od.sinkId := io.id
   od.sourceId := req.source
@@ -920,6 +933,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   od.way := self_meta.way
   od.off := req.off
   od.denied := bad_grant
+  od.dirty := Mux(self_meta.hit, self_meta.dirty, gotDirty)
 
   oe.sink := sink
 
@@ -960,6 +974,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   ic.save := Mux(s_writeprobe, releaseSave, probeAckDataSave)
   ic.drop := Mux(s_writeprobe, releaseDrop, probeAckDataDrop)
   ic.release := Mux(s_writeprobe, releaseThrough, probeAckDataThrough)
+  ic.dirty := req.dirty
 
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := self_meta.way
@@ -1099,6 +1114,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grant := req.off === 0.U || io.resps.sink_d.bits.last
       bad_grant := io.resps.sink_d.bits.denied
       gotT := io.resps.sink_d.bits.param === toT
+      gotDirty := io.resps.sink_d.bits.dirty
     }
     when(io.resps.sink_d.bits.opcode === ReleaseAck) {
       w_releaseack := true.B
