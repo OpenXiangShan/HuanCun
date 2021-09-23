@@ -166,6 +166,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io_b_status.way := 0.U
       mshr.io_b_status.nestedProbeAckData := false.B
       mshr.io_b_status.probeHelperFinish := false.B
+    case _: inclusive.MSHR =>
   }
 
   c_mshr match
