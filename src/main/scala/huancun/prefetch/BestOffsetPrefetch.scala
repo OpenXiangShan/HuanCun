@@ -209,7 +209,11 @@ class OffsetScoreTable(implicit p: Parameters) extends BOPModule {
 }
 
 class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
-  val io = IO(new PrefetchIO)
+  val io = IO(new Bundle() {
+    val train = Flipped(DecoupledIO(new PrefetchTrain))
+    val req = DecoupledIO(new PrefetchReq)
+    val resp = Flipped(DecoupledIO(new PrefetchResp))
+  })
 
   val rrTable = Module(new RecentRequestTable)
   val scoreTable = Module(new OffsetScoreTable)
