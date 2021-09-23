@@ -40,6 +40,7 @@ class SourceBReq(implicit p: Parameters) extends HuanCunBundle {
   val param = UInt(3.W)
   val clients = UInt(clientBits.W)
   val alias = aliasBitsOpt.map(w => UInt(w.W))
+  val needData = if (cacheParams.inclusive) None else Some(Bool())
 }
 class SinkCReq(implicit p: Parameters) extends InnerTask {
   val size = UInt(msgSizeBits.W)
@@ -132,6 +133,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val preferCache = Bool()
   val dirty = Bool()
   val fromProbeHelper = Bool()
+  val needProbeAckData = if (cacheParams.inclusive) None else Some(Bool())
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {

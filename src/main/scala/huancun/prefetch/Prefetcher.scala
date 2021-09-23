@@ -108,6 +108,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       io.req.bits.preferCache := true.B
       io.req.bits.fromProbeHelper := false.B
       io.req.bits.bufIdx := DontCare
+      io.req.bits.needProbeAckData.foreach(_ := false.B)
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }
