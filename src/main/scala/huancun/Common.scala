@@ -53,6 +53,7 @@ class SinkCReq(implicit p: Parameters) extends InnerTask {
   val save = Bool() // write into banked store
   val drop = Bool() // clear write buf (without writing banked store)
   val release = Bool() // send buffer contents to SourceC
+  val dirty = Bool() // useful only when release = true
 }
 class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val opcode = UInt(3.W)
@@ -62,6 +63,7 @@ class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val off = UInt(offsetBits.W)
   val denied = Bool()
   val sinkId = UInt(mshrBits.W)
+  val dirty = Bool()
 }
 
 class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
@@ -79,6 +81,7 @@ class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
   val param = UInt(3.W)
   val source = UInt(mshrBits.W)
   val way = UInt(wayBits.W)
+  val dirty = Bool()
 }
 class SourceEReq(implicit p: Parameters) extends HuanCunBundle {
   val sink = UInt(outerSinkBits.W)
@@ -101,6 +104,7 @@ class SinkDResp(implicit p: Parameters) extends HuanCunBundle {
   val sink = UInt(outerSinkBits.W)
   val last = Bool() // last beat
   val denied = Bool()
+  val dirty = Bool()
 }
 class SinkEResp(implicit p: Parameters) extends HuanCunBundle {
   // GrantAck
@@ -127,6 +131,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val isPrefetch = prefetchOpt.map(_ => Bool())
   val alias = aliasBitsOpt.map(_ => UInt(aliasBitsOpt.get.W))
   val preferCache = Bool()
+  val dirty = Bool()
   val fromProbeHelper = Bool()
   val needProbeAckData = if (cacheParams.inclusive) None else Some(Bool())
 }

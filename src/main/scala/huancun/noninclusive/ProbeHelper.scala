@@ -43,6 +43,7 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   req.isPrefetch.foreach(_ := false.B)
   req.alias.foreach(_ := 0.U)
   req.preferCache := true.B
+  req.dirty := false.B // ignored
   req.needProbeAckData.foreach(_ := false.B)
 
   val client_dir = dir.clients(req_client)

@@ -58,6 +58,8 @@ trait HasHuanCunParameters {
   val bufBlocks = mshrs
   val bufIdxBits = log2Ceil(bufBlocks)
 
+  val alwaysReleaseData = cacheParams.alwaysReleaseData
+
   lazy val edgeIn = p(EdgeInKey)
   lazy val edgeOut = p(EdgeOutKey)
 
@@ -203,11 +205,10 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     print_bundle_fields(node.in.head._2.bundle.requestFields, "usr")
     print_bundle_fields(node.in.head._2.bundle.echoFields, "echo")
 
-    val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(p.alterPartial {
+    val pftParams: Parameters = p.alterPartial {
       case EdgeInKey => node.in.head._2
       case EdgeOutKey => node.out.head._2
-    })))
-
+    }
     def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
       val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), in.size))
       if (name.nonEmpty) {
@@ -218,15 +219,15 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
       out <> arbiter.io.out
     }
-    val prefetchTrains = Wire(Vec(banks, DecoupledIO(new PrefetchTrain)))
-    val prefetchResps = Wire(Vec(banks, DecoupledIO(new PrefetchResp)))
+    val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
+    val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
+    val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
-    prefetchTrains <> DontCare
-    prefetchResps <> DontCare
-    prefetcher.foreach { pft =>
-      arbTasks(pft.io.train, prefetchTrains, Some("prefetch_train"))
-      pft.io.req.ready := Cat(prefetchReqsReady).orR
-      arbTasks(pft.io.resp, prefetchResps, Some("prefetch_resp"))
+    prefetchOpt.foreach {
+      case _ =>
+        arbTasks(prefetcher.get.io.train, prefetchTrains.get, Some("prefetch_train"))
+        prefetcher.get.io.req.ready := Cat(prefetchReqsReady).orR
+        arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
     }
 
     node.in.zip(node.out).zipWithIndex.foreach {
@@ -241,11 +242,11 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
 
         slice.io.prefetch.zip(prefetcher).foreach {
           case (s, p) =>
-            prefetchTrains(i) <> s.train
+            prefetchTrains.get(i) <> s.train
             s.req.valid := p.io.req.valid && p.io.req.bits.set(bankBits - 1, 0) === i.U
             s.req.bits := p.io.req.bits
             prefetchReqsReady(i) := s.req.ready && p.io.req.bits.set(bankBits - 1, 0) === i.U
-            prefetchResps(i) <> s.resp
+            prefetchResps.get(i) <> s.resp
         }
     }
     node.edges.in.headOption.foreach { n =>

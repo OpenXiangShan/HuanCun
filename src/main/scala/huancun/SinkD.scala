@@ -58,6 +58,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.resp.bits.source := Mux(io.d.valid, io.d.bits.source, RegEnable(io.d.bits.source, io.d.valid))
   io.resp.bits.sink := io.d.bits.sink
   io.resp.bits.denied := io.d.bits.denied
+  io.resp.bits.dirty := io.d.bits.echo.lift(DirtyKey).getOrElse(false.B)
 
   // Save data to Datastorage
   io.bs_waddr.valid := ((needData && io.d.valid && w_safe) || !first) && cache
