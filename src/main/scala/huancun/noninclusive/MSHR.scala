@@ -1157,6 +1157,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.way := self_meta.way
   io.status.bits.will_grant_data := req.fromA && od.opcode(0)
   io.status.bits.will_save_data := req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
+  io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)
   io.status.bits.blockB := true.B
   // B nest A
   // if we are waitting for probeack,
