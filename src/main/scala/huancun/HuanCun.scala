@@ -195,10 +195,11 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case _                            => "B"
     }
     val banks = node.in.size
-    val bankBits = log2Up(banks)
+    val bankBits = if(banks == 1) 0 else log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
     println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) $prefetch ======")
+    println(s"bankBits: ${bankBits}")
     def print_bundle_fields(fs: Seq[BundleFieldBase], prefix: String) = {
       if(fs.nonEmpty){
         println(fs.map{f => s"$prefix/${f.key.name}: (${f.data.getWidth}-bit)"}.mkString("\n"))
@@ -232,6 +233,9 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
     }
 
+    def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
+      if(bankBits == 0) true.B else set(bankBits - 1, 0) === bankId.U
+    }
     node.in.zip(node.out).zipWithIndex.foreach {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
@@ -245,9 +249,9 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         slice.io.prefetch.zip(prefetcher).foreach {
           case (s, p) =>
             prefetchTrains.get(i) <> s.train
-            s.req.valid := p.io.req.valid && p.io.req.bits.set(bankBits - 1, 0) === i.U
+            s.req.valid := p.io.req.valid && bank_eq(p.io.req.bits.set, i, bankBits)
             s.req.bits := p.io.req.bits
-            prefetchReqsReady(i) := s.req.ready && p.io.req.bits.set(bankBits - 1, 0) === i.U
+            prefetchReqsReady(i) := s.req.ready && bank_eq(p.io.req.bits.set, i, bankBits)
             prefetchResps.get(i) <> s.resp
         }
     }
