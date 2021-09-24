@@ -63,6 +63,7 @@ class SubDirectory[T <: Data](
   tagBits:     Int,
   dir_init_fn: () => T,
   dir_hit_fn: T => Bool,
+  invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
   replacement: String)
     extends MultiIOModule {
 
@@ -155,8 +156,8 @@ class SubDirectory[T <: Data](
     hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
     val hitWay = OHToUInt(hitVec(i))
     val replaceWay = replacer.way(reqSets(i))
-    val invalidWay = ParallelPriorityMux(metaValidVec.zipWithIndex.map(a => (!a._1, a._2.U)))
-    val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
+    val (inv, invalidWay) = invalid_way_sel(metas, replaceWay)
+    val chosenWay = Mux(inv, invalidWay, replaceWay)
 
     result.bits.hit := Cat(hitVec(i)).orR()
     result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
@@ -198,8 +199,13 @@ abstract class SubDirectoryDoUpdate[T <: Data](
   tagBits:     Int,
   dir_init_fn: () => T,
   dir_hit_fn:  T => Bool,
+  invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
   replacement: String)
-    extends SubDirectory[T](rports, wports, sets, ways, tagBits, dir_init_fn, dir_hit_fn, replacement) with HasUpdate {
+    extends SubDirectory[T](
+      rports, wports, sets, ways, tagBits,
+      dir_init_fn, dir_hit_fn, invalid_way_sel,
+      replacement
+    ) with HasUpdate {
 
   for ((result, i) <- io.resps.zipWithIndex) {
     val updateReplacer = doUpdate(reqReplacerInfo(i))
@@ -208,25 +214,3 @@ abstract class SubDirectoryDoUpdate[T <: Data](
     }
   }
 }
-
-class SubDirectoryOnRelease[T <: Data](
-  rports:      Int,
-  wports:      Int,
-  sets:        Int,
-  ways:        Int,
-  tagBits:     Int,
-  dir_init_fn: () => T,
-  dir_hit_fn:  T => Bool,
-  replacement: String)
-    extends SubDirectoryDoUpdate[T](rports, wports, sets, ways, tagBits, dir_init_fn, dir_hit_fn, replacement) with UpdateOnRelease
-
-class SubDirectoryOnAcquire[T <: Data](
-  rports:      Int,
-  wports:      Int,
-  sets:        Int,
-  ways:        Int,
-  tagBits:     Int,
-  dir_init_fn: () => T,
-  dir_hit_fn:  T => Bool,
-  replacement: String)
-    extends SubDirectoryDoUpdate[T](rports, wports, sets, ways, tagBits, dir_init_fn, dir_hit_fn, replacement) with UpdateOnAcquire

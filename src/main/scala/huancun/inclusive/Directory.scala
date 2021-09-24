@@ -45,8 +45,15 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
 
   val io = IO(new DirectoryIO())
 
+  def invalid_way_sel(metaVec: Seq[DirectoryEntry], repl: UInt) = {
+    val invalid_vec = metaVec.map(_.state === MetaData.INVALID)
+    val has_invalid_way = Cat(invalid_vec).orR()
+    val way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
+    (has_invalid_way, way)
+  }
+
   val dir = Module(
-    new SubDirectoryOnAcquire[DirectoryEntry](
+    new SubDirectoryDoUpdate[DirectoryEntry](
       rports = dirReadPorts,
       wports = mshrsAll,
       sets = cacheParams.sets,
@@ -59,8 +66,9 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
         init
       },
       dir_hit_fn = x => x.state =/= MetaData.INVALID,
+      invalid_way_sel = invalid_way_sel,
       replacement = "plru"
-    )
+    ) with UpdateOnAcquire
   )
 
   for (i <- 0 until dirReadPorts) {
