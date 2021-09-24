@@ -552,6 +552,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     req_valid := false.B
     meta_valid := false.B
   }
+  io.status.bits.will_free := no_wait && no_schedule
 
   // Alloc MSHR (alloc has higher priority than release)
   assert(RegNext(!req_valid || !io.alloc.valid, true.B)) // TODO: support fully-pipelined

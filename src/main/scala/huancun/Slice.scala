@@ -35,13 +35,15 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   })
 
   // Inner channels
+  val a_req_buffer = Module(new RequestBuffer())
   val sinkA = Module(new SinkA)
   val sourceB = Module(new SourceB)
   val sinkC = Module(if (cacheParams.inclusive) new inclusive.SinkC else new noninclusive.SinkC)
   val sourceD = Module(new SourceD)
   val sinkE = Module(new SinkE)
 
-  sinkA.io.a <> io.in.a
+  a_req_buffer.io.in <> io.in.a
+  sinkA.io.a <> a_req_buffer.io.out
   io.in.b <> sourceB.io.b
   sinkC.io.c <> io.in.c
   io.in.d <> sourceD.io.d
@@ -124,6 +126,12 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val c_mshr = ms.last
   val bc_mshr = ms.init.last
   val abc_mshr = ms.init.init
+
+  abc_mshr.zipWithIndex.foreach{
+    case (mshr, i) =>
+      a_req_buffer.io.mshr_status(i) := mshr.io.status
+      a_req_buffer.io.mshr_alloc(i) := mshrAlloc.io.alloc(i)
+  }
 
   val block_bc = c_mshr.io.status.valid
   val block_abc = block_bc || bc_mshr.io.status.valid
