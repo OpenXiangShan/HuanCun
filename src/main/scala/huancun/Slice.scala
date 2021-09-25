@@ -35,15 +35,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   })
 
   // Inner channels
-  val a_req_buffer = Module(new RequestBuffer())
   val sinkA = Module(new SinkA)
   val sourceB = Module(new SourceB)
   val sinkC = Module(if (cacheParams.inclusive) new inclusive.SinkC else new noninclusive.SinkC)
   val sourceD = Module(new SourceD)
   val sinkE = Module(new SinkE)
 
-  a_req_buffer.io.in <> io.in.a
-  sinkA.io.a <> a_req_buffer.io.out
+  sinkA.io.a <> io.in.a
   io.in.b <> sourceB.io.b
   sinkC.io.c <> io.in.c
   io.in.d <> sourceD.io.d
@@ -92,6 +90,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   dataStorage.io.sinkC_wdata <> sinkC.io.bs_wdata
 
   val mshrAlloc = Module(new MSHRAlloc)
+  val a_req_buffer = Module(new RequestBuffer())
   val probeHelperOpt = if(cacheParams.inclusive) None else Some(Module(new ProbeHelper))
 
   val a_req = Wire(DecoupledIO(new MSHRRequest()))
@@ -110,10 +109,11 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
     alloc_A_arb.io.in(0) <> a_req
     alloc_A_arb.io.in(1) <> io.prefetch.get.req
-    mshrAlloc.io.a_req <> alloc_A_arb.io.out
+    a_req_buffer.io.in <> alloc_A_arb.io.out
   } else {
-    mshrAlloc.io.a_req <> a_req
+    a_req_buffer.io.in <> a_req
   }
+  mshrAlloc.io.a_req <> a_req_buffer.io.out
   mshrAlloc.io.c_req <> sinkC.io.alloc
 
   ms.zipWithIndex.foreach {
@@ -130,7 +130,6 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   abc_mshr.zipWithIndex.foreach{
     case (mshr, i) =>
       a_req_buffer.io.mshr_status(i) := mshr.io.status
-      a_req_buffer.io.mshr_alloc(i) := mshrAlloc.io.alloc(i)
   }
 
   val block_bc = c_mshr.io.status.valid
