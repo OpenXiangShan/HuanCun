@@ -974,7 +974,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   ic.save := Mux(s_writeprobe, releaseSave, probeAckDataSave)
   ic.drop := Mux(s_writeprobe, releaseDrop, probeAckDataDrop)
   ic.release := Mux(s_writeprobe, releaseThrough, probeAckDataThrough)
-  ic.dirty := req.dirty
+  ic.dirty := Mux(s_writeprobe,
+    req.dirty || self_meta.hit && self_meta.dirty,
+    probe_dirty || self_meta.hit && self_meta.dirty
+  )
 
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := self_meta.way
