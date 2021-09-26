@@ -315,13 +315,13 @@ class Directory(implicit p: Parameters)
 
   assert(dirReadPorts == 1)
   val resp = io.results.head
-  val req = io.reads.head
-  XSPerfAccumulate(cacheParams, "selfdir_A_req", req.bits.replacerInfo.channel(0) && resp.valid)
-  XSPerfAccumulate(cacheParams, "selfdir_A_hit", req.bits.replacerInfo.channel(0) && resp.valid && resp.bits.self.hit)
-  XSPerfAccumulate(cacheParams, "selfdir_B_req", req.bits.replacerInfo.channel(1) && resp.valid)
-  XSPerfAccumulate(cacheParams, "selfdir_B_hit", req.bits.replacerInfo.channel(1) && resp.valid && resp.bits.self.hit)
-  XSPerfAccumulate(cacheParams, "selfdir_C_req", req.bits.replacerInfo.channel(2) && resp.valid)
-  XSPerfAccumulate(cacheParams, "selfdir_C_hit", req.bits.replacerInfo.channel(2) && resp.valid && resp.bits.self.hit)
+  val req = RegEnable(io.reads.head.bits, io.reads.head.fire())
+  XSPerfAccumulate(cacheParams, "selfdir_A_req", req.replacerInfo.channel(0) && resp.valid)
+  XSPerfAccumulate(cacheParams, "selfdir_A_hit", req.replacerInfo.channel(0) && resp.valid && resp.bits.self.hit)
+  XSPerfAccumulate(cacheParams, "selfdir_B_req", req.replacerInfo.channel(1) && resp.valid)
+  XSPerfAccumulate(cacheParams, "selfdir_B_hit", req.replacerInfo.channel(1) && resp.valid && resp.bits.self.hit)
+  XSPerfAccumulate(cacheParams, "selfdir_C_req", req.replacerInfo.channel(2) && resp.valid)
+  XSPerfAccumulate(cacheParams, "selfdir_C_hit", req.replacerInfo.channel(2) && resp.valid && resp.bits.self.hit)
 
   XSPerfAccumulate(cacheParams, "selfdir_dirty", resp.valid && resp.bits.self.dirty)
   XSPerfAccumulate(cacheParams, "selfdir_TIP", resp.valid && resp.bits.self.state === TIP)
