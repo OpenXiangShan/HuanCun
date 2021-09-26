@@ -74,12 +74,18 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
 
   val free_mask = VecInit(io.mshr_status.map(s => s.valid && s.bits.will_free)).asUInt()
   for (i <- 0 until entries){
+    when(valids(i)){
+      val wait_next = WireInit(wait_table(i))
+      val dep_mask_next = WireInit(buffer_dep_mask(i))
+      wait_next := wait_table(i).asUInt() & (~free_mask.asUInt()).asUInt()
+      when(issue_arb.io.out.fire()){
+        dep_mask_next(issue_arb.io.chosen) := false.B
+      }
+      wait_table(i) := wait_next
+      rdys(i) := !wait_next.orR() && !Cat(dep_mask_next).orR()
+    }
     when(issue_arb.io.out.fire()){
       buffer_dep_mask(i)(issue_arb.io.chosen) := false.B
-    }
-    when(valids(i)){
-      wait_table(i) := wait_table(i).asUInt() & (~free_mask.asUInt()).asUInt()
-      rdys(i) := !wait_table(i).orR() && !Cat(buffer_dep_mask(i)).orR()
     }
   }
 
