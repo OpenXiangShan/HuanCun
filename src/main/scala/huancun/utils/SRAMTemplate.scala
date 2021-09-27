@@ -95,12 +95,21 @@ class SRAMTemplate[T <: Data](
   shouldReset: Boolean = false,
   holdRead:    Boolean = false,
   singlePort:  Boolean = false,
-  bypassWrite: Boolean = false)
+  bypassWrite: Boolean = false,
+  cycleFactor: Int = 1)
     extends Module {
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
   })
+
+  if(cycleFactor != 1){
+    require(!shouldReset)
+    require(!holdRead)
+    require(singlePort)
+    require(!bypassWrite)
+    require(isPow2(cycleFactor))
+  }
 
   val wordType = UInt(gen.getWidth.W)
   val array = SyncReadMem(set, Vec(way, wordType))
@@ -115,15 +124,31 @@ class SRAMTemplate[T <: Data](
     resetSet := _resetSet
   }
 
-  val (ren, wen) = (io.r.req.valid, io.w.req.valid || resetState)
+  val cycleBits = if(cycleFactor == 1) 1 else log2Ceil(cycleFactor)
+  val counter = RegInit(0.U(cycleBits.W))
+  counter := counter + 1.U
+  val busy = if(cycleFactor == 1) false.B else counter =/= 0.U
+
+  val ren_reg = RegEnable(io.r.req.valid, false.B, !busy)
+  val wen_reg = RegEnable(io.w.req.valid, false.B, !busy)
+
+  val ren = Mux(busy, ren_reg, io.r.req.valid)
+  val wen = Mux(busy, wen_reg, io.w.req.valid || resetState)
+
+  val rreq_reg = RegEnable(io.r.req.bits, !busy)
+  val wreq_reg = RegEnable(io.w.req.bits, !busy)
+
+  val rreq = Mux(busy, rreq_reg, io.r.req.bits)
+  val wreq = Mux(busy, wreq_reg, io.w.req.bits)
+
   val realRen = (if (singlePort) ren && !wen else ren)
 
-  val setIdx = Mux(resetState, resetSet, io.w.req.bits.setIdx)
-  val wdata = VecInit(Mux(resetState, 0.U.asTypeOf(Vec(way, gen)), io.w.req.bits.data).map(_.asTypeOf(wordType)))
-  val waymask = Mux(resetState, Fill(way, "b1".U), io.w.req.bits.waymask.getOrElse("b1".U))
+  val setIdx = Mux(resetState, resetSet, wreq.setIdx)
+  val wdata = VecInit(Mux(resetState, 0.U.asTypeOf(Vec(way, gen)), wreq.data).map(_.asTypeOf(wordType)))
+  val waymask = Mux(resetState, Fill(way, "b1".U), wreq.waymask.getOrElse("b1".U))
   when(wen) { array.write(setIdx, wdata, waymask.asBools) }
 
-  val raw_rdata = array.read(io.r.req.bits.setIdx, realRen)
+  val raw_rdata = array.read(rreq.setIdx, realRen)
 
   // bypass for dual-port SRAMs
   require(!bypassWrite || bypassWrite && !singlePort)

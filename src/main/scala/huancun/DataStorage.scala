@@ -22,7 +22,7 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3.{util, _}
 import chisel3.util._
-import huancun.utils.SRAMTemplate
+import huancun.utils.{SRAMTemplate, SReg}
 
 class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
@@ -62,7 +62,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         way = 1,
         shouldReset = false,
         holdRead = false,
-        singlePort = sramSinglePort
+        singlePort = sramSinglePort,
+        cycleFactor = cacheParams.sramCycleFactor
       )
     )
   )
@@ -93,7 +94,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         }
         .reverse
     )
-    addr.ready := accessVec(innerAddr(stackBits - 1, 0))
+    addr.ready := accessVec(innerAddr(stackBits - 1, 0)) && SReg.sren()
 
     out.wen := wen.B
     out.index := innerIndex
@@ -126,9 +127,11 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   }
 
   val outData = Wire(Vec(nrBanks, UInt((8 * bankBytes).W)))
+  val data_en = Wire(Vec(nrBanks, Bool()))
+  dontTouch(data_en)
 
   for (i <- 0 until nrBanks) {
-    val en = reqs.map(_.bankEn(i)).reduce(_ || _)
+    val en = reqs.map(_.bankEn(i)).reduce(_ || _) && SReg.sren()
     val selectedReq = PriorityMux(reqs.map(_.bankSel(i)), reqs)
 
     // Write
@@ -141,12 +144,14 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     // Read
     bankedData(i).io.r.req.valid := en && !selectedReq.wen
     bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
-    outData(i) := RegEnable(bankedData(i).io.r.resp.data(0), RegNext(en && !selectedReq.wen))
+    data_en(i) := SReg.pipe(en && !selectedReq.wen)
+    outData(i) := RegEnable(bankedData(i).io.r.resp.data(0), data_en(i))
+//    outData(i) := RegEnable(bankedData(i).io.r.resp.data(0), RegNext(en && !selectedReq.wen))
   }
 
   /* Pack out-data to channels */
-  val sourceDlatch = RegNext(RegNext(sourceD_rreq.bankEn))
-  val sourceClatch = RegNext(RegNext(sourceC_req.bankEn))
+  val sourceDlatch = RegNext(SReg.pipe(sourceD_rreq.bankEn))
+  val sourceClatch = RegNext(SReg.pipe(sourceC_req.bankEn))
 
   val sourceDrdata = outData.zipWithIndex.map {
     case (r, i) => Mux(sourceDlatch(i), r, 0.U)
