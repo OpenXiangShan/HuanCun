@@ -91,6 +91,8 @@ case class HCCacheParameters(
   clientCaches:      Seq[CacheParameters] = Nil,
   inclusive:         Boolean = true,
   alwaysReleaseData: Boolean = false,
+  tagECC:            Option[String] = None,
+  dataECC:           Option[String] = None,
   echoField:         Seq[BundleFieldBase] = Nil,
   reqField:          Seq[BundleFieldBase] = Nil, // master
   respKey:           Seq[BundleKeyBase] = Nil,
