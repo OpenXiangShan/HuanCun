@@ -20,9 +20,9 @@
 package huancun
 
 import chipsalliance.rocketchip.config.Parameters
-import chisel3.{util, _}
+import chisel3._
 import chisel3.util._
-import huancun.utils.{SRAMTemplate, SReg}
+import huancun.utils._
 
 class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
@@ -54,10 +54,15 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   //     one row ==> ******** ******** ******** ********
   // If there's no conflict, one row can be accessed in parallel by nrStacks
 
+  def dataCode: Code = Code.fromString(p(HCCacheParamsKey).dataECC)
+
+  val eccDataBits = dataCode.width(8*bankBytes)
+  println(s"extra ECC Databits:${eccDataBits - (8*bankBytes)}")
+
   val bankedData = Seq.fill(nrBanks)(
     Module(
       new SRAMTemplate(
-        UInt((8 * bankBytes).W),
+        UInt(eccDataBits.W),
         set = nrRows,
         way = 1,
         shouldReset = false,
@@ -128,7 +133,6 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   val outData = Wire(Vec(nrBanks, UInt((8 * bankBytes).W)))
   val data_en = Wire(Vec(nrBanks, Bool()))
-  dontTouch(data_en)
 
   for (i <- 0 until nrBanks) {
     val en = reqs.map(_.bankEn(i)).reduce(_ || _) && SReg.sren()
@@ -138,15 +142,18 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     bankedData(i).io.w.req.valid := en && selectedReq.wen
     bankedData(i).io.w.req.bits.apply(
       setIdx = selectedReq.index,
-      data = selectedReq.data(i),
+      data = dataCode.encode(selectedReq.data(i)),
       waymask = 1.U
     )
     // Read
     bankedData(i).io.r.req.valid := en && !selectedReq.wen
     bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
     data_en(i) := SReg.pipe(en && !selectedReq.wen)
-    outData(i) := RegEnable(bankedData(i).io.r.resp.data(0), data_en(i))
-//    outData(i) := RegEnable(bankedData(i).io.r.resp.data(0), RegNext(en && !selectedReq.wen))
+    val decode = dataCode.decode(bankedData(i).io.r.resp.data(0))
+    outData(i) := RegEnable(decode.uncorrected, data_en(i))
+    when(data_en(i)) {
+      assert(!decode.error)
+    }
   }
 
   /* Pack out-data to channels */
