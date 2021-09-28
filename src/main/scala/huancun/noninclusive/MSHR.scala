@@ -686,6 +686,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
     reset_all_flags()
 
+    assert(!io.dirResult.bits.self.hit || !io.dirResult.bits.self.error)
+    io.dirResult.bits.clients.foreach(r => assert(!r.hit || !r.error))
+
     when(req.fromC) {
       c_schedule()
     }.elsewhen(req.fromB) {

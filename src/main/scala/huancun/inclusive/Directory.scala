@@ -32,6 +32,7 @@ class DirResult(implicit p: Parameters) extends DirectoryEntry with BaseDirResul
   val hit = Bool()
   val way = UInt(wayBits.W)
   val tag = UInt(tagBits.W)
+  val error = Bool()
 }
 
 class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, DirWrite, TagWrite] {
@@ -91,6 +92,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
     resp.bits.state := selfResp.bits.dir.state
     resp.bits.clients := selfResp.bits.dir.clients
     resp.bits.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
+    resp.bits.error := selfResp.bits.error
   }
   // Self Tag Write
   dir.io.tag_w.valid := io.tagWReq.valid
