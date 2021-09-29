@@ -61,6 +61,7 @@ class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val size = UInt(msgSizeBits.W)
   val way = UInt(wayBits.W)
   val off = UInt(offsetBits.W)
+  val bufIdx = UInt(bufIdxBits.W)
   val denied = Bool()
   val sinkId = UInt(mshrBits.W)
   val dirty = Bool()
@@ -72,7 +73,9 @@ class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
   val opcode = UInt(3.W)
   val param = UInt(3.W)
   val source = UInt(mshrBits.W)
+  val bufIdx = UInt(bufIdxBits.W)
   val needData = Bool()
+  val putData = Bool()
 }
 class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
   val opcode = UInt(3.W)
@@ -183,4 +186,16 @@ class SourceDHazard(implicit p: Parameters) extends HuanCunBundle {
 class ReplacerInfo() extends Bundle {
   val channel = UInt(3.W)
   val opcode = UInt(3.W)
+}
+
+class PutBufferPop(implicit p: Parameters) extends HuanCunBundle {
+  val bufIdx = UInt(bufIdxBits.W)
+  val count = UInt(beatBits.W)
+  val last = Bool()
+}
+
+class PutBufferBeatEntry(implicit p: Parameters) extends HuanCunBundle {
+  val data = UInt((beatBytes * 8).W)
+  val mask = UInt(beatBytes.W)
+  val corrupt = Bool()
 }
