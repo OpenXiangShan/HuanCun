@@ -207,7 +207,8 @@ object TLLogger {
       val logger = LazyModule(new TLLogger(name))
       logger.node
     } else {
-      TLAdapterNode()
+      val logger = TLAdapterNode()
+      logger
     }
   }
 
