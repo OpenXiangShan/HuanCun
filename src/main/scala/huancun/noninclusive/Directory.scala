@@ -38,12 +38,14 @@ class SelfDirResult(implicit p: Parameters) extends SelfDirEntry {
   val hit = Bool()
   val way = UInt(wayBits.W)
   val tag = UInt(tagBits.W)
+  val error = Bool()
 }
 
 class ClientDirResult(implicit p: Parameters) extends ClientDirEntry with HasClientInfo {
   val hit = Bool()
   val way = UInt(clientWayBits.W)
   val tag = UInt(clientTagBits.W)
+  val error = Bool()
 
   def parseTag(lineAddr: UInt): UInt = {
     lineAddr(clientSetBits + clientTagBits - 1, clientSetBits)
@@ -267,6 +269,7 @@ class Directory(implicit p: Parameters)
     resp.bits.self.tag := selfResp.bits.tag
     resp.bits.self.dirty := selfResp.bits.dir.dirty
     resp.bits.self.state := selfResp.bits.dir.state
+    resp.bits.self.error := selfResp.bits.error
     resp.bits.self.clientStates := selfResp.bits.dir.clientStates
     resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
     resp.bits.clients.zip(clientResps).foreach {
@@ -276,6 +279,7 @@ class Directory(implicit p: Parameters)
         resp.tag := clientResp.bits.tag
         resp.state := clientResp.bits.dir.state
         resp.alias.foreach(_ := clientResp.bits.dir.alias.get)
+        resp.error := clientResp.bits.error
     }
   }
 

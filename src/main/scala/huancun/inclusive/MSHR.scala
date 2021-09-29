@@ -212,6 +212,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     probes_done := 0.U
     bad_grant := false.B
 
+    assert(!io.dirResult.bits.hit || !io.dirResult.bits.error)
+
     when(req.fromC) {
       // Release
       s_execute := false.B
