@@ -32,6 +32,7 @@ class DirResult(implicit p: Parameters) extends DirectoryEntry with BaseDirResul
   val hit = Bool()
   val way = UInt(wayBits.W)
   val tag = UInt(tagBits.W)
+  val error = Bool()
 }
 
 class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, DirWrite, TagWrite] {
@@ -45,8 +46,15 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
 
   val io = IO(new DirectoryIO())
 
+  def invalid_way_sel(metaVec: Seq[DirectoryEntry], repl: UInt) = {
+    val invalid_vec = metaVec.map(_.state === MetaData.INVALID)
+    val has_invalid_way = Cat(invalid_vec).orR()
+    val way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
+    (has_invalid_way, way)
+  }
+
   val dir = Module(
-    new SubDirectoryOnAcquire[DirectoryEntry](
+    new SubDirectoryDoUpdate[DirectoryEntry](
       rports = dirReadPorts,
       wports = mshrsAll,
       sets = cacheParams.sets,
@@ -59,8 +67,9 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
         init
       },
       dir_hit_fn = x => x.state =/= MetaData.INVALID,
+      invalid_way_sel = invalid_way_sel,
       replacement = "plru"
-    )
+    ) with UpdateOnAcquire
   )
 
   for (i <- 0 until dirReadPorts) {
@@ -83,6 +92,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
     resp.bits.state := selfResp.bits.dir.state
     resp.bits.clients := selfResp.bits.dir.clients
     resp.bits.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
+    resp.bits.error := selfResp.bits.error
   }
   // Self Tag Write
   dir.io.tag_w.valid := io.tagWReq.valid

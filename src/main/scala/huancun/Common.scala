@@ -160,6 +160,10 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
     *     and the data will be bypassed to inner cache
     */
   val will_save_data = Bool()
+  // the mshr will be free at next cycle
+  val will_free = Bool()
+  // for debug usage now
+  val is_prefetch = Bool()
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {

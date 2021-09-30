@@ -3,6 +3,7 @@ package huancun.noninclusive
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import freechips.rocketchip.tilelink.TLMessages
 import huancun.MetaData._
 import huancun._
 import huancun.debug.{DirectoryLogger, TypeId}
@@ -37,12 +38,14 @@ class SelfDirResult(implicit p: Parameters) extends SelfDirEntry {
   val hit = Bool()
   val way = UInt(wayBits.W)
   val tag = UInt(tagBits.W)
+  val error = Bool()
 }
 
 class ClientDirResult(implicit p: Parameters) extends ClientDirEntry with HasClientInfo {
   val hit = Bool()
   val way = UInt(clientWayBits.W)
   val tag = UInt(clientTagBits.W)
+  val error = Bool()
 
   def parseTag(lineAddr: UInt): UInt = {
     lineAddr(clientSetBits + clientTagBits - 1, clientSetBits)
@@ -90,6 +93,14 @@ class ClientDirWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
     this.set := lineAddr(clientSetBits - 1, 0)
     this.way := way
     this.data := data
+  }
+}
+
+trait NonInclusiveCacheReplacerUpdate { this: HasUpdate =>
+  override def doUpdate(info: ReplacerInfo): Bool = {
+    val release_update = info.channel(2) && info.opcode === TLMessages.ReleaseData
+    val prefetch_update = info.channel(0) && info.opcode === TLMessages.Hint
+    release_update | prefetch_update
   }
 }
 
@@ -159,6 +170,12 @@ class Directory(implicit p: Parameters)
   }
 
   def clientHitFn(dir: ClientDirEntry): Bool = dir.state =/= MetaData.INVALID
+  def client_invalid_way_fn(metaVec: Seq[ClientDirEntry], repl: UInt): (Bool, UInt) = {
+    val invalid_vec = metaVec.map(_.state === MetaData.INVALID)
+    val has_invalid_way = Cat(invalid_vec).orR()
+    val way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(clientWayBits.W)))
+    (has_invalid_way, way)
+  }
   val clientDirs = (0 until clientBits).map { _ =>
     val clientDir = Module(
       new SubDirectory[ClientDirEntry](
@@ -174,6 +191,7 @@ class Directory(implicit p: Parameters)
           init
         },
         dir_hit_fn = clientHitFn,
+        invalid_way_sel = client_invalid_way_fn,
         replacement = "random"
       )
     )
@@ -181,8 +199,24 @@ class Directory(implicit p: Parameters)
   }
 
   def selfHitFn(dir: SelfDirEntry): Bool = dir.state =/= MetaData.INVALID
+  def self_invalid_way_sel(metaVec: Seq[SelfDirEntry], repl: UInt): (Bool, UInt) = {
+    // 1.try to find a invalid way
+    val invalid_vec = metaVec.map(_.state === MetaData.INVALID)
+    val has_invalid_way = Cat(invalid_vec).orR()
+    val invalid_way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
+    // 2.if there is no invalid way, then try to find a TRUNK to replace
+    // (we are non-inclusive, if we are trunk, there must be a TIP in our client)
+    val trunk_vec = metaVec.map(_.state === MetaData.TRUNK)
+    val has_trunk_way = Cat(trunk_vec).orR()
+    val trunk_way = ParallelPriorityMux(trunk_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
+    val repl_way_is_trunk = VecInit(metaVec)(repl).state === MetaData.TRUNK
+    (
+      has_invalid_way || has_trunk_way,
+      Mux(has_invalid_way, invalid_way, Mux(repl_way_is_trunk, repl, trunk_way))
+      )
+  }
   val selfDir = Module(
-    new SubDirectoryOnRelease[SelfDirEntry](
+    new SubDirectoryDoUpdate[SelfDirEntry](
       rports = dirReadPorts,
       wports = mshrsAll,
       sets = cacheParams.sets,
@@ -195,8 +229,9 @@ class Directory(implicit p: Parameters)
         init
       },
       dir_hit_fn = selfHitFn,
+      self_invalid_way_sel,
       replacement = "lru"
-    )
+    ) with NonInclusiveCacheReplacerUpdate
   )
 
   def addrConnect(lset: UInt, ltag: UInt, rset: UInt, rtag: UInt) = {
@@ -234,6 +269,7 @@ class Directory(implicit p: Parameters)
     resp.bits.self.tag := selfResp.bits.tag
     resp.bits.self.dirty := selfResp.bits.dir.dirty
     resp.bits.self.state := selfResp.bits.dir.state
+    resp.bits.self.error := selfResp.bits.error
     resp.bits.self.clientStates := selfResp.bits.dir.clientStates
     resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
     resp.bits.clients.zip(clientResps).foreach {
@@ -243,6 +279,7 @@ class Directory(implicit p: Parameters)
         resp.tag := clientResp.bits.tag
         resp.state := clientResp.bits.dir.state
         resp.alias.foreach(_ := clientResp.bits.dir.alias.get)
+        resp.error := clientResp.bits.error
     }
   }
 
@@ -282,8 +319,14 @@ class Directory(implicit p: Parameters)
 
   assert(dirReadPorts == 1)
   val resp = io.results.head
-  XSPerfAccumulate(cacheParams, "selfdir_req", resp.valid)
-  XSPerfAccumulate(cacheParams, "selfdir_hit", resp.valid && resp.bits.self.hit)
+  val req = RegEnable(io.reads.head.bits, io.reads.head.fire())
+  XSPerfAccumulate(cacheParams, "selfdir_A_req", req.replacerInfo.channel(0) && resp.valid)
+  XSPerfAccumulate(cacheParams, "selfdir_A_hit", req.replacerInfo.channel(0) && resp.valid && resp.bits.self.hit)
+  XSPerfAccumulate(cacheParams, "selfdir_B_req", req.replacerInfo.channel(1) && resp.valid)
+  XSPerfAccumulate(cacheParams, "selfdir_B_hit", req.replacerInfo.channel(1) && resp.valid && resp.bits.self.hit)
+  XSPerfAccumulate(cacheParams, "selfdir_C_req", req.replacerInfo.channel(2) && resp.valid)
+  XSPerfAccumulate(cacheParams, "selfdir_C_hit", req.replacerInfo.channel(2) && resp.valid && resp.bits.self.hit)
+
   XSPerfAccumulate(cacheParams, "selfdir_dirty", resp.valid && resp.bits.self.dirty)
   XSPerfAccumulate(cacheParams, "selfdir_TIP", resp.valid && resp.bits.self.state === TIP)
   XSPerfAccumulate(cacheParams, "selfdir_BRANCH", resp.valid && resp.bits.self.state === BRANCH)

@@ -63,7 +63,8 @@ class SubDirectory[T <: Data](
   tagBits:     Int,
   dir_init_fn: () => T,
   dir_hit_fn: T => Bool,
-  replacement: String)
+  invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
+  replacement: String)(implicit p: Parameters)
     extends MultiIOModule {
 
   val setBits = log2Ceil(sets)
@@ -86,6 +87,7 @@ class SubDirectory[T <: Data](
         val way = UInt(wayBits.W)
         val tag = UInt(tagBits.W)
         val dir = dir_init.cloneType
+        val error = Bool()
       })
     )
     val tag_w = Flipped(DecoupledIO(new Bundle() {
@@ -118,12 +120,16 @@ class SubDirectory[T <: Data](
   io.tag_w.ready := true.B
   io.reads.foreach(_.ready := !io.tag_w.valid && resetFinish)
 
+  def tagCode: Code = Code.fromString(p(HCCacheParamsKey).tagECC)
+
+  val eccTagBits = tagCode.width(tagBits)
+  println(s"extra ECC Tagbits:${eccTagBits - tagBits}")
   val tagArray = Array.fill(rports) {
-    Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true))
+    Module(new SRAMTemplate(UInt(eccTagBits.W), sets, ways, singlePort = true))
   }
 
   val tagRead = Seq.fill(rports) {
-    Wire(Vec(ways, UInt(tagBits.W)))
+    Wire(Vec(ways, UInt(eccTagBits.W)))
   }
   tagArray
     .zip(io.reads)
@@ -131,7 +137,7 @@ class SubDirectory[T <: Data](
     .foreach({
       case ((sram, rreq), rdata) =>
         val wen = io.tag_w.fire()
-        sram.io.w(wen, io.tag_w.bits.tag, io.tag_w.bits.set, UIntToOH(io.tag_w.bits.way))
+        sram.io.w(wen, tagCode.encode(io.tag_w.bits.tag), io.tag_w.bits.set, UIntToOH(io.tag_w.bits.way))
         assert(!wen || (wen && sram.io.w.req.ready))
         rdata := sram.io.r(!wen, rreq.bits.set).resp.data
         assert(wen || (!wen && sram.io.r.req.ready))
@@ -150,19 +156,20 @@ class SubDirectory[T <: Data](
     result.valid := reqValids(i)
     val tags = tagRead(i)
     val metas = metaArray(reqSets(i))
-    val tagMatchVec = tags.map(_ === reqTags(i))
+    val tagMatchVec = tags.map(_(tagBits-1, 0) === reqTags(i))
     val metaValidVec = metas.map(dir_hit_fn)
     hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
     val hitWay = OHToUInt(hitVec(i))
     val replaceWay = replacer.way(reqSets(i))
-    val invalidWay = ParallelPriorityMux(metaValidVec.zipWithIndex.map(a => (!a._1, a._2.U)))
-    val chosenWay = Mux(Cat(metaValidVec).andR(), replaceWay, invalidWay)
+    val (inv, invalidWay) = invalid_way_sel(metas, replaceWay)
+    val chosenWay = Mux(inv, invalidWay, replaceWay)
 
     result.bits.hit := Cat(hitVec(i)).orR()
     result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
     val meta = metas(result.bits.way)
     result.bits.dir := meta
-    result.bits.tag := tags(result.bits.way)
+    result.bits.tag := tags(result.bits.way)(tagBits-1, 0)
+    result.bits.error := tagCode.decode(tags(result.bits.way)).error
   }
 
   for (req <- io.dir_w) {
@@ -198,8 +205,13 @@ abstract class SubDirectoryDoUpdate[T <: Data](
   tagBits:     Int,
   dir_init_fn: () => T,
   dir_hit_fn:  T => Bool,
-  replacement: String)
-    extends SubDirectory[T](rports, wports, sets, ways, tagBits, dir_init_fn, dir_hit_fn, replacement) with HasUpdate {
+  invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
+  replacement: String)(implicit p: Parameters)
+    extends SubDirectory[T](
+      rports, wports, sets, ways, tagBits,
+      dir_init_fn, dir_hit_fn, invalid_way_sel,
+      replacement
+    ) with HasUpdate {
 
   for ((result, i) <- io.resps.zipWithIndex) {
     val updateReplacer = doUpdate(reqReplacerInfo(i))
@@ -208,25 +220,3 @@ abstract class SubDirectoryDoUpdate[T <: Data](
     }
   }
 }
-
-class SubDirectoryOnRelease[T <: Data](
-  rports:      Int,
-  wports:      Int,
-  sets:        Int,
-  ways:        Int,
-  tagBits:     Int,
-  dir_init_fn: () => T,
-  dir_hit_fn:  T => Bool,
-  replacement: String)
-    extends SubDirectoryDoUpdate[T](rports, wports, sets, ways, tagBits, dir_init_fn, dir_hit_fn, replacement) with UpdateOnRelease
-
-class SubDirectoryOnAcquire[T <: Data](
-  rports:      Int,
-  wports:      Int,
-  sets:        Int,
-  ways:        Int,
-  tagBits:     Int,
-  dir_init_fn: () => T,
-  dir_hit_fn:  T => Bool,
-  replacement: String)
-    extends SubDirectoryDoUpdate[T](rports, wports, sets, ways, tagBits, dir_init_fn, dir_hit_fn, replacement) with UpdateOnAcquire

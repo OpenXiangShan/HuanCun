@@ -64,10 +64,6 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   /* Whether selected request can be accepted */
 
-  val block_granularity = if (!cacheParams.inclusive && cacheParams.clientCaches.nonEmpty) {
-    log2Ceil(cacheParams.clientCaches.head.sets)
-  } else setBits
-
   def get_match_vec(req: MSHRRequest, granularity: Int = setBits): Vec[Bool] = {
     VecInit(io.status.map(s => s.valid && s.bits.set(granularity - 1, 0) === req.set(granularity - 1, 0)))
   }
@@ -190,10 +186,16 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
+  val pretch_block_vec = VecInit(io.status.map(s =>
+    s.valid && s.bits.is_prefetch &&
+      (s.bits.set(block_granularity - 1, 0) === io.a_req.bits.set(block_granularity - 1, 0))
+  ))
+
   XSPerfAccumulate(cacheParams, "nrWorkingABCmshr", PopCount(io.status.init.init.map(_.valid)))
   XSPerfAccumulate(cacheParams, "nrWorkingBmshr", io.status.take(mshrs+1).last.valid)
   XSPerfAccumulate(cacheParams, "nrWorkingCmshr", io.status.last.valid)
   XSPerfAccumulate(cacheParams, "conflictA", io.a_req.valid && conflict_a)
+  XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && Cat(pretch_block_vec).orR())
   XSPerfAccumulate(cacheParams, "conflictB", io.b_req.valid && conflict_b)
   XSPerfAccumulate(cacheParams, "conflictC", io.c_req.valid && conflict_c)
 }

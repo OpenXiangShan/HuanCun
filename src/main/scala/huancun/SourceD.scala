@@ -24,7 +24,8 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages.{AcquireBlock, AcquirePerm, ReleaseAck}
-import huancun.utils.HoldUnless
+import huancun.utils._
+
 
 class SourceD(implicit p: Parameters) extends HuanCunModule {
   /*
@@ -174,6 +175,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   // stage3
   val s3_latch = s2_valid && s3_ready
   val s3_valid_d = RegInit(false.B)
+
+  // wait counter for sram data
+  val s3_wait = Reg(UInt(log2Ceil(cacheParams.sramCycleFactor).W))
   val s3_needData = RegInit(false.B)
   val s3_req = RegEnable(s2_req, s3_latch)
   val s3_counter = RegEnable(s2_counter, s3_latch)
@@ -182,10 +186,11 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s3_releaseAck = RegEnable(s2_releaseAck, s3_latch)
   val s3_d = Wire(io.d.cloneType)
   val s3_queue = Module(new Queue(new DSData, 3, flow = true))
+  val s3_can_go = if(cacheParams.sramCycleFactor == 1) true.B else s3_wait === 0.U
 
   assert(!s3_valid_d || s3_needData, "Only data task can go to stage3!")
 
-  when(d.ready) {
+  when(s3_d.ready && s3_can_go) {
     s3_valid_d := false.B
     s3_needData := false.B
   }
@@ -193,9 +198,13 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     s3_valid_d := s2_need_d
     s3_needData := s2_needData
   }
+  s3_wait := Mux(s3_latch,
+    (cacheParams.sramCycleFactor - 1).U,
+    Mux(s3_can_go, s3_wait, s3_wait - 1.U)
+  )
 
   val s3_rdata = s3_queue.io.deq.bits.data
-  s3_d.valid := s3_valid_d
+  s3_d.valid := s3_valid_d && s3_can_go
   s3_d.bits.opcode := s3_req.opcode
   s3_d.bits.param := Mux(s3_releaseAck, 0.U, s3_req.param)
   s3_d.bits.sink := s3_req.sinkId
@@ -206,14 +215,15 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s3_d.bits.corrupt := false.B
   s3_d.bits.echo.lift(DirtyKey).foreach(_ := s3_req.dirty)
 
-  s3_queue.io.enq.valid := RegNext(RegNext(
+  s3_queue.io.enq.valid := RegNext(SReg.pipe(
     io.bs_raddr.fire() && !Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire),
-    false.B), false.B)
+    false.B
+  ), false.B)
   s3_queue.io.enq.bits := io.bs_rdata
   assert(!s3_queue.io.enq.valid || s3_queue.io.enq.ready)
-  s3_queue.io.deq.ready := s3_d.ready && s3_needData && s3_valid  // TODO: inspect this
+  s3_queue.io.deq.ready := s3_d.ready && s3_needData && s3_valid && s3_can_go  // TODO: inspect this
 
-  s3_ready := !s3_valid_d || s3_d.ready
+  s3_ready := !s3_valid_d || s3_d.ready && s3_can_go
   s3_valid := s3_valid_d
 
   // stage4

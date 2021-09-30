@@ -74,6 +74,10 @@ trait HasHuanCunParameters {
 
   lazy val outerSinkBits = edgeOut.bundle.sinkBits
 
+  val block_granularity = if (!cacheParams.inclusive && cacheParams.clientCaches.nonEmpty) {
+    log2Ceil(cacheParams.clientCaches.head.sets)
+  } else setBits
+
   def getClientBitOH(sourceId: UInt): UInt = {
     if (clientBits == 0) {
       0.U

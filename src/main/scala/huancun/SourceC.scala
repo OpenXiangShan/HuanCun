@@ -23,6 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
+import huancun.utils.SReg
 
 class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
@@ -35,6 +36,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val queue_size = 6
   val queue_flow = true
 
+  val en = SReg.sren()
   val bs_busy = RegInit(false.B)
   val back_pressure = RegInit(false.B)
   val queue = Module(new Queue(chiselTypeOf(io.c.bits), entries = queue_size, flow = queue_flow))
@@ -47,10 +49,10 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   }
   val task_latch = RegEnable(io.task.bits, !bs_busy && io.task.valid)
   val task = Mux(!bs_busy, io.task.bits, task_latch)
-  val taskWithData = io.task.valid && !back_pressure && io.task.bits.opcode(0)
+  val taskWithData = io.task.valid && !back_pressure && io.task.bits.opcode(0) && en
   when(taskWithData) { bs_busy := true.B }
   when(io.bs_raddr.fire() && beat === ~0.U(beatBits.W)) { bs_busy := false.B }
-  io.task.ready := !bs_busy && !back_pressure
+  io.task.ready := !bs_busy && !back_pressure && en
 
   // Read Datastorage
   val has_data = taskWithData || bs_busy
@@ -65,17 +67,21 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val task_handled = Mux(has_data, io.bs_raddr.ready, io.task.fire())
   val s1_task = RegInit(io.task.bits)
   val s1_beat = RegInit(0.U(beatBits.W))
-  val s1_valid = RegNext(task_handled, false.B)
+  val s1_valid = RegInit(false.B)
+  when(s1_valid && en){
+    s1_valid := false.B
+  }
   when(task_handled) {
+    s1_valid := true.B
     s1_task := task
     s1_beat := beat
   }
 
   // Stage 1 => Stage 2
-  val s2_valid = RegNext(s1_valid, false.B)
+  val s2_valid = RegNext(s1_valid && en, false.B)
   val s2_task = RegInit(io.task.bits)
   val s2_beat = RegInit(0.U(beatBits.W))
-  when(s1_valid) {
+  when(s1_valid && en) {
     s2_task := s1_task
     s2_beat := s1_beat
   }

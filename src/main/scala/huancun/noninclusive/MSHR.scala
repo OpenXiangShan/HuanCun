@@ -689,6 +689,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
     reset_all_flags()
 
+    assert(!io.dirResult.bits.self.hit || !io.dirResult.bits.self.error)
+    io.dirResult.bits.clients.foreach(r => assert(!r.hit || !r.error))
+
     when(req.fromC) {
       c_schedule()
     }.elsewhen(req.fromB) {
@@ -985,7 +988,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   ic.save := Mux(s_writeprobe, releaseSave, probeAckDataSave)
   ic.drop := Mux(s_writeprobe, releaseDrop, probeAckDataDrop)
   ic.release := Mux(s_writeprobe, releaseThrough, probeAckDataThrough)
-  ic.dirty := req.dirty
+  ic.dirty := Mux(s_writeprobe,
+    req.dirty || self_meta.hit && self_meta.dirty,
+    probe_dirty || self_meta.hit && self_meta.dirty
+  )
 
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := self_meta.way
@@ -1148,6 +1154,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probeAckDataDrop := false.B
     probe_helper_finish := false.B
   }
+  io.status.bits.will_free := no_wait && no_schedule
 
   // Alloc MSHR (alloc has higher priority than release)
   assert(RegNext(!req_valid || !io.alloc.valid, true.B)) // TODO: support fully-pipelined
@@ -1166,6 +1173,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.way := self_meta.way
   io.status.bits.will_grant_data := req.fromA && od.opcode(0)
   io.status.bits.will_save_data := req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
+  io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)
   io.status.bits.blockB := true.B
   // B nest A
   // if we are waitting for probeack,

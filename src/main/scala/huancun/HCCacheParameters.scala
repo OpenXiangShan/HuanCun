@@ -5,7 +5,7 @@
   * XiangShan is licensed under Mulan PSL v2.
   * You can use this software according to the terms and conditions of the Mulan PSL v2.
   * You may obtain a copy of Mulan PSL v2 at:
-  *          http://license.coscl.org.cn/MulanPSL2
+  * http://license.coscl.org.cn/MulanPSL2
   *
   * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
   * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
@@ -28,40 +28,51 @@ import huancun.prefetch.PrefetchParameters
 
 case object HCCacheParamsKey extends Field[HCCacheParameters](HCCacheParameters())
 
-case class CacheParameters(
-  name:          String,
-  sets:          Int,
-  ways:          Int,
-  blockBytes:    Int = 64,
-  aliasBitsOpt:  Option[Int] = None,
-  inner:         Seq[CacheParameters] = Nil) {
+case class CacheParameters
+(
+  name: String,
+  sets: Int,
+  ways: Int,
+  blockBytes: Int = 64,
+  aliasBitsOpt: Option[Int] = None,
+  inner: Seq[CacheParameters] = Nil
+) {
   val capacity = sets * ways * blockBytes
   val setBits = log2Ceil(sets)
   val offsetBits = log2Ceil(blockBytes)
   val needResolveAlias = aliasBitsOpt.nonEmpty
 }
 
-case object PrefetchKey extends ControlKey[Bool](name ="needHint")
+case object PrefetchKey extends ControlKey[Bool](name = "needHint")
 
 case class PrefetchField() extends BundleField(PrefetchKey) {
   override def data: Bool = Output(Bool())
 
-  override def default(x: Bool): Unit = { x := false.B }
+  override def default(x: Bool): Unit = {
+    x := false.B
+  }
 }
 
 case object AliasKey extends ControlKey[UInt]("alias")
+
 case class AliasField(width: Int) extends BundleField(AliasKey) {
   override def data: UInt = Output(UInt(width.W))
 
-  override def default(x: UInt): Unit = {x := 0.U(width.W)}
+  override def default(x: UInt): Unit = {
+    x := 0.U(width.W)
+  }
 }
+
 // try to keep data in cache is true
 // now it only works for non-inclusive cache (ignored in inclusive cache)
 case object PreferCacheKey extends ControlKey[Bool](name = "preferCache")
 
 case class PreferCacheField() extends BundleField(PreferCacheKey) {
   override def data: Bool = Output(Bool())
-  override def default(x: Bool): Unit = { x := false.B }
+
+  override def default(x: Bool): Unit = {
+    x := false.B
+  }
 }
 
 // indicate whether this block is dirty or not (only used in handle Release/ReleaseData)
@@ -70,32 +81,39 @@ case object DirtyKey extends ControlKey[Bool](name = "blockisdirty")
 
 case class DirtyField() extends BundleField(DirtyKey) {
   override def data: Bool = Output(Bool())
-  override def default(x: Bool): Unit = { x := true.B }
+
+  override def default(x: Bool): Unit = {
+    x := true.B
+  }
 }
 
-case class HCCacheParameters(
-  name:              String = "L2",
-  level:             Int = 2,
-  ways:              Int = 4,
-  sets:              Int = 128,
-  blockBytes:        Int = 64,
-  pageBytes:         Int = 4096,
-  replacement:       String = "plru",
-  mshrs:             Int = 16,
-  dirReadPorts:      Int = 1,
-  dirReg:            Boolean = true,
-  enableDebug:       Boolean = false,
-  enablePerf:        Boolean = false,
-  channelBytes:      TLChannelBeatBytes = TLChannelBeatBytes(32),
-  prefetch:          Option[PrefetchParameters] = None,
-  clientCaches:      Seq[CacheParameters] = Nil,
-  inclusive:         Boolean = true,
+case class HCCacheParameters
+(
+  name: String = "L2",
+  level: Int = 2,
+  ways: Int = 4,
+  sets: Int = 128,
+  blockBytes: Int = 64,
+  pageBytes: Int = 4096,
+  replacement: String = "plru",
+  mshrs: Int = 16,
+  dirReadPorts: Int = 1,
+  dirReg: Boolean = true,
+  enableDebug: Boolean = false,
+  enablePerf: Boolean = false,
+  channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
+  prefetch: Option[PrefetchParameters] = None,
+  clientCaches: Seq[CacheParameters] = Nil,
+  inclusive: Boolean = true,
   alwaysReleaseData: Boolean = false,
-  echoField:         Seq[BundleFieldBase] = Nil,
-  reqField:          Seq[BundleFieldBase] = Nil, // master
-  respKey:           Seq[BundleKeyBase] = Nil,
-  reqKey:            Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey), // slave
-  respField:         Seq[BundleFieldBase] = Nil) {
+  tagECC:            Option[String] = None,
+  dataECC:           Option[String] = None,
+  echoField: Seq[BundleFieldBase] = Nil,
+  reqField: Seq[BundleFieldBase] = Nil, // master
+  respKey: Seq[BundleKeyBase] = Nil,
+  reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey), // slave
+  respField: Seq[BundleFieldBase] = Nil,
+  sramCycleFactor: Int = 1) {
   require(ways > 0)
   require(sets > 0)
   require(channelBytes.d.get >= 8)
@@ -114,4 +132,5 @@ case class HCCacheParameters(
 }
 
 case object EdgeInKey extends Field[TLEdgeIn]
+
 case object EdgeOutKey extends Field[TLEdgeOut]

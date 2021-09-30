@@ -212,6 +212,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     probes_done := 0.U
     bad_grant := false.B
 
+    assert(!io.dirResult.bits.hit || !io.dirResult.bits.error)
+
     when(req.fromC) {
       // Release
       s_execute := false.B
@@ -562,6 +564,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     req_valid := false.B
     meta_valid := false.B
   }
+  io.status.bits.will_free := no_wait && no_schedule
 
   // Alloc MSHR (alloc has higher priority than release)
   assert(RegNext(!req_valid || !io.alloc.valid, true.B)) // TODO: support fully-pipelined
@@ -577,6 +580,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   io.status.bits.way := meta.way
   io.status.bits.will_grant_data := req.fromA && od.opcode(0)
   io.status.bits.will_save_data := true.B
+  io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)
   io.status.bits.blockB := !meta_valid ||
     ((!w_releaseack || !w_rprobeacklast || !w_pprobeacklast) && !w_grantfirst)
   // B nest A
