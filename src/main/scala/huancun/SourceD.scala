@@ -24,6 +24,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages.{AcquireBlock, AcquirePerm, ReleaseAck}
+import huancun.utils.HoldUnless
 
 class SourceD(implicit p: Parameters) extends HuanCunModule {
   /*
@@ -46,16 +47,16 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     val bs_wdata = Output(new DSData)
     // data hazards
     val sourceD_r_hazard = ValidIO(new SourceDHazard)
+    // putbuffer interface
+    val pb_pop = DecoupledIO(new PutBufferPop)
+    val pb_beat = Input(new PutBufferBeatEntry)
   })
-
-  io.bs_waddr.valid := false.B
-  io.bs_waddr.bits := DontCare
-  io.bs_wdata := DontCare
 
   val d = io.d
   val s1_valid = Wire(Bool())
   val s2_valid, s2_ready = Wire(Bool())
   val s3_valid, s3_ready = Wire(Bool())
+  val s4_ready = Wire(Bool())
 
   // stage1
   val busy = RegInit(false.B)
@@ -64,8 +65,10 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s1_req = Mux(busy, s1_req_reg, io.task.bits)
   val s1_needData = s1_req.fromA && (
     s1_req.opcode === TLMessages.GrantData ||
-      s1_req.opcode === TLMessages.AccessAckData
+    s1_req.opcode === TLMessages.AccessAckData ||
+    s1_req.opcode === TLMessages.AccessAck // Put should also read data TODO: no need for full-sized PutFullData
   )
+  val s1_need_pb = s1_req.fromA && (s1_req.opcode === TLMessages.AccessAck)
   val s1_counter = RegInit(0.U(beatBits.W)) // how many beats have been sent
   val s1_total_beats = Mux(s1_needData, totalBeats(s1_req.size), 0.U(beatBits.W))
   val s1_beat = startBeat(s1_req.off) | s1_counter
@@ -125,6 +128,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s2_latch = s1_valid && s2_ready
   val s2_req = RegEnable(s1_req, s2_latch)
   val s2_needData = RegEnable(s1_needData, s2_latch)
+  val s2_last = RegEnable(s1_last, s2_latch)
+  val s2_counter = RegEnable(s1_counter, s2_latch)
   val s2_full = RegInit(false.B)
   val s2_releaseAck = s2_req.opcode === ReleaseAck
   val s2_bypass_hit = RegEnable(
@@ -132,6 +137,20 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     false.B, s2_latch
   )
   val s2_d = Wire(io.d.cloneType)
+  val s2_need_pb = RegEnable(s1_need_pb, s2_latch)
+  val s2_need_d = RegEnable(!s1_need_pb || s1_counter === 0.U, s2_latch) // AccessAck for Put should only be fired once
+  val s2_valid_pb = RegInit(false.B) // put buffer is valid, wait put buffer fire
+  val s2_pdata_raw = io.pb_beat
+  val pb_ready = io.pb_pop.ready
+  val s2_pdata = HoldUnless(s2_pdata_raw, s2_valid_pb)
+
+  io.pb_pop.valid := s2_valid_pb && s2_req.fromA
+  io.pb_pop.bits.bufIdx := s2_req.bufIdx
+  io.pb_pop.bits.count := s2_counter
+  io.pb_pop.bits.last  := s2_last
+
+  when (pb_ready) { s2_valid_pb := false.B }
+  when (s2_latch) { s2_valid_pb := s1_need_pb }
 
   s1_queue.io.deq.ready := s2_full && s2_bypass_hit && s2_d.ready
   s2_d.valid := s2_full && ((s2_bypass_hit && s1_queue.io.deq.valid) || !s2_needData)
@@ -145,35 +164,38 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s2_d.bits.corrupt := false.B
   s2_d.bits.echo.lift(DirtyKey).foreach(_ := s2_req.dirty)
 
-  val s2_can_go = Mux(s2_d.valid, s2_d.ready, s3_ready)
+  val s2_can_go = Mux(s2_d.valid, s2_d.ready, s3_ready && (!s2_valid_pb || pb_ready))
   when(s2_full && s2_can_go) { s2_full := false.B }
   when(s2_latch) { s2_full := true.B }
 
-  s2_valid := s2_full && !s2_d.valid
+  s2_valid := s2_full && !s2_d.valid && (!s2_valid_pb || pb_ready)
   s2_ready := !s2_full || s2_can_go
 
   // stage3
   val s3_latch = s2_valid && s3_ready
-  val s3_full = RegInit(false.B)
+  val s3_valid_d = RegInit(false.B)
   val s3_needData = RegInit(false.B)
   val s3_req = RegEnable(s2_req, s3_latch)
+  val s3_counter = RegEnable(s2_counter, s3_latch)
+  val s3_pdata = RegEnable(s2_pdata, s3_latch)
+  val s3_need_pb = RegEnable(s2_need_pb, s3_latch)
   val s3_releaseAck = RegEnable(s2_releaseAck, s3_latch)
   val s3_d = Wire(io.d.cloneType)
   val s3_queue = Module(new Queue(new DSData, 3, flow = true))
 
-  assert(!s3_full || s3_needData, "Only data task can go to stage3!")
+  assert(!s3_valid_d || s3_needData, "Only data task can go to stage3!")
 
   when(d.ready) {
-    s3_full := false.B
+    s3_valid_d := false.B
     s3_needData := false.B
   }
   when(s3_latch) {
-    s3_full := true.B
+    s3_valid_d := s2_need_d
     s3_needData := s2_needData
   }
 
   val s3_rdata = s3_queue.io.deq.bits.data
-  s3_d.valid := s3_valid
+  s3_d.valid := s3_valid_d
   s3_d.bits.opcode := s3_req.opcode
   s3_d.bits.param := Mux(s3_releaseAck, 0.U, s3_req.param)
   s3_d.bits.sink := s3_req.sinkId
@@ -189,10 +211,37 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     false.B), false.B)
   s3_queue.io.enq.bits := io.bs_rdata
   assert(!s3_queue.io.enq.valid || s3_queue.io.enq.ready)
-  s3_queue.io.deq.ready := s3_d.ready && s3_needData && s3_valid
+  s3_queue.io.deq.ready := s3_d.ready && s3_needData && s3_valid  // TODO: inspect this
 
-  s3_ready := !s3_valid || s3_d.ready
-  s3_valid := s3_full
+  s3_ready := !s3_valid_d || s3_d.ready
+  s3_valid := s3_valid_d
+
+  // stage4
+  val s4_latch = s3_valid && s4_ready
+  val s4_req = RegEnable(s3_req, s4_latch)
+  val s4_rdata = RegEnable(s3_rdata, s4_latch)
+  val s4_pdata = RegEnable(s3_pdata, s4_latch)
+  val s4_need_pb = RegEnable(s3_need_pb, s4_latch)
+  val s4_beat = RegEnable(s3_counter, s4_latch)
+  val s4_full = RegInit(false.B)
+
+  when (io.bs_waddr.ready || !s4_need_pb) { s4_full := false.B }
+  when (s4_latch) { s4_full := true.B }
+
+  val selects = s4_pdata.mask.asBools
+  val mergedData = Cat(selects.zipWithIndex.map { case (s, i) =>
+    VecInit(Seq(s4_rdata, s4_pdata.data).map(_((i + 1) * 8 - 1, i * 8)))(s)
+  }.reverse)  // merge data according to mask
+
+  io.bs_waddr.valid := s4_full && s4_need_pb
+  io.bs_waddr.bits.noop := false.B
+  io.bs_waddr.bits.way  := s4_req.way
+  io.bs_waddr.bits.set  := s4_req.set
+  io.bs_waddr.bits.beat := s4_beat
+  io.bs_waddr.bits.write := true.B
+  io.bs_wdata.data := mergedData
+
+  s4_ready := !s4_full || io.bs_waddr.ready || !s4_need_pb
 
   TLArbiter.lowest(edgeIn, io.d, s3_d, s2_d)
 
