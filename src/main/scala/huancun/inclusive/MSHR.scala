@@ -163,7 +163,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   val s_grantack = RegInit(true.B) // source_e
   val s_writebacktag = RegInit(true.B) // tag_write
   val s_writebackdir = RegInit(true.B) // dir_write
-  val s_writeput = RegInit(true.B) // sink_a
+  val s_transferput = RegInit(true.B) // writeput to source_a
   val s_writerelease = RegInit(true.B) // sink_c
   val s_triggerprefetch =
     prefetchOpt.map(_ => RegInit(true.B)) // trigger a prefetch training to prefetcher
@@ -191,7 +191,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     s_grantack := true.B
     s_writebacktag := true.B
     s_writebackdir := true.B
-    s_writeput := true.B
+    s_transferput := true.B
     s_writerelease := true.B
     s_triggerprefetch.foreach(_ := true.B)
     s_prefetchack.foreach(_ := true.B)
@@ -244,6 +244,23 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
           }
         }
       }
+    }.elsewhen(req.opcode(2,1) === 0.U) { // Put
+      // need pprobe
+      when(meta.hit && meta.state === TRUNK) {
+        s_pprobe := false.B
+        w_pprobeackfirst := false.B
+        w_pprobeacklast := false.B
+        w_pprobeack := false.B
+        s_writebackdir := false.B
+      }
+      // Put and Atomics need to write
+      when(meta.hit && meta.state === TIP) {
+        s_writebackdir := false.B
+      }
+      // need to transfer exactly the request to sourceA when Put miss
+      when(!meta.hit || meta.state === BRANCH) { // Put[Full/Partial]Data
+        s_transferput := false.B
+      }
     }.otherwise {
       // A channel requests
       // TODO: consider parameterized write-through policy for put/atomics
@@ -287,17 +304,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
         w_grantack := false.B
         s_writebackdir := false.B
       }
-      // Put and Atomics need to write
-      when(!req.opcode(2) && !meta.dirty) {
-        s_writebackdir := false.B
-      }
       // need write tag
       when(!meta.hit) {
         s_writebacktag := false.B
-      }
-      // need wirte putbuffer in Sink A into data array
-      when(req.opcode(2, 1) === 0.U) { // Put[Full/Partial]Data
-        s_writeput := false.B
       }
       // trigger a prefetch when req is from DCache, and miss / prefetched hit in L2
       prefetchOpt.map(_ => {
@@ -335,14 +344,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
    * Assume that in data array, sinkA > sinkC > sourceC > sinkD > sourceDw > sourceDr
    */
   val no_wait = w_rprobeacklast && w_pprobeacklast && w_grantlast && w_releaseack && w_grantack
-  io.tasks.source_a.valid := !s_acquire && s_release && s_pprobe
+  io.tasks.source_a.valid := (!s_acquire || !s_transferput) && s_release && s_pprobe
   io.tasks.source_b.valid := !s_rprobe || !s_pprobe
   io.tasks.source_c.valid := !s_release && w_rprobeackfirst || !s_probeack && w_pprobeackfirst
   io.tasks.source_d.valid := !s_execute && w_grant && w_pprobeack
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
   io.tasks.dir_write.valid := !s_writebackdir && no_wait || !s_release && w_rprobeackfirst // TODO: Is the latter clause necessary?
   io.tasks.tag_write.valid := !s_writebacktag && no_wait
-  io.tasks.sink_a.valid := !s_writeput && w_grant && w_pprobeack
+  // io.tasks.sink_a.valid := !s_transferput && w_grant && w_pprobeack
+  io.tasks.sink_a.valid := false.B
   io.tasks.sink_c.valid := !s_writerelease // && w_grant && w_pprobeack
   io.tasks.prefetch_train.foreach(_.valid := !s_triggerprefetch.get)
   io.tasks.prefetch_resp.foreach(_.valid := !s_prefetchack.get && w_grantfirst)
@@ -357,11 +367,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
 
   oa.tag := req.tag
   oa.set := req.set
-  oa.opcode := TLMessages.AcquireBlock // TODO: change this
-  oa.opcode := Mux(meta.hit, TLMessages.AcquirePerm, TLMessages.AcquireBlock)
-  oa.param := Mux(req_needT, Mux(meta.hit, BtoT, NtoT), NtoB)
+  oa.opcode := Mux(!s_transferput, req.opcode, Mux(meta.hit, TLMessages.AcquirePerm, TLMessages.AcquireBlock))
+  oa.param := Mux(!s_transferput, req.param, Mux(req_needT, Mux(meta.hit, BtoT, NtoT), NtoB))
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U
+  oa.bufIdx := req.bufIdx
+  oa.putData := req.opcode(2,1) === 0.U
 
   ob.tag := Mux(!s_rprobe, meta.tag, req.tag)
   ob.set := req.set
@@ -419,6 +430,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   od.off := req.off
   od.denied := bad_grant
   od.dirty := false.B // TODO
+  od.bufIdx := req.bufIdx
 
   oe.sink := sink
 
@@ -466,6 +478,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   dontTouch(io.tasks)
   when(io.tasks.source_a.fire()) {
     s_acquire := true.B
+    s_transferput := true.B
   }
   when(io.tasks.source_b.fire()) {
     s_rprobe := true.B
@@ -486,9 +499,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   }
   when(io.tasks.tag_write.fire()) {
     s_writebacktag := true.B
-  }
-  when(io.tasks.sink_a.fire()) {
-    s_writeput := true.B
   }
   when(io.tasks.sink_c.fire()) {
     s_writerelease := true.B
@@ -547,7 +557,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   val no_schedule = s_execute && s_probeack && meta_valid && s_writebacktag && s_writebackdir && s_writerelease &&
     s_triggerprefetch.getOrElse(true.B) &&
     s_prefetchack.getOrElse(true.B) &&
-    s_grantack
+    s_grantack && s_transferput
   when(no_wait && no_schedule) { // TODO: remove s_writebackdir to improve perf
     req_valid := false.B
     meta_valid := false.B
