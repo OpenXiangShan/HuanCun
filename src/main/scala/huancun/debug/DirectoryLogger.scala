@@ -92,15 +92,17 @@ object DirectoryLogger {
   )(
     implicit p: Parameters
   ) = {
-    val dirLogger = Module(new DirLogWriter(prefix))
-    dirLogger.io.set := set
-    dirLogger.io.way := way
-    dirLogger.io.typeId := typeId.U
-    dirLogger.io.stamp := stamp
-    dirLogger.io.dir := state.asUInt()
-    dirLogger.io.tag := tag
-    dirLogger.io.wen := wen
-    dirLogger.io.clock := clock
-    dirLogger.io.reset := reset
+    if(p(HCCacheParamsKey).enableDebug){
+      val dirLogger = Module(new DirLogWriter(prefix))
+      dirLogger.io.set := set
+      dirLogger.io.way := way
+      dirLogger.io.typeId := typeId.U
+      dirLogger.io.stamp := stamp
+      dirLogger.io.dir := state.asUInt()
+      dirLogger.io.tag := tag
+      dirLogger.io.wen := wen
+      dirLogger.io.clock := clock
+      dirLogger.io.reset := reset
+    }
   }
 }

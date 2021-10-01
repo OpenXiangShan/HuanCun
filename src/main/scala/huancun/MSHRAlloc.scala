@@ -47,7 +47,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     // To MSHRs
     val alloc = Vec(mshrsAll, ValidIO(new MSHRRequest))
     // To directory
-    val dirReads = Vec(dirReadPorts, DecoupledIO(new DirRead))
+    val dirRead = DecoupledIO(new DirRead)
   })
 
   // Allocate one MSHR per cycle
@@ -101,7 +101,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val nestC = may_nestC && !c_mshr_status.valid
   val nestB = may_nestB && !bc_mshr_status.valid && !c_mshr_status.valid
 
-  val dirRead = io.dirReads.head
+  val dirRead = io.dirRead
   val mshrFree = Cat(abc_mshr_status.map(s => !s.valid)).orR()
 
   val can_accept_c = (mshrFree && !conflict_c) || nestC
@@ -157,11 +157,6 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   )
   dirRead.bits.replacerInfo.channel := request.bits.channel
   dirRead.bits.replacerInfo.opcode := request.bits.opcode
-
-  io.dirReads.drop(1).foreach { d =>
-    d.valid := false.B
-    d.bits <> DontCare
-  }
 
   val cntStart = RegInit(false.B)
   when(dirRead.ready) {

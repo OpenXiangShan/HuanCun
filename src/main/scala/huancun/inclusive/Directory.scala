@@ -36,8 +36,8 @@ class DirResult(implicit p: Parameters) extends DirectoryEntry with BaseDirResul
 }
 
 class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, DirWrite, TagWrite] {
-  val reads = Vec(dirReadPorts, Flipped(DecoupledIO(new DirRead)))
-  val results = Vec(dirReadPorts, ValidIO(new DirResult))
+  val read = Flipped(DecoupledIO(new DirRead))
+  val result = ValidIO(new DirResult)
   val dirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new DirWrite)))
   val tagWReq = Flipped(DecoupledIO(new TagWrite))
 }
@@ -55,7 +55,6 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
 
   val dir = Module(
     new SubDirectoryDoUpdate[DirectoryEntry](
-      rports = dirReadPorts,
       wports = mshrsAll,
       sets = cacheParams.sets,
       ways = cacheParams.ways,
@@ -68,32 +67,29 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
       },
       dir_hit_fn = x => x.state =/= MetaData.INVALID,
       invalid_way_sel = invalid_way_sel,
-      replacement = "plru"
+      replacement = cacheParams.replacement
     ) with UpdateOnAcquire
   )
-
-  for (i <- 0 until dirReadPorts) {
-    val rport = dir.io.reads(i)
-    val req = io.reads(i)
-    rport.valid := req.valid
-    rport.bits.set := req.bits.set
-    rport.bits.tag := req.bits.tag
-    rport.bits.replacerInfo := req.bits.replacerInfo
-    req.ready := rport.ready
-    val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
-    val resp = io.results(i)
-    val selfResp = dir.io.resps(i)
-    resp.valid := selfResp.valid
-    resp.bits.idOH := reqIdOHReg
-    resp.bits.hit := selfResp.bits.hit
-    resp.bits.way := selfResp.bits.way
-    resp.bits.tag := selfResp.bits.tag
-    resp.bits.dirty := selfResp.bits.dir.dirty
-    resp.bits.state := selfResp.bits.dir.state
-    resp.bits.clients := selfResp.bits.dir.clients
-    resp.bits.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
-    resp.bits.error := selfResp.bits.error
-  }
+  val rport = dir.io.read
+  val req = io.read
+  rport.valid := req.valid
+  rport.bits.set := req.bits.set
+  rport.bits.tag := req.bits.tag
+  rport.bits.replacerInfo := req.bits.replacerInfo
+  req.ready := rport.ready
+  val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
+  val resp = io.result
+  val selfResp = dir.io.resp
+  resp.valid := selfResp.valid
+  resp.bits.idOH := reqIdOHReg
+  resp.bits.hit := selfResp.bits.hit
+  resp.bits.way := selfResp.bits.way
+  resp.bits.tag := selfResp.bits.tag
+  resp.bits.dirty := selfResp.bits.dir.dirty
+  resp.bits.state := selfResp.bits.dir.state
+  resp.bits.clients := selfResp.bits.dir.clients
+  resp.bits.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
+  resp.bits.error := selfResp.bits.error
   // Self Tag Write
   dir.io.tag_w.valid := io.tagWReq.valid
   dir.io.tag_w.bits.tag := io.tagWReq.bits.tag

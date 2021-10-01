@@ -43,8 +43,8 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
 abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
   implicit p: Parameters)
     extends HuanCunBundle {
-  val reads:    Vec[DecoupledIO[DirRead]]
-  val results:  Vec[Valid[T_RESULT]]
+  val read:    DecoupledIO[DirRead]
+  val result:  Valid[T_RESULT]
   val dirWReqs: Vec[DecoupledIO[T_DIR_W]]
   val tagWReq:  DecoupledIO[T_TAG_W]
 }
@@ -56,7 +56,6 @@ abstract class BaseDirectory[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite,
 }
 
 class SubDirectory[T <: Data](
-  rports:      Int,
   wports:      Int,
   sets:        Int,
   ways:        Int,
@@ -72,24 +71,18 @@ class SubDirectory[T <: Data](
   val dir_init = dir_init_fn()
 
   val io = IO(new Bundle() {
-    val reads = Vec(
-      rports,
-      Flipped(DecoupledIO(new Bundle() {
-        val tag = UInt(tagBits.W)
-        val set = UInt(setBits.W)
-        val replacerInfo = new ReplacerInfo()
-      }))
-    )
-    val resps = Vec(
-      rports,
-      ValidIO(new Bundle() {
-        val hit = Bool()
-        val way = UInt(wayBits.W)
-        val tag = UInt(tagBits.W)
-        val dir = dir_init.cloneType
-        val error = Bool()
-      })
-    )
+    val read = Flipped(DecoupledIO(new Bundle() {
+      val tag = UInt(tagBits.W)
+      val set = UInt(setBits.W)
+      val replacerInfo = new ReplacerInfo()
+    }))
+    val resp = ValidIO(new Bundle() {
+      val hit = Bool()
+      val way = UInt(wayBits.W)
+      val tag = UInt(tagBits.W)
+      val dir = dir_init.cloneType
+      val error = Bool()
+    })
     val tag_w = Flipped(DecoupledIO(new Bundle() {
       val tag = UInt(tagBits.W)
       val set = UInt(setBits.W)
@@ -107,76 +100,82 @@ class SubDirectory[T <: Data](
 
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Mem(sets, Vec(ways, dir_init.cloneType))
-
-  when(!resetFinish) {
-    metaArray(resetIdx).foreach(w => w := dir_init)
-    resetIdx := resetIdx - 1.U
-  }
-  when(resetIdx === 0.U) {
-    resetFinish := true.B
+  val metaArray = Seq.fill(ways) {
+    Module(new SyncDataModuleTemplate(dir_init.cloneType, sets, 1, wports))
   }
 
+  val tag_wen = io.tag_w.valid
+  val replacer_wen = WireInit(false.B)
   io.tag_w.ready := true.B
-  io.reads.foreach(_.ready := !io.tag_w.valid && resetFinish)
+  io.read.ready := !tag_wen && !replacer_wen && resetFinish
 
   def tagCode: Code = Code.fromString(p(HCCacheParamsKey).tagECC)
 
   val eccTagBits = tagCode.width(tagBits)
   println(s"extra ECC Tagbits:${eccTagBits - tagBits}")
-  val tagArray = Array.fill(rports) {
-    Module(new SRAMTemplate(UInt(eccTagBits.W), sets, ways, singlePort = true))
+  val tagArray = Module(new SRAMTemplate(UInt(eccTagBits.W), sets, ways, singlePort = true))
+  val tagRead = Wire(Vec(ways, UInt(eccTagBits.W)))
+
+  tagArray.io.w(
+    io.tag_w.fire(),
+    tagCode.encode(io.tag_w.bits.tag),
+    io.tag_w.bits.set,
+    UIntToOH(io.tag_w.bits.way)
+  )
+  tagRead := tagArray.io.r(!io.tag_w.fire(), io.read.bits.set).resp.data
+
+  val reqReg = RegEnable(io.read.bits, enable = io.read.fire())
+  val reqValidReg = RegNext(io.read.fire(), false.B)
+
+  val repl = ReplacementPolicy.fromString(replacement, ways)
+  val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
+  val repl_state = replacer_sram.io.r(!replacer_wen, io.read.bits.set).resp.data(0)
+  val next_state = repl.get_next_state(repl_state, io.resp.bits.way)
+  replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
+
+  for (m <- metaArray) {
+    m.io.raddr(0) := io.read.bits.set
   }
 
-  val tagRead = Seq.fill(rports) {
-    Wire(Vec(ways, UInt(eccTagBits.W)))
-  }
-  tagArray
-    .zip(io.reads)
-    .zip(tagRead)
-    .foreach({
-      case ((sram, rreq), rdata) =>
-        val wen = io.tag_w.fire()
-        sram.io.w(wen, tagCode.encode(io.tag_w.bits.tag), io.tag_w.bits.set, UIntToOH(io.tag_w.bits.way))
-        assert(!wen || (wen && sram.io.w.req.ready))
-        rdata := sram.io.r(!wen, rreq.bits.set).resp.data
-        assert(wen || (!wen && sram.io.r.req.ready))
-    })
+  io.resp.valid := reqValidReg
+  val metas = VecInit(metaArray.map(m => m.io.rdata(0)))
+  val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
+  val metaValidVec = metas.map(dir_hit_fn)
+  val hitVec = tagMatchVec.zip(metaValidVec).map(x => x._1 && x._2)
+  val hitWay = OHToUInt(hitVec)
+  val replaceWay = repl.get_replace_way(repl_state)
+  val (inv, invalidWay) = invalid_way_sel(metas, replaceWay)
+  val chosenWay = Mux(inv, invalidWay, replaceWay)
+  val meta = metas(io.resp.bits.way)
+  val tag_decode = tagCode.decode(tagRead(io.resp.bits.way))
+  val tag = tag_decode.uncorrected
+  io.resp.bits.hit := Cat(hitVec).orR()
+  io.resp.bits.way := Mux(io.resp.bits.hit, hitWay, chosenWay)
+  io.resp.bits.dir := meta
+  io.resp.bits.tag := tag
+  io.resp.bits.error := tag_decode.error
 
-  val replacer = new SetAssocReplacer(sets, ways, replacement)
-
-  val reqTags = io.reads.map(r => RegEnable(r.bits.tag, enable = r.fire()))
-  val reqSets = io.reads.map(r => RegEnable(r.bits.set, enable = r.fire()))
-  val reqValids = io.reads.map(r => RegNext(r.fire(), false.B))
-  val reqReplacerInfo = io.reads.map(r => RegEnable(r.bits.replacerInfo, enable = r.fire()))
-
-  val hitVec = Seq.fill(rports)(Wire(Vec(ways, Bool())))
-
-  for ((result, i) <- io.resps.zipWithIndex) {
-    result.valid := reqValids(i)
-    val tags = tagRead(i)
-    val metas = metaArray(reqSets(i))
-    val tagMatchVec = tags.map(_(tagBits-1, 0) === reqTags(i))
-    val metaValidVec = metas.map(dir_hit_fn)
-    hitVec(i) := tagMatchVec.zip(metaValidVec).map(a => a._1 && a._2)
-    val hitWay = OHToUInt(hitVec(i))
-    val replaceWay = replacer.way(reqSets(i))
-    val (inv, invalidWay) = invalid_way_sel(metas, replaceWay)
-    val chosenWay = Mux(inv, invalidWay, replaceWay)
-
-    result.bits.hit := Cat(hitVec(i)).orR()
-    result.bits.way := Mux(result.bits.hit, hitWay, chosenWay)
-    val meta = metas(result.bits.way)
-    result.bits.dir := meta
-    result.bits.tag := tags(result.bits.way)(tagBits-1, 0)
-    result.bits.error := tagCode.decode(tags(result.bits.way)).error
-  }
-
-  for (req <- io.dir_w) {
-    when(req.fire()) {
-      metaArray(req.bits.set)(req.bits.way) := req.bits.dir
+  for ((req, i) <- io.dir_w.zipWithIndex) {
+    for( (m, way) <- metaArray.zipWithIndex ){
+      m.io.wen(i) := req.fire() && way.U === req.bits.way
+      m.io.waddr(i) := req.bits.set
+      m.io.wdata(i) := req.bits.dir
     }
     req.ready := true.B
+  }
+
+  for( m <- metaArray ) {
+    when(!resetFinish){
+      m.io.waddr(0) := resetIdx
+      m.io.wdata(0) := dir_init
+      m.io.wen(0) := true.B
+    }
+  }
+  when(resetIdx === 0.U) {
+    resetFinish := true.B
+  }
+  when(!resetFinish) {
+    resetIdx := resetIdx - 1.U
   }
 
 }
@@ -198,7 +197,6 @@ trait UpdateOnAcquire extends HasUpdate {
 }
 
 abstract class SubDirectoryDoUpdate[T <: Data](
-  rports:      Int,
   wports:      Int,
   sets:        Int,
   ways:        Int,
@@ -208,15 +206,13 @@ abstract class SubDirectoryDoUpdate[T <: Data](
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
   replacement: String)(implicit p: Parameters)
     extends SubDirectory[T](
-      rports, wports, sets, ways, tagBits,
+      wports, sets, ways, tagBits,
       dir_init_fn, dir_hit_fn, invalid_way_sel,
       replacement
     ) with HasUpdate {
 
-  for ((result, i) <- io.resps.zipWithIndex) {
-    val updateReplacer = doUpdate(reqReplacerInfo(i))
-    when(reqValids(i) && updateReplacer) {
-      replacer.access(reqSets(i), result.bits.way)
-    }
+  val update = doUpdate(reqReg.replacerInfo)
+  when(reqValidReg && update){
+    replacer_wen := true.B
   }
 }

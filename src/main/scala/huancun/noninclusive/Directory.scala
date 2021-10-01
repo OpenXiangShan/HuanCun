@@ -105,8 +105,8 @@ trait NonInclusiveCacheReplacerUpdate { this: HasUpdate =>
 }
 
 class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, SelfDirWrite, SelfTagWrite] {
-  val reads = Vec(dirReadPorts, Flipped(DecoupledIO(new DirRead)))
-  val results = Vec(dirReadPorts, ValidIO(new DirResult))
+  val read = Flipped(DecoupledIO(new DirRead))
+  val result = ValidIO(new DirResult)
   val dirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new SelfDirWrite)))
   val tagWReq = Flipped(DecoupledIO(new SelfTagWrite))
   val clientDirWReqs = Vec(clientBits, Vec(mshrsAll, Flipped(DecoupledIO(new ClientDirWrite))))
@@ -179,7 +179,6 @@ class Directory(implicit p: Parameters)
   val clientDirs = (0 until clientBits).map { _ =>
     val clientDir = Module(
       new SubDirectory[ClientDirEntry](
-        rports = dirReadPorts,
         wports = mshrsAll,
         sets = clientSets,
         ways = clientWays,
@@ -217,7 +216,6 @@ class Directory(implicit p: Parameters)
   }
   val selfDir = Module(
     new SubDirectoryDoUpdate[SelfDirEntry](
-      rports = dirReadPorts,
       wports = mshrsAll,
       sets = cacheParams.sets,
       ways = cacheParams.ways,
@@ -230,7 +228,7 @@ class Directory(implicit p: Parameters)
       },
       dir_hit_fn = selfHitFn,
       self_invalid_way_sel,
-      replacement = "lru"
+      replacement = cacheParams.replacement
     ) with NonInclusiveCacheReplacerUpdate
   )
 
@@ -241,46 +239,44 @@ class Directory(implicit p: Parameters)
     ltag := addr.head(ltag.getWidth)
   }
 
-  for (i <- 0 until dirReadPorts) {
-    val rports = clientDirs.map(_.io.reads(i)) :+ selfDir.io.reads(i)
-    val req = io.reads(i)
-    rports.foreach { p =>
-      p.valid := req.valid
-      addrConnect(p.bits.set, p.bits.tag, req.bits.set, req.bits.tag)
-      p.bits.replacerInfo := req.bits.replacerInfo
-    }
-    req.ready := Cat(rports.map(_.ready)).andR()
-    val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
-    val sourceIdReg = RegEnable(req.bits.source, req.fire())
-    val setReg = RegEnable(req.bits.set, req.fire())
-    val replacerInfoReg = RegEnable(req.bits.replacerInfo, req.fire())
-    val resp = io.results(i)
-    val clientResps = clientDirs.map(_.io.resps(i))
-    val selfResp = selfDir.io.resps(i)
-    resp.valid := selfResp.valid
-    val valids = Cat(clientResps.map(_.valid) :+ selfResp.valid)
-    assert(valids.andR() || !valids.orR(), "valids must be all 1s or 0s")
-    resp.bits.idOH := reqIdOHReg
-    resp.bits.sourceId := sourceIdReg
-    resp.bits.set := setReg
-    resp.bits.replacerInfo := replacerInfoReg
-    resp.bits.self.hit := selfResp.bits.hit
-    resp.bits.self.way := selfResp.bits.way
-    resp.bits.self.tag := selfResp.bits.tag
-    resp.bits.self.dirty := selfResp.bits.dir.dirty
-    resp.bits.self.state := selfResp.bits.dir.state
-    resp.bits.self.error := selfResp.bits.error
-    resp.bits.self.clientStates := selfResp.bits.dir.clientStates
-    resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
-    resp.bits.clients.zip(clientResps).foreach {
-      case (resp, clientResp) =>
-        resp.hit := clientResp.bits.hit
-        resp.way := clientResp.bits.way
-        resp.tag := clientResp.bits.tag
-        resp.state := clientResp.bits.dir.state
-        resp.alias.foreach(_ := clientResp.bits.dir.alias.get)
-        resp.error := clientResp.bits.error
-    }
+  val rports = clientDirs.map(_.io.read) :+ selfDir.io.read
+  val req = io.read
+  rports.foreach { p =>
+    p.valid := req.valid
+    addrConnect(p.bits.set, p.bits.tag, req.bits.set, req.bits.tag)
+    p.bits.replacerInfo := req.bits.replacerInfo
+  }
+  req.ready := Cat(rports.map(_.ready)).andR()
+  val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
+  val sourceIdReg = RegEnable(req.bits.source, req.fire())
+  val setReg = RegEnable(req.bits.set, req.fire())
+  val replacerInfoReg = RegEnable(req.bits.replacerInfo, req.fire())
+  val resp = io.result
+  val clientResps = clientDirs.map(_.io.resp)
+  val selfResp = selfDir.io.resp
+  resp.valid := selfResp.valid
+  val valids = Cat(clientResps.map(_.valid) :+ selfResp.valid)
+  assert(valids.andR() || !valids.orR(), "valids must be all 1s or 0s")
+  resp.bits.idOH := reqIdOHReg
+  resp.bits.sourceId := sourceIdReg
+  resp.bits.set := setReg
+  resp.bits.replacerInfo := replacerInfoReg
+  resp.bits.self.hit := selfResp.bits.hit
+  resp.bits.self.way := selfResp.bits.way
+  resp.bits.self.tag := selfResp.bits.tag
+  resp.bits.self.dirty := selfResp.bits.dir.dirty
+  resp.bits.self.state := selfResp.bits.dir.state
+  resp.bits.self.error := selfResp.bits.error
+  resp.bits.self.clientStates := selfResp.bits.dir.clientStates
+  resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
+  resp.bits.clients.zip(clientResps).foreach {
+    case (resp, clientResp) =>
+      resp.hit := clientResp.bits.hit
+      resp.way := clientResp.bits.way
+      resp.tag := clientResp.bits.tag
+      resp.state := clientResp.bits.dir.state
+      resp.alias.foreach(_ := clientResp.bits.dir.alias.get)
+      resp.error := clientResp.bits.error
   }
 
   // Self Tag Write
@@ -318,14 +314,13 @@ class Directory(implicit p: Parameters)
   }
 
   assert(dirReadPorts == 1)
-  val resp = io.results.head
-  val req = RegEnable(io.reads.head.bits, io.reads.head.fire())
-  XSPerfAccumulate(cacheParams, "selfdir_A_req", req.replacerInfo.channel(0) && resp.valid)
-  XSPerfAccumulate(cacheParams, "selfdir_A_hit", req.replacerInfo.channel(0) && resp.valid && resp.bits.self.hit)
-  XSPerfAccumulate(cacheParams, "selfdir_B_req", req.replacerInfo.channel(1) && resp.valid)
-  XSPerfAccumulate(cacheParams, "selfdir_B_hit", req.replacerInfo.channel(1) && resp.valid && resp.bits.self.hit)
-  XSPerfAccumulate(cacheParams, "selfdir_C_req", req.replacerInfo.channel(2) && resp.valid)
-  XSPerfAccumulate(cacheParams, "selfdir_C_hit", req.replacerInfo.channel(2) && resp.valid && resp.bits.self.hit)
+  val req_r = RegEnable(req.bits, req.fire())
+  XSPerfAccumulate(cacheParams, "selfdir_A_req", req_r.replacerInfo.channel(0) && resp.valid)
+  XSPerfAccumulate(cacheParams, "selfdir_A_hit", req_r.replacerInfo.channel(0) && resp.valid && resp.bits.self.hit)
+  XSPerfAccumulate(cacheParams, "selfdir_B_req", req_r.replacerInfo.channel(1) && resp.valid)
+  XSPerfAccumulate(cacheParams, "selfdir_B_hit", req_r.replacerInfo.channel(1) && resp.valid && resp.bits.self.hit)
+  XSPerfAccumulate(cacheParams, "selfdir_C_req", req_r.replacerInfo.channel(2) && resp.valid)
+  XSPerfAccumulate(cacheParams, "selfdir_C_hit", req_r.replacerInfo.channel(2) && resp.valid && resp.bits.self.hit)
 
   XSPerfAccumulate(cacheParams, "selfdir_dirty", resp.valid && resp.bits.self.dirty)
   XSPerfAccumulate(cacheParams, "selfdir_TIP", resp.valid && resp.bits.self.state === TIP)

@@ -308,7 +308,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     if (cacheParams.inclusive) new inclusive.Directory()
     else new noninclusive.Directory()
   })
-  directory.io.reads <> mshrAlloc.io.dirReads
+  directory.io.read <> mshrAlloc.io.dirRead
 
   // Send tasks
 
@@ -458,19 +458,14 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
-      val dirResultMatch = directory.io.results.map(r => r.valid && r.bits.idOH(i))
-      val dirResult = Wire(Valid(directory.io.results.head.bits.cloneType))
-      dirResult.valid := Cat(dirResultMatch).orR()
-      dirResult.bits := Mux1H(dirResultMatch.zip(directory.io.results.map(_.bits)))
+      val dirResultMatch = directory.io.result.valid && directory.io.result.bits.idOH(i)
+      val dirResult = WireInit(directory.io.result)
+      // override valid
+      dirResult.valid := dirResultMatch
       mshr.io.dirResult := regFn(dirResult)
   }
   probeHelperOpt.foreach(h => {
-    h.io.dirResult.valid := Cat(directory.io.results.map(_.valid)).orR()
-    h.io.dirResult.bits := Mux1H(
-      directory.io.results.zipWithIndex.map{
-        case (r, i) => (r.valid && r.bits.idOH(i)) -> r.bits
-      }
-    )
+    h.io.dirResult := directory.io.result
   })
 
   // Provide MSHR info for sinkC, sinkD
