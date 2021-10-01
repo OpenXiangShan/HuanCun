@@ -491,4 +491,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   sinkC.io.sourceD_r_hazard <> sourceD.io.sourceD_r_hazard
   sinkD.io.sourceD_r_hazard <> sourceD.io.sourceD_r_hazard
 
+  sinkA.io.d_pb_pop <> sourceD.io.pb_pop
+  sinkA.io.d_pb_beat <> sourceD.io.pb_beat
+
+  sinkA.io.a_pb_pop <> sourceA.io.pb_pop
+  sinkA.io.a_pb_beat <> sourceA.io.pb_beat
 }
