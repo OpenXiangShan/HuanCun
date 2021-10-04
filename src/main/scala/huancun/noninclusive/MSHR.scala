@@ -754,8 +754,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val can_start = Mux(client_dir_conflict, probe_helper_finish, true.B)
   io.tasks.source_a.valid := (!s_acquire || !s_transferput) && s_release && s_probe && can_start
-  io.tasks.source_b.valid := !s_probe
-  io.tasks.source_c.valid := !s_release && w_probeack && s_writeprobe || !s_probeack && s_writerelease && w_probeack
+  io.tasks.source_b.valid := !s_probe && s_release
+  io.tasks.source_c.valid := !s_release || !s_probeack && s_writerelease && w_probeack
   io.tasks.source_d.valid := !s_execute && can_start && w_grant && s_writeprobe && w_probeacklast // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
   io.tasks.dir_write.valid := !s_wbselfdir && no_wait && can_start
