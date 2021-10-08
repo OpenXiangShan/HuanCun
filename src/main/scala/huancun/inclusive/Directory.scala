@@ -101,5 +101,5 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
   dir.io.dir_w.bits.set := io.dirWReq.bits.set
   dir.io.dir_w.bits.way := io.dirWReq.bits.way
   dir.io.dir_w.bits.dir := io.dirWReq.bits.data
-  req.ready := io.dirWReq.ready
+  io.dirWReq.ready := dir.io.dir_w.ready
 }
