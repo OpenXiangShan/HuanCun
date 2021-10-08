@@ -329,19 +329,19 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
-  def block_b_c[T <: Data](sinks: Seq[DecoupledIO[T]], sources: Seq[DecoupledIO[T]]): Unit = {
+  def block_b_c[T <: Data](sink: DecoupledIO[T], sources: Seq[DecoupledIO[T]]): Unit = {
     val c_src = sources.last
     val b_src = sources.init.last
     val abc_src = sources.init.init
-    for ((src, sink) <- abc_src.zip(sinks.dropRight(2))){
-      sink <> src
-    }
-    block_decoupled(sinks.init.last, b_src, select_c)
-    sinks.last <> c_src
+    val arbiter = Module(new RRArbiter[T](chiselTypeOf(sink.bits), sources.size))
+    arbiter.io.in.init.init.zip(abc_src).foreach(x => x._1 <> x._2)
+    block_decoupled(arbiter.io.in.init.last, b_src, select_c)
+    arbiter.io.in.last <> c_src
+    sink <> arbiter.io.out
   }
 
   // don't allow b write back when c is valid to simplify 'NestedWriteBack'
-  block_b_c(directory.io.dirWReqs, ms.map(_.io.tasks.dir_write))
+  block_b_c(directory.io.dirWReq, ms.map(_.io.tasks.dir_write))
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))

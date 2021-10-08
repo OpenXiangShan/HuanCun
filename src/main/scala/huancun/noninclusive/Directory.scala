@@ -107,9 +107,9 @@ trait NonInclusiveCacheReplacerUpdate { this: HasUpdate =>
 class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, SelfDirWrite, SelfTagWrite] {
   val read = Flipped(DecoupledIO(new DirRead))
   val result = ValidIO(new DirResult)
-  val dirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new SelfDirWrite)))
+  val dirWReq = Flipped(DecoupledIO(new SelfDirWrite))
   val tagWReq = Flipped(DecoupledIO(new SelfTagWrite))
-  val clientDirWReqs = Vec(clientBits, Vec(mshrsAll, Flipped(DecoupledIO(new ClientDirWrite))))
+  val clientDirWReqs = Vec(clientBits, Flipped(DecoupledIO(new ClientDirWrite)))
   val clientTagWreq = Vec(clientBits, Flipped(DecoupledIO(new ClientTagWrite)))
 }
 
@@ -119,19 +119,17 @@ class Directory(implicit p: Parameters)
   val io = IO(new DirectoryIO())
 
   val stamp = GTimer()
-  for (i <- 0 until mshrsAll) {
-    val selfDirW = io.dirWReqs(i)
-    DirectoryLogger(cacheParams.name, TypeId.self_dir)(
-      selfDirW.bits.set,
-      selfDirW.bits.way,
-      0.U,
-      selfDirW.bits.data,
-      stamp,
-      selfDirW.fire(),
-      this.clock,
-      this.reset
-    )
-  }
+  val selfDirW = io.dirWReq
+  DirectoryLogger(cacheParams.name, TypeId.self_dir)(
+    selfDirW.bits.set,
+    selfDirW.bits.way,
+    0.U,
+    selfDirW.bits.data,
+    stamp,
+    selfDirW.fire(),
+    this.clock,
+    this.reset
+  )
   DirectoryLogger(cacheParams.name, TypeId.self_tag)(
     io.tagWReq.bits.set,
     io.tagWReq.bits.way,
@@ -143,27 +141,24 @@ class Directory(implicit p: Parameters)
     this.reset
   )
 
-  for ((cDir, cTag) <- io.clientDirWReqs.zip(io.clientTagWreq)) {
-    for (i <- 0 until mshrsAll) {
-      val dirW = cDir(i)
-      DirectoryLogger(cacheParams.name, TypeId.client_dir)(
-        dirW.bits.set,
-        dirW.bits.way,
-        0.U,
-        dirW.bits.data,
-        stamp,
-        dirW.fire(),
-        this.clock,
-        this.reset
-      )
-    }
+  for ((dirW, tagW) <- io.clientDirWReqs.zip(io.clientTagWreq)) {
+    DirectoryLogger(cacheParams.name, TypeId.client_dir)(
+      dirW.bits.set,
+      dirW.bits.way,
+      0.U,
+      dirW.bits.data,
+      stamp,
+      dirW.fire(),
+      this.clock,
+      this.reset
+    )
     DirectoryLogger(cacheParams.name, TypeId.client_tag)(
-      cTag.bits.set,
-      cTag.bits.way,
-      cTag.bits.tag,
+      tagW.bits.set,
+      tagW.bits.way,
+      tagW.bits.tag,
       0.U,
       stamp,
-      cTag.fire(),
+      tagW.fire(),
       this.clock,
       this.reset
     )
@@ -295,22 +290,18 @@ class Directory(implicit p: Parameters)
   }
 
   // Self Dir Write
-  for ((req, wport) <- io.dirWReqs.zip(selfDir.io.dir_w)) {
+  selfDir.io.dir_w.valid := io.dirWReq.valid
+  selfDir.io.dir_w.bits.set := io.dirWReq.bits.set
+  selfDir.io.dir_w.bits.way := io.dirWReq.bits.way
+  selfDir.io.dir_w.bits.dir := io.dirWReq.bits.data
+  io.dirWReq.ready := selfDir.io.dir_w.ready
+  // Clients Dir Write
+  for ((req, wport) <- io.clientDirWReqs.zip(clientDirs.map(_.io.dir_w))) {
     wport.valid := req.valid
     wport.bits.set := req.bits.set
     wport.bits.way := req.bits.way
     wport.bits.dir := req.bits.data
     req.ready := wport.ready
-  }
-  // Clients Dir Write
-  for ((reqs, client) <- io.clientDirWReqs.zip(clientDirs)) {
-    for ((req, wport) <- reqs.zip(client.io.dir_w)) {
-      wport.valid := req.valid
-      wport.bits.set := req.bits.set
-      wport.bits.way := req.bits.way
-      wport.bits.dir := req.bits.data
-      req.ready := wport.ready
-    }
   }
 
   assert(dirReadPorts == 1)

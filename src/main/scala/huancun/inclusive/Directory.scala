@@ -38,7 +38,7 @@ class DirResult(implicit p: Parameters) extends DirectoryEntry with BaseDirResul
 class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, DirWrite, TagWrite] {
   val read = Flipped(DecoupledIO(new DirRead))
   val result = ValidIO(new DirResult)
-  val dirWReqs = Vec(mshrsAll, Flipped(DecoupledIO(new DirWrite)))
+  val dirWReq = Flipped(DecoupledIO(new DirWrite))
   val tagWReq = Flipped(DecoupledIO(new TagWrite))
 }
 
@@ -96,12 +96,10 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
   dir.io.tag_w.bits.set := io.tagWReq.bits.set
   dir.io.tag_w.bits.way := io.tagWReq.bits.way
   io.tagWReq.ready := dir.io.tag_w.ready
-  for ((req, wport) <- io.dirWReqs.zip(dir.io.dir_w)) {
-    wport.valid := req.valid
-    wport.bits.set := req.bits.set
-    wport.bits.way := req.bits.way
-    wport.bits.dir := req.bits.data
-    req.ready := wport.ready
-  }
-
+  // Self Dir Write
+  dir.io.dir_w.valid := io.dirWReq.valid
+  dir.io.dir_w.bits.set := io.dirWReq.bits.set
+  dir.io.dir_w.bits.way := io.dirWReq.bits.way
+  dir.io.dir_w.bits.dir := io.dirWReq.bits.data
+  req.ready := io.dirWReq.ready
 }
