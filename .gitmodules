@@ -1,4 +1,4 @@
 [submodule "rocket-chip"]
 	path = rocket-chip
-	url = git@github.com:OpenXiangShan/rocket-chip.git
+	url = https://github.com/OpenXiangShan/HuanCun.git
 	branch = 86a2f2cca699f149bcc082ef2828654a0a4e3f4b
