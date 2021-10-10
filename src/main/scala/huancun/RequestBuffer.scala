@@ -37,7 +37,8 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   val full = Cat(valids).andR()
   val no_ready_entry = !Cat(issue_arb.io.in.map(_.valid)).orR()
   io.out.bits := Mux(no_ready_entry && flow.B, io.in.bits, issue_arb.io.out.bits)
-  io.out.valid := (flow.B && no_ready_entry && io.in.valid) | issue_arb.io.out.valid
+  // TODO: flow new request even buffer is full
+  io.out.valid := (flow.B && no_ready_entry && io.in.valid && !full) | issue_arb.io.out.valid
   issue_arb.io.out.ready := io.out.ready
 
   io.in.ready := !full
