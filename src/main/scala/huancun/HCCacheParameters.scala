@@ -87,6 +87,12 @@ case class DirtyField() extends BundleField(DirtyKey) {
   }
 }
 
+case class CacheCtrl
+(
+  address: BigInt,
+  beatBytes: Int = 8
+)
+
 case class HCCacheParameters
 (
   name: String = "L2",
@@ -113,6 +119,7 @@ case class HCCacheParameters
   respKey: Seq[BundleKeyBase] = Nil,
   reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey), // slave
   respField: Seq[BundleFieldBase] = Nil,
+  ctrl: Option[CacheCtrl] = None,
   sramCycleFactor: Int = 1) {
   require(ways > 0)
   require(sets > 0)
