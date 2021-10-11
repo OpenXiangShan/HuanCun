@@ -157,6 +157,8 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   )
   dirRead.bits.replacerInfo.channel := request.bits.channel
   dirRead.bits.replacerInfo.opcode := request.bits.opcode
+  dirRead.bits.wayMode := false.B
+  dirRead.bits.way := DontCare
 
   val cntStart = RegInit(false.B)
   when(dirRead.ready) {

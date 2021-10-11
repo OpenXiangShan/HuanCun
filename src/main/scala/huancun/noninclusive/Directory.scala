@@ -240,6 +240,11 @@ class Directory(implicit p: Parameters)
     p.valid := req.valid
     addrConnect(p.bits.set, p.bits.tag, req.bits.set, req.bits.tag)
     p.bits.replacerInfo := req.bits.replacerInfo
+    p.bits.wayMode := req.bits.wayMode
+    p.bits.way := req.bits.way
+    when(req.fire() && req.bits.wayMode){
+      assert(req.bits.idOH(1, 0) === "b11".U)
+    }
   }
   req.ready := Cat(rports.map(_.ready)).andR()
   val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())

@@ -76,6 +76,8 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
   rport.bits.set := req.bits.set
   rport.bits.tag := req.bits.tag
   rport.bits.replacerInfo := req.bits.replacerInfo
+  rport.bits.wayMode := false.B
+  rport.bits.way := DontCare
   req.ready := rport.ready
   val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
   val resp = io.result

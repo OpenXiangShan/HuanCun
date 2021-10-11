@@ -51,6 +51,8 @@ trait HasHuanCunParameters {
   val offsetBits = log2Ceil(blockBytes)
   val beatBits = offsetBits - log2Ceil(beatBytes)
   val pageOffsetBits = log2Ceil(cacheParams.pageBytes)
+  val clientMaxWays = cacheParams.clientCaches.map(_.ways).fold(0)(math.max)
+  val maxWays = math.max(clientMaxWays, cacheParams.ways)
 
   val stateBits = MetaData.stateBits
 
@@ -191,6 +193,9 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
   )
 
+  val ctrl_unit = cacheParams.ctrl.map(_ => LazyModule(new CtrlUnit(node)))
+  val ctlnode = ctrl_unit.map(_.ctlnode)
+
   lazy val module = new LazyModuleImp(this) {
     val sizeBytes = cacheParams.sets * cacheParams.ways * cacheParams.blockBytes
     val sizeStr = sizeBytes match {
@@ -240,7 +245,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
       if(bankBits == 0) true.B else set(bankBits - 1, 0) === bankId.U
     }
-    node.in.zip(node.out).zipWithIndex.foreach {
+
+    val slices = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
         val slice = Module(new Slice()(p.alterPartial {
@@ -258,6 +264,24 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             prefetchReqsReady(i) := s.req.ready && bank_eq(p.io.req.bits.set, i, bankBits)
             prefetchResps.get(i) <> s.resp
         }
+        slice
+    }
+    ctrl_unit.map { c =>
+      val bank_match = slices.map(_ => Wire(Bool()))
+      c.module.req.ready := Mux1H(bank_match, slices.map(_.io.ctl_req.ready))
+      for((s, i) <- slices.zipWithIndex){
+        bank_match(i) := bank_eq(c.module.req.bits.set, i, bankBits)
+        s.io.ctl_req.valid := c.module.req.valid && bank_match(i)
+        s.io.ctl_req.bits := c.module.req.bits
+      }
+      val arb = Module(new Arbiter(new CtrlResp, slices.size))
+      arb.io.in <> VecInit(slices.map(_.io.ctl_resp))
+      c.module.resp <> arb.io.out
+    }
+    if(ctrl_unit.isEmpty){
+      slices.foreach(_.io.ctl_req <> DontCare)
+      slices.foreach(_.io.ctl_req.valid := false.B)
+      slices.foreach(_.io.ctl_resp.ready := false.B)
     }
     node.edges.in.headOption.foreach { n =>
       n.client.clients.zipWithIndex.foreach {

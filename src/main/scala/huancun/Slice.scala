@@ -23,8 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
-import huancun.inclusive.MSHR
-import huancun.noninclusive.{MSHR, ProbeHelper}
+import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
 import huancun.prefetch._
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
@@ -32,7 +31,31 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
     val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
+    val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
+    val ctl_resp = DecoupledIO(new CtrlResp())
   })
+
+  val ctrl = cacheParams.ctrl.map(_ => Module(new SliceCtrl()))
+  if(ctrl.nonEmpty){
+    ctrl.get.io.req <> io.ctl_req
+    io.ctl_resp <> ctrl.get.io.resp
+  } else {
+    io.ctl_req <> DontCare
+    io.ctl_resp <> DontCare
+    io.ctl_req.ready := false.B
+    io.ctl_resp.valid := false.B
+  }
+
+  def ctrl_arb[T <: Data](source: DecoupledIO[T], ctrl: Option[DecoupledIO[T]]): DecoupledIO[T] ={
+    if(ctrl.nonEmpty){
+      val arbiter = Module(new Arbiter(chiselTypeOf(source.bits), 2))
+      arbiter.io.in(0) <> ctrl.get
+      arbiter.io.in(1) <> source
+      arbiter.io.out
+    } else {
+      source
+    }
+  }
 
   // Inner channels
   val sinkA = Module(new SinkA)
@@ -81,13 +104,22 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   dataStorage.io.sinkD_wdata := sinkD.io.bs_wdata
   dataStorage.io.sinkD_waddr <> sinkD.io.bs_waddr
   sourceC.io.bs_rdata := dataStorage.io.sourceC_rdata
-  dataStorage.io.sourceC_raddr <> sourceC.io.bs_raddr
+  if(ctrl.nonEmpty){
+    ctrl.get.io.bs_r_data := dataStorage.io.sourceC_rdata
+  }
   sourceD.io.bs_rdata := dataStorage.io.sourceD_rdata
   dataStorage.io.sourceD_raddr <> sourceD.io.bs_raddr
   dataStorage.io.sourceD_waddr <> sourceD.io.bs_waddr
   dataStorage.io.sourceD_wdata <> sourceD.io.bs_wdata
-  dataStorage.io.sinkC_waddr <> sinkC.io.bs_waddr
-  dataStorage.io.sinkC_wdata <> sinkC.io.bs_wdata
+  dataStorage.io.sourceC_raddr <> ctrl_arb(sourceC.io.bs_raddr, ctrl.map(_.io.bs_r_addr))
+  dataStorage.io.sinkC_waddr <> ctrl_arb(sinkC.io.bs_waddr, ctrl.map(_.io.bs_w_addr))
+  dataStorage.io.sinkC_wdata <> (if(ctrl.nonEmpty){
+    Mux(ctrl.get.io.bs_w_addr.valid,
+      ctrl.get.io.bs_w_data,
+      sinkC.io.bs_wdata
+    )
+  } else sinkC.io.bs_wdata)
+
 
   val mshrAlloc = Module(new MSHRAlloc)
   val a_req_buffer = Module(new RequestBuffer())
@@ -308,7 +340,11 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     if (cacheParams.inclusive) new inclusive.Directory()
     else new noninclusive.Directory()
   })
-  directory.io.read <> mshrAlloc.io.dirRead
+  directory.io.read <> ctrl_arb(mshrAlloc.io.dirRead, ctrl.map(_.io.dir_read))
+  ctrl.map(c => {
+    c.io.dir_result.valid := directory.io.result.valid && directory.io.result.bits.idOH(1, 0) === "b11".U
+    c.io.dir_result.bits := directory.io.result.bits
+  })
 
   // Send tasks
 
@@ -340,8 +376,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     sink <> arbiter.io.out
   }
 
+  def add_ctrl[T <: Data](xs: Seq[DecoupledIO[T]], ctrl: Option[DecoupledIO[T]]): Seq[DecoupledIO[T]] = {
+    val last = if(ctrl.nonEmpty) ctrl_arb(xs.last, ctrl) else xs.last
+    xs.init :+ last
+  }
+
   // don't allow b write back when c is valid to simplify 'NestedWriteBack'
-  block_b_c(directory.io.dirWReq, ms.map(_.io.tasks.dir_write))
+  block_b_c(directory.io.dirWReq, add_ctrl(ms.map(_.io.tasks.dir_write), ctrl.map(_.io.s_dir_w)))
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
@@ -351,18 +392,18 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"))
   arbTasks(
     directory.io.tagWReq,
-    ms.map(_.io.tasks.tag_write),
+    add_ctrl(ms.map(_.io.tasks.tag_write), ctrl.map(_.io.s_tag_w)),
     Some("tagWrite")
   )
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
       for ((dirW, idx) <- dir.io.clientDirWReqs.zipWithIndex) {
-        block_b_c(dirW, ms.map(_.io.tasks.client_dir_write(idx)))
+        block_b_c(dirW, add_ctrl(ms.map(_.io.tasks.client_dir_write(idx)), ctrl.map(_.io.c_dir_w(idx))))
       }
       for ((tagW, idx) <- dir.io.clientTagWreq.zipWithIndex) {
         arbTasks(
           tagW,
-          ms.map(_.io.tasks.client_tag_write(idx)),
+          add_ctrl(ms.map(_.io.tasks.client_tag_write(idx)), ctrl.map(_.io.c_tag_w(idx))),
           Some(s"client_${idx}_tagWrite")
         )
       }
@@ -456,9 +497,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     } else x
   }
 
+  val is_ctrl_dir_res = directory.io.result.bits.idOH(1, 0) === "b11".U
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
-      val dirResultMatch = directory.io.result.valid && directory.io.result.bits.idOH(i)
+      val dirResultMatch = !is_ctrl_dir_res && directory.io.result.valid && directory.io.result.bits.idOH(i)
       val dirResult = WireInit(directory.io.result)
       // override valid
       dirResult.valid := dirResultMatch
