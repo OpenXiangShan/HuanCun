@@ -123,7 +123,7 @@ object TLLogger {
     for ((name, data) <- log.elements.filterNot(_._1 == "data")) {
       val e = chn.elements.find(_._1 == name)
       if (e.nonEmpty) {
-        data := e.get._2
+        data := e.get._2.asUInt()
       } else {
         data := 0.U
       }
