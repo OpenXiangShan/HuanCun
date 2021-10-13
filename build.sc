@@ -5,7 +5,7 @@ import scalafmt._
 val defaultVersions = Map(
   "chisel3" -> "3.4.3",
   "chisel3-plugin" -> "3.4.3",
-  "chiseltest" -> "latest.integration",
+  "chiseltest" -> "0.3.2",
   "scala" -> "2.12.13",
   "scalatest" -> "3.2.7"
 )
