@@ -570,7 +570,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
 
-  val preferCache = req.preferCache
+  val preferCache = req.preferCache || cache_alias // Cache alias will always preferCache to avoid trifle
   val bypassGet = req.opcode === Get && !preferCache
 
   def set_probe(): Unit = {
@@ -1109,7 +1109,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
     })
   }
-  when(io.resps.sink_c.valid) {
+  when(req_valid && io.resps.sink_c.valid) {
     val resp = io.resps.sink_c.bits
     probes_done := probes_done | probeack_bit
     w_probeackfirst := w_probeackfirst || probeack_last
@@ -1137,7 +1137,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
     }
   }
-  when(io.resps.sink_d.valid) {
+  when(req_valid && io.resps.sink_d.valid) {
     when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData || io.resps.sink_d.bits.opcode === AccessAckData) {
       sink := io.resps.sink_d.bits.sink
       w_grantfirst := true.B
@@ -1218,8 +1218,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     nest_c_set_match && nest_c_way_match &&
     (
       (req.fromA && !nest_c_tag_match && (preferCache || self_meta.hit) && !acquirePermMiss) ||
-        (req.fromB && Mux(self_meta.hit, !nest_c_tag_match, nest_c_tag_match))
-      )
+      (req.fromA && nest_c_tag_match && !self_meta.hit && io_c_status.tag =/= self_meta.tag && !acquirePermMiss)
+      (req.fromB && Mux(self_meta.hit, !nest_c_tag_match, nest_c_tag_match))
+    )
   // B nest A (A -> B)
   io_b_status.probeAckDataThrough := req_valid &&
     io_b_status.set === req.set && io_b_status.tag =/= req.tag &&
