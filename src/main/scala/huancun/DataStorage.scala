@@ -59,18 +59,27 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val eccDataBits = dataCode.width(8*bankBytes)
   println(s"extra ECC Databits:${eccDataBits - (8*bankBytes)}")
 
+  val sram_clk = if(cacheParams.sramCycleFactor == 1) {
+    this.clock
+  } else {
+    val clk = RegInit(false.B)
+    clk := !clk
+    clk.asClock()
+  }
   val bankedData = Seq.fill(nrBanks)(
-    Module(
-      new SRAMTemplate(
-        UInt(eccDataBits.W),
-        set = nrRows,
-        way = 1,
-        shouldReset = false,
-        holdRead = false,
-        singlePort = sramSinglePort,
-        cycleFactor = cacheParams.sramCycleFactor
+    withClock(sram_clk){
+      Module(
+        new SRAMTemplate(
+          UInt(eccDataBits.W),
+          set = nrRows,
+          way = 1,
+          shouldReset = false,
+          holdRead = false,
+          singlePort = sramSinglePort,
+          cycleFactor = 1
+        )
       )
-    )
+    }
   )
 
   /* Convert to internal request signals */
