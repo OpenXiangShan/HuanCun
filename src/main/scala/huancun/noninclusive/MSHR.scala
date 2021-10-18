@@ -403,6 +403,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(io.nestedwb.b_clr_dirty) {
       meta_reg.self.dirty := false.B
     }
+    when(io.nestedwb.b_set_dirty) {
+      meta_reg.self.dirty := true.B
+    }
     when(io.nestedwb.c_set_dirty) {
       meta_reg.self.dirty := true.B
     }
@@ -1214,13 +1217,14 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val nest_c_set_match = io_c_status.set === req.set
   val nest_c_tag_match = io_c_status.tag === req.tag
   val nest_c_way_match = io_c_status.way === self_meta.way
-  io_c_status.releaseThrough := req_valid && io_c_status.nestedReleaseData &&
-    nest_c_set_match && nest_c_way_match &&
-    (
+  io_c_status.releaseThrough := req_valid && io_c_status.nestedReleaseData && nest_c_set_match &&
+    ((nest_c_way_match && (
       (req.fromA && !nest_c_tag_match && (preferCache || self_meta.hit) && !acquirePermMiss) ||
-      (req.fromA && nest_c_tag_match && !self_meta.hit && io_c_status.tag =/= self_meta.tag && !acquirePermMiss)
+      (req.fromA && nest_c_tag_match && !self_meta.hit && io_c_status.tag =/= self_meta.tag && !acquirePermMiss) ||
       (req.fromB && Mux(self_meta.hit, !nest_c_tag_match, nest_c_tag_match))
-    )
+    )) ||
+    (req.fromB && nest_c_tag_match && !self_meta.hit)) // TODO: Probe miss with nested Release should be handled carefully
+
   // B nest A (A -> B)
   io_b_status.probeAckDataThrough := req_valid &&
     io_b_status.set === req.set && io_b_status.tag =/= req.tag &&

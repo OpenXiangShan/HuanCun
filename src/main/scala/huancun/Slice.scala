@@ -255,6 +255,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   nestedWb.b_clr_dirty := select_bc &&
     bc_mshr.io.tasks.dir_write.valid &&
     !MetaData.isT(bc_wb_state)
+  nestedWb.b_set_dirty := select_bc &&
+    bc_mshr.io.tasks.dir_write.valid &&
+    bc_wb_dirty
   nestedWb.c_set_dirty := select_c &&
     c_mshr.io.tasks.dir_write.valid &&
     c_wb_dirty
