@@ -250,7 +250,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         false.B,
         Mux(self_meta.hit,
           Mux(req_promoteT, false.B, self_meta.dirty || probe_dirty),
-          gotDirty
+          gotDirty || probe_dirty
         )
       ),
       Mux(req.opcode(2,1) === 0.U,
@@ -1219,7 +1219,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val nest_c_way_match = io_c_status.way === self_meta.way
   io_c_status.releaseThrough := req_valid && io_c_status.nestedReleaseData && nest_c_set_match &&
     ((nest_c_way_match && (
-      (req.fromA && !nest_c_tag_match && (preferCache || self_meta.hit) && !acquirePermMiss) ||
+      (req.fromA && !nest_c_tag_match && (preferCache || self_meta.hit) && (!acquirePermMiss || cache_alias)) ||
       (req.fromA && nest_c_tag_match && !self_meta.hit && io_c_status.tag =/= self_meta.tag && !acquirePermMiss) ||
       (req.fromB && Mux(self_meta.hit, !nest_c_tag_match, nest_c_tag_match))
     )) ||
