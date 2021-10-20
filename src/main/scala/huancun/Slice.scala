@@ -170,6 +170,23 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val select_c = c_mshr.io.status.valid
   val select_bc = bc_mshr.io.status.valid
 
+  val bc_mask_latch = RegInit(0.U.asTypeOf(mshrAlloc.io.bc_mask.bits))
+  val c_mask_latch = RegInit(0.U.asTypeOf(mshrAlloc.io.c_mask.bits))
+  when(mshrAlloc.io.bc_mask.valid) {
+    bc_mask_latch := mshrAlloc.io.bc_mask.bits
+  }
+  when(mshrAlloc.io.c_mask.valid) {
+    c_mask_latch := mshrAlloc.io.c_mask.bits
+  }
+  abc_mshr.zipWithIndex.foreach {
+    case (mshr, i) =>
+      val bc_disable = bc_mask_latch(i) && select_bc
+      val c_disable = c_mask_latch(i) && select_c
+      mshr.io.enable := !(bc_disable || c_disable)
+  }
+  bc_mshr.io.enable := !(c_mask_latch(mshrsAll-2) && select_c)
+  c_mshr.io.enable := true.B
+
   def non_inclusive[T <: RawModule](m: T): noninclusive.MSHR = {
     m.asInstanceOf[noninclusive.MSHR]
   }
@@ -255,6 +272,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   nestedWb.b_clr_dirty := select_bc &&
     bc_mshr.io.tasks.dir_write.valid &&
     !MetaData.isT(bc_wb_state)
+  nestedWb.b_set_dirty := select_bc &&
+    bc_mshr.io.tasks.dir_write.valid &&
+    bc_wb_dirty
   nestedWb.c_set_dirty := select_c &&
     c_mshr.io.tasks.dir_write.valid &&
     c_wb_dirty
