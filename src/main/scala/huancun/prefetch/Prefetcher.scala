@@ -36,7 +36,12 @@ class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
   def addr = Cat(tag, set, 0.U(offsetBits.W))
 }
 
+class PrefetchUpdate(implicit p: Parameters) extends PrefetchBundle {
+  val commit = new CoreCommitInfos
+}
+
 class PrefetchIO(implicit p: Parameters) extends PrefetchBundle {
+  val update = Flipped(new PrefetchUpdate)
   val train = Flipped(DecoupledIO(new PrefetchTrain))
   val req = DecoupledIO(new MSHRRequest)
   val resp = Flipped(DecoupledIO(new PrefetchResp))

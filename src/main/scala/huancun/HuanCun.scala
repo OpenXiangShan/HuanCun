@@ -231,6 +231,11 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
       out <> arbiter.io.out
     }
+
+    val io = IO(new Bundle() {
+      val commit = Flipped(new CoreCommitInfos()(pftParams))
+    })
+
     val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
     val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
@@ -240,6 +245,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         arbTasks(prefetcher.get.io.train, prefetchTrains.get, Some("prefetch_train"))
         prefetcher.get.io.req.ready := Cat(prefetchReqsReady).orR
         arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
+        prefetcher.get.io.update.commit := io.commit
     }
 
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {

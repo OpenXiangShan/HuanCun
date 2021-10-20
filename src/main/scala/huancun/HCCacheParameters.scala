@@ -35,6 +35,8 @@ case class CacheParameters
   ways: Int,
   blockBytes: Int = 64,
   aliasBitsOpt: Option[Int] = None,
+  commitWidth: Int = 6,
+  vaddrBits: Int = 39,
   inner: Seq[CacheParameters] = Nil
 ) {
   val capacity = sets * ways * blockBytes

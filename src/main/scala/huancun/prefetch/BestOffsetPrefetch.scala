@@ -21,6 +21,7 @@ case class BOPParameters(
     extends PrefetchParameters {
   override val hasPrefetchBit:  Boolean = true
   override val inflightEntries: Int = 16
+  override val needCommitInfo: Boolean = false
 }
 
 trait HasBOPParams extends HasHuanCunParameters {

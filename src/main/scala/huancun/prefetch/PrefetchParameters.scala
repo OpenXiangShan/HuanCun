@@ -8,6 +8,7 @@ import huancun._
 trait PrefetchParameters {
   val hasPrefetchBit:  Boolean
   val inflightEntries: Int // max num of inflight prefetch reqs
+  val needCommitInfo: Boolean
 }
 
 trait HasPrefetchParameters extends HasHuanCunParameters {
