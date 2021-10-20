@@ -53,6 +53,7 @@ abstract class BaseMSHRIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_
   implicit p: Parameters)
     extends HuanCunBundle {
   val id = Input(UInt(mshrBits.W))
+  val enable = Input(Bool())
   val alloc = Flipped(ValidIO(new MSHRRequest))
   val status = ValidIO(new MSHRStatus)
   val tasks:     MSHRTasks[T_DIR_W, T_TAG_W] //= new MSHRTasks
