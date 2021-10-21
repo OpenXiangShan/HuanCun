@@ -48,6 +48,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     val alloc = Vec(mshrsAll, ValidIO(new MSHRRequest))
     // To directory
     val dirRead = DecoupledIO(new DirRead)
+    val perfEvents = Vec(numPCntHcMSHR,(Output(UInt(6.W))))
   })
 
   // Allocate one MSHR per cycle
@@ -195,4 +196,14 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && Cat(pretch_block_vec).orR())
   XSPerfAccumulate(cacheParams, "conflictB", io.b_req.valid && conflict_b)
   XSPerfAccumulate(cacheParams, "conflictC", io.c_req.valid && conflict_c)
+  //for(i <- 0 until 32 ) {
+  //  io.perfEvents(i) := DontCare
+  //}
+  io.perfEvents(0) :=  PopCount(io.status.init.init.map(_.valid))
+  io.perfEvents(1) :=  io.status.take(mshrs+1).last.valid
+  io.perfEvents(2) :=  io.status.last.valid
+  io.perfEvents(3) :=  io.a_req.valid && conflict_a
+  io.perfEvents(4) :=  io.a_req.valid && Cat(pretch_block_vec).orR
+  io.perfEvents(5) :=  io.c_req.valid && conflict_c
+  io.perfEvents(6) :=  io.c_req.valid && conflict_c
 }

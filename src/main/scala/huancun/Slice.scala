@@ -33,6 +33,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
+    val perfEvents = Vec(numPCntHc,(Output(UInt(6.W))))
   })
 
   val ctrl = cacheParams.ctrl.map(_ => Module(new SliceCtrl()))
@@ -255,9 +256,6 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   nestedWb.b_clr_dirty := select_bc &&
     bc_mshr.io.tasks.dir_write.valid &&
     !MetaData.isT(bc_wb_state)
-  nestedWb.b_set_dirty := select_bc &&
-    bc_mshr.io.tasks.dir_write.valid &&
-    bc_wb_dirty
   nestedWb.c_set_dirty := select_c &&
     c_mshr.io.tasks.dir_write.valid &&
     c_wb_dirty
@@ -541,4 +539,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   sinkA.io.a_pb_pop <> sourceA.io.pb_pop
   sinkA.io.a_pb_beat <> sourceA.io.pb_beat
+  val perfEvents = Wire(Vec(numPCntHc,(UInt(6.W))))
+  perfEvents := a_req_buffer.io.perfEvents ++ (mshrAlloc.io.perfEvents :+ probeHelperOpt.get.io.perfEvents) ++ directory.asInstanceOf[noninclusive.Directory].io.perfEvents
+  io.perfEvents := perfEvents
 }

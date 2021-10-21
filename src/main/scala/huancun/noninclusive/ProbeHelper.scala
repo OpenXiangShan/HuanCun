@@ -14,6 +14,7 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
     val dirResult = Flipped(Valid(new DirResult()))
     val probe = DecoupledIO(new MSHRRequest)
     val full = Output(Bool())
+    val perfEvents = (Output(UInt(6.W)))
   })
 
   val queue = Module(new Queue(new MSHRRequest, entries = entries, pipe = false, flow = false))
@@ -58,4 +59,8 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   io.probe <> queue.io.deq
 
   XSPerfAccumulate(cacheParams, "client_dir_conflict", queue.io.enq.fire())
+  //for(i <- 0 until 32 ) {
+  //  io.perfEvents(i) := DontCare
+  //}
+  io.perfEvents :=  queue.io.enq.fire()
 }

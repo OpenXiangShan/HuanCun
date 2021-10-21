@@ -11,6 +11,7 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
     val in = Flipped(DecoupledIO(new MSHRRequest))
     val out = DecoupledIO(new MSHRRequest)
     val mshr_status = Vec(mshrs, Flipped(ValidIO(new MSHRStatus)))
+    val perfEvents = Vec(numPCntHcReqb,(Output(UInt(6.W))))
   })
 
   val buffer = Mem(entries, new MSHRRequest)
@@ -102,5 +103,15 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   }
   XSPerfAccumulate(cacheParams, "recv_prefetch", io.in.fire() && io.in.bits.isPrefetch.getOrElse(false.B))
   XSPerfAccumulate(cacheParams, "recv_normal", io.in.fire() && !io.in.bits.isPrefetch.getOrElse(false.B))
+
+ // for(i <- 0 until 6 ) {
+ //   io.perfEvents(i) := DontCare
+ // }
+  io.perfEvents(0) :=  dup && !full
+  io.perfEvents(1) :=  no_ready_entry && io.in.fire
+  io.perfEvents(2) :=  alloc
+  io.perfEvents(3) :=  full
+  io.perfEvents(4) :=  io.in.fire() && io.in.bits.isPrefetch.getOrElse(false.B)
+  io.perfEvents(5) :=  io.in.fire() && !io.in.bits.isPrefetch.getOrElse(false.B)
 
 }

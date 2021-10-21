@@ -7,7 +7,7 @@ import freechips.rocketchip.tilelink.TLMessages._
 import freechips.rocketchip.tilelink.TLPermissions._
 import freechips.rocketchip.tilelink.TLHints._
 import huancun._
-import huancun.utils._
+import huancun.utils.{ParallelMax}
 import huancun.MetaData._
 
 class C_Status(implicit p: Parameters) extends HuanCunBundle {
@@ -249,13 +249,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       Mux(req_needT,
         false.B,
         Mux(self_meta.hit,
-          Mux(req_promoteT, false.B, self_meta.dirty || probe_dirty),
+          Mux(req_promoteT, false.B, self_meta.dirty),
           gotDirty
         )
       ),
       Mux(req.opcode(2,1) === 0.U,
         true.B,  // Put
-        gotDirty || probe_dirty, // Hint & Get
+        gotDirty // Hint
       )
     )
     new_self_meta.state := Mux(
@@ -268,7 +268,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       ),
       Mux(!self_meta.hit,
         Mux(
-          transmit_from_other_client || cache_alias, // For cache alias, !promoteT is granteed
+          transmit_from_other_client,
           highest_perm,
           Mux(gotT,
             Mux(req_acquire, TRUNK, TIP),
@@ -403,9 +403,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(io.nestedwb.b_clr_dirty) {
       meta_reg.self.dirty := false.B
     }
-    when(io.nestedwb.b_set_dirty) {
-      meta_reg.self.dirty := true.B
-    }
     when(io.nestedwb.c_set_dirty) {
       meta_reg.self.dirty := true.B
     }
@@ -502,7 +499,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     need_block_downwards := false.B
     inv_self_dir := false.B
     nested_c_hit_reg := false.B
-    gotDirty := false.B
+
   }
 
   def c_schedule(): Unit = {
@@ -573,8 +570,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
 
-  val preferCache = req.preferCache || cache_alias // Cache alias will always preferCache to avoid trifle
-  val bypassGet = req.opcode === Get && !preferCache
+  val preferCache = req.preferCache
 
   def set_probe(): Unit = {
     s_probe := false.B
@@ -617,12 +613,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantfirst := false.B
       w_grantlast := false.B
       w_grant := false.B
-      when (!bypassGet) {
-        s_grantack := false.B
-      }
+      s_grantack := false.B
       // for acquirePermMiss and (miss && !preferCache):
       // no data block will be saved, so self dir won't change
-      when(!acquirePermMiss && ((self_meta.hit && !req.opcode === Get) || preferCache)) {
+      when(!acquirePermMiss && (self_meta.hit || preferCache)) {
         s_wbselfdir := false.B
       }
     }
@@ -651,9 +645,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           // Get / Put
           when (meta.hit && (isT(meta.state) || !self_meta.hit)) {
             set_probe()
-            when(self_meta.hit) { // For get, self meta hit and need probe, then wbselfdir is necessary
-              s_wbselfdir := false.B
-            }
             s_wbclientsdir(i) := false.B
           }
         }
@@ -806,7 +797,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.set := req.set
   // full overwrite, we can always acquire perm, no need to acquire block
   val acquire_perm_NtoT = req.opcode === AcquirePerm && req.param === NtoT
-  oa.opcode := Mux(!s_transferput || bypassGet, req.opcode,
+  oa.opcode := Mux(!s_transferput, req.opcode,
     Mux(self_meta.hit, AcquirePerm,
       Mux(client_hit_acquire_prem || acquire_perm_NtoT,
         AcquirePerm,
@@ -955,15 +946,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   od.way := self_meta.way
   od.off := req.off
   od.denied := bad_grant
-  od.dirty := Mux(
-    req_acquire,
-    Mux(
-      self_meta.hit,
-      Mux(req.param === NtoB && !req_promoteT, false.B, self_meta.dirty),
-      gotDirty
-    ),
-    false.B
-  )
+  od.dirty := Mux(self_meta.hit, self_meta.dirty, gotDirty)
   od.bufIdx := req.bufIdx
 
   oe.sink := sink
@@ -1112,22 +1095,20 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
     })
   }
-  when(req_valid && io.resps.sink_c.valid) {
+  when(io.resps.sink_c.valid) {
     val resp = io.resps.sink_c.bits
     probes_done := probes_done | probeack_bit
     w_probeackfirst := w_probeackfirst || probeack_last
     w_probeacklast := w_probeacklast || probeack_last && resp.last
     w_probeack := w_probeack || probeack_last && (resp.last || req.off === 0.U)
 
-    probe_dirty := probe_dirty || resp.hasData && isShrink(resp.param) && !w_probeackfirst
+    probe_dirty := probe_dirty || resp.hasData && !w_probeackfirst
     when (a_need_data && probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit) {
       s_acquire := false.B
       w_grantfirst := false.B
       w_grantlast := false.B
       w_grant := false.B
-      when (!bypassGet) {
-        s_grantack := false.B
-      }
+      s_grantack := false.B
       need_block_downwards := true.B
       // we assume clients will ack data for us at first,
       // if they only ack perm, we should change our schedule
@@ -1140,8 +1121,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
     }
   }
-  when(req_valid && io.resps.sink_d.valid) {
-    when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData || io.resps.sink_d.bits.opcode === AccessAckData) {
+  when(io.resps.sink_d.valid) {
+    when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData) {
       sink := io.resps.sink_d.bits.sink
       w_grantfirst := true.B
       w_grantlast := w_grantlast || io.resps.sink_d.bits.last
@@ -1217,14 +1198,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val nest_c_set_match = io_c_status.set === req.set
   val nest_c_tag_match = io_c_status.tag === req.tag
   val nest_c_way_match = io_c_status.way === self_meta.way
-  io_c_status.releaseThrough := req_valid && io_c_status.nestedReleaseData && nest_c_set_match &&
-    ((nest_c_way_match && (
+  io_c_status.releaseThrough := req_valid && io_c_status.nestedReleaseData &&
+    nest_c_set_match && nest_c_way_match &&
+    (
       (req.fromA && !nest_c_tag_match && (preferCache || self_meta.hit) && !acquirePermMiss) ||
-      (req.fromA && nest_c_tag_match && !self_meta.hit && io_c_status.tag =/= self_meta.tag && !acquirePermMiss) ||
-      (req.fromB && Mux(self_meta.hit, !nest_c_tag_match, nest_c_tag_match))
-    )) ||
-    (req.fromB && nest_c_tag_match && !self_meta.hit)) // TODO: Probe miss with nested Release should be handled carefully
-
+        (req.fromB && Mux(self_meta.hit, !nest_c_tag_match, nest_c_tag_match))
+      )
   // B nest A (A -> B)
   io_b_status.probeAckDataThrough := req_valid &&
     io_b_status.set === req.set && io_b_status.tag =/= req.tag &&

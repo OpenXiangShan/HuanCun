@@ -6,7 +6,6 @@ import chisel3.experimental.StringParam
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util.BundleMap
 import huancun.utils.GTimer
 
 trait HasCLikeTypes {
@@ -27,8 +26,6 @@ class TLLog extends Bundle with HasCLikeTypes {
   val address = uint64_t
   val data = Vec(4, uint64_t)
   val stamp = uint64_t
-  val user = uint64_t
-  val echo = uint64_t
 }
 
 class TLLogWriter(prefix: String) extends BlackBox(Map("prefix" -> StringParam(prefix))) with HasBlackBoxInline {
@@ -57,8 +54,6 @@ class TLLogWriter(prefix: String) extends BlackBox(Map("prefix" -> StringParam(p
       |    input longint data_2,
       |    input longint data_3,
       |    input longint stamp,
-      |    input longint user,
-      |    input longint echo,
       |    input string prefix
       |);
       |
@@ -74,8 +69,6 @@ class TLLogWriter(prefix: String) extends BlackBox(Map("prefix" -> StringParam(p
       |    input [63:0] data_2,
       |    input [63:0] data_3,
       |    input [63:0] stamp,
-      |    input [63:0] user,
-      |    input [63:0] echo,
       |    input wen,
       |    input clock,
       |    input reset
@@ -86,7 +79,7 @@ class TLLogWriter(prefix: String) extends BlackBox(Map("prefix" -> StringParam(p
       |        if(wen && !reset) begin
       |            tl_log_write_helper(
       |                channel, opcode, param, source, sink,
-      |                address, data_0, data_1, data_2, data_3, stamp, user, echo, prefix
+      |                address, data_0, data_1, data_2, data_3, stamp, prefix
       |            );
       |        end
       |    end
@@ -123,35 +116,16 @@ object TLLogger {
     for ((name, data) <- log.elements.filterNot(_._1 == "data")) {
       val e = chn.elements.find(_._1 == name)
       if (e.nonEmpty) {
-        data := e.get._2.asUInt()
+        data := e.get._2
       } else {
         data := 0.U
       }
     }
-    def bmp_to_uint(bmp: BundleMap): UInt = {
-      if(bmp.fields.nonEmpty){
-        bmp.asUInt()
-      } else {
-        0.U
-      }
-    }
     chn match {
-      case a_chn: TLBundleA =>
-        log.channel := a
-        log.user := bmp_to_uint(a_chn.user)
-        log.echo := bmp_to_uint(a_chn.echo)
-      case _: TLBundleB =>
-        log.channel := b
-        log.user := 0.U
-        log.echo := 0.U
-      case c_chn: TLBundleC =>
-        log.channel := c
-        log.user := bmp_to_uint(c_chn.user)
-        log.echo := bmp_to_uint(c_chn.echo)
-      case d_chn: TLBundleD =>
-        log.channel := d
-        log.user := bmp_to_uint(d_chn.user)
-        log.echo := bmp_to_uint(d_chn.echo)
+      case _: TLBundleA => log.channel := a
+      case _: TLBundleB => log.channel := b
+      case _: TLBundleC => log.channel := c
+      case _: TLBundleD => log.channel := d
     }
     log.stamp := stamp
   }
@@ -195,8 +169,6 @@ object TLLogger {
       writer.io.address := log.address
       writer.io.data := log.data
       writer.io.stamp := log.stamp
-      writer.io.user := log.user
-      writer.io.echo := log.echo
       writer.io.wen := wen
       writer.io.clock := clock
       writer.io.reset := reset

@@ -111,6 +111,7 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Sel
   val tagWReq = Flipped(DecoupledIO(new SelfTagWrite))
   val clientDirWReqs = Vec(clientBits, Flipped(DecoupledIO(new ClientDirWrite)))
   val clientTagWreq = Vec(clientBits, Flipped(DecoupledIO(new ClientTagWrite)))
+  val perfEvents = Vec(numPCntHcDir,(Output(UInt(6.W))))
 }
 
 class Directory(implicit p: Parameters)
@@ -323,4 +324,19 @@ class Directory(implicit p: Parameters)
   XSPerfAccumulate(cacheParams, "selfdir_BRANCH", resp.valid && resp.bits.self.state === BRANCH)
   XSPerfAccumulate(cacheParams, "selfdir_TRUNK", resp.valid && resp.bits.self.state === TRUNK)
   XSPerfAccumulate(cacheParams, "selfdir_INVALID", resp.valid && resp.bits.self.state === INVALID)
+
+  //for(i <- 0 until 32 ) {
+  //  io.perfEvents(i) := DontCare
+  //}
+  io.perfEvents(0)  :=  req_r.replacerInfo.channel(0) && resp.valid
+  io.perfEvents(1)  :=  req_r.replacerInfo.channel(0) && resp.valid && resp.bits.self.hit
+  io.perfEvents(2)  :=  req_r.replacerInfo.channel(1) && resp.valid
+  io.perfEvents(3)  :=  req_r.replacerInfo.channel(1) && resp.valid && resp.bits.self.hit
+  io.perfEvents(4)  :=  req_r.replacerInfo.channel(2) && resp.valid
+  io.perfEvents(5)  :=  req_r.replacerInfo.channel(2) && resp.valid && resp.bits.self.hit
+  io.perfEvents(6)  :=  resp.valid && resp.bits.self.dirty
+  io.perfEvents(7)  :=  resp.valid && resp.bits.self.state === TIP
+  io.perfEvents(8)  :=  resp.valid && resp.bits.self.state === BRANCH
+  io.perfEvents(9)  :=  resp.valid && resp.bits.self.state === TRUNK
+  io.perfEvents(10) :=  resp.valid && resp.bits.self.state === INVALID
 }
