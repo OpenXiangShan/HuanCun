@@ -23,6 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
+import freechips.rocketchip.util.leftOR
 import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
 import huancun.prefetch._
 
@@ -33,18 +34,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
+    val ctl_ecc = DecoupledIO(new EccInfo())
   })
 
   val ctrl = cacheParams.ctrl.map(_ => Module(new SliceCtrl()))
-  if(ctrl.nonEmpty){
-    ctrl.get.io.req <> io.ctl_req
-    io.ctl_resp <> ctrl.get.io.resp
-  } else {
-    io.ctl_req <> DontCare
-    io.ctl_resp <> DontCare
-    io.ctl_req.ready := false.B
-    io.ctl_resp.valid := false.B
-  }
 
   def ctrl_arb[T <: Data](source: DecoupledIO[T], ctrl: Option[DecoupledIO[T]]): DecoupledIO[T] ={
     if(ctrl.nonEmpty){
@@ -558,4 +551,22 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   sinkA.io.a_pb_pop <> sourceA.io.pb_pop
   sinkA.io.a_pb_beat <> sourceA.io.pb_beat
+
+  if (ctrl.nonEmpty) {
+    ctrl.get.io.req <> io.ctl_req
+    io.ctl_resp <> ctrl.get.io.resp
+    io.ctl_ecc <> DontCare
+    val eccMask = Cat(ms.map(m => m.io.ecc.errCode =/= 0.U && m.io.status.valid))
+    val valid_eccMask = ~(leftOR(eccMask) << 1) & eccMask
+    val ms_errCode = VecInit(ms.map(_.io.ecc.errCode))(OHToUInt(valid_eccMask))
+    io.ctl_ecc.bits.errCode := Mux(dataStorage.io.ecc.errCode =/= 0.U, dataStorage.io.ecc.errCode, ms_errCode)
+    io.ctl_ecc.valid := Cat(eccMask).orR()
+  } else {
+    io.ctl_req <> DontCare
+    io.ctl_resp <> DontCare
+    io.ctl_ecc <> DontCare
+    io.ctl_req.ready := false.B
+    io.ctl_resp.valid := false.B
+    io.ctl_ecc.valid := false.B
+  }
 }

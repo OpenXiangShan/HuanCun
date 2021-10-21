@@ -36,6 +36,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     val sourceD_wdata = Input(new DSData)
     val sinkC_waddr = Flipped(DecoupledIO(new DSAddress))
     val sinkC_wdata = Input(new DSData)
+    val ecc = Output(new EccInfo)
   })
 
   /* Define some internal parameters */
@@ -133,6 +134,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   val outData = Wire(Vec(nrBanks, UInt((8 * bankBytes).W)))
   val data_en = Wire(Vec(nrBanks, Bool()))
+  val errVec = Wire(Vec(nrBanks, Bool()))
 
   for (i <- 0 until nrBanks) {
     val en = reqs.map(_.bankEn(i)).reduce(_ || _) && SReg.sren()
@@ -151,10 +153,13 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     data_en(i) := SReg.pipe(en && !selectedReq.wen)
     val decode = dataCode.decode(bankedData(i).io.r.resp.data(0))
     outData(i) := RegEnable(decode.uncorrected, data_en(i))
-    when(data_en(i)) {
-      assert(!decode.error)
-    }
+    errVec(i) := decode.error
+    // when(data_en(i)) {
+    //   assert(!decode.error)
+    // }
   }
+
+  io.ecc.errCode := Mux(Cat(errVec).orR(), io.ecc.ERR_DATA, io.ecc.ERR_NO)
 
   /* Pack out-data to channels */
   val sourceDlatch = RegNext(SReg.pipe(sourceD_rreq.bankEn))

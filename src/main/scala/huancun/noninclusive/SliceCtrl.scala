@@ -85,6 +85,8 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.dir_read.bits.idOH := Cat(req_reg.way, "b11".U)
   io.dir_read.bits.tag := req_reg.tag
   io.dir_read.bits.set := req_reg.set
+  io.dir_read.bits.way := req_reg.way
+  io.dir_read.bits.wayMode := false.B // TODO: it seems incorrect
   io.dir_read.bits.replacerInfo := DontCare
   io.dir_read.bits.source := DontCare
 
