@@ -49,6 +49,8 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     // To directory
     val dirRead = DecoupledIO(new DirRead)
     val perfEvents = Vec(numPCntHcMSHR,(Output(UInt(6.W))))
+    val bc_mask = ValidIO(Vec(mshrsAll, Bool()))
+    val c_mask = ValidIO(Vec(mshrsAll, Bool()))
   })
 
   // Allocate one MSHR per cycle
@@ -146,6 +148,11 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   bc_mshr_alloc.bits := io.b_req.bits
   c_mshr_alloc.valid := nestC_valid && dirRead.ready
   c_mshr_alloc.bits := io.c_req.bits
+
+  io.bc_mask.valid := bc_mshr_alloc.valid
+  io.bc_mask.bits := b_match_vec
+  io.c_mask.valid := c_mshr_alloc.valid
+  io.c_mask.bits := c_match_vec
 
   dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR() && dirRead.ready
   dirRead.bits.source := request.bits.source
