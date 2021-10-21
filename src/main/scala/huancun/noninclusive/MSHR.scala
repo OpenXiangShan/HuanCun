@@ -694,12 +694,23 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     })
   }
 
+  def handleEcc() = {
+    // assert(!io.dirResult.bits.self.hit || !io.dirResult.bits.self.error)
+    // io.dirResult.bits.clients.foreach(r => assert(!r.hit || !r.error))
+    when(io.dirResult.bits.self.hit && io.dirResult.bits.self.error) {
+      io.ecc.errCode := io.ecc.ERR_SELF_DIR
+    }
+    when(Cat(io.dirResult.bits.clients.map{r => r.hit && r.error}).orR()) {
+      io.ecc.errCode := io.ecc.ERR_CLIENT_DIR
+    }
+  }
+
+  io.ecc.errCode := io.ecc.ERR_NO
+
   when(io.dirResult.valid) {
 
     reset_all_flags()
-
-    assert(!io.dirResult.bits.self.hit || !io.dirResult.bits.self.error)
-    io.dirResult.bits.clients.foreach(r => assert(!r.hit || !r.error))
+    handleEcc()
 
     when(req.fromC) {
       c_schedule()

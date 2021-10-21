@@ -27,6 +27,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   val req = IO(DecoupledIO(new CtrlReq()))
   val resp = IO(Flipped(DecoupledIO(new CtrlResp())))
+  val ecc = IO(Flipped(DecoupledIO(new EccInfo())))
 
   val node = wrapper.node
   val ctlnode = wrapper.ctlnode
@@ -66,9 +67,13 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_way = RegInit(0.U(64.W))
   val ctl_dir = RegInit(0.U(64.W))
   val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
-  val ctl_ecc = RegInit(0.U(64.W))
   val ctl_client = RegInit(0.U(64.W))
   val ctl_cmd = RegInit(0.U(64.W))
+
+  val ecc_code = RegInit(0.U(64.W)) // assume non-zero as ECC error
+  val ecc_tag = RegInit(0.U(64.W))
+  val ecc_set = RegInit(0.U(64.W))
+  val ecc_way = RegInit(0.U(64.W))
 
   val cmd_in_valid = RegInit(false.B)
   val cmd_in_ready = WireInit(false.B)
@@ -80,8 +85,10 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   val ctl_config_regs = (
     Seq(ctl_tag, ctl_set, ctl_way) ++
-    ctl_data ++ Seq(ctl_dir, ctl_ecc, ctl_client)
-    ).map(reg => RegField(64, reg, RegWriteFn(reg)))
+    ctl_data ++
+    Seq(ctl_dir, ctl_client) ++
+    Seq(ecc_code, ecc_tag, ecc_set, ecc_way)
+  ).map(reg => RegField(64, reg, RegWriteFn(reg)))
 
   ctlnode.regmap(
     0x000 -> RegFieldGroup(
@@ -106,6 +113,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     cmd_out_valid := true.B
   }
   resp.ready := !cmd_out_valid
+  ecc.ready := ecc_code === 0.U // Block multiple ecc req
   req.valid := cmd_in_valid
   req.bits.cmd := ctl_cmd
   req.bits.data.zip(ctl_data).foreach(x => x._1 := x._2)
@@ -115,7 +123,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   req.bits.dir := ctl_dir
   req.bits.client := ctl_client
 
-  when(resp.fire()){
+  when(resp.fire()) {
     switch(resp.bits.cmd){
       is(CacheCMD.CMD_R_S_TAG){
         ctl_tag := resp.bits.data(0)
@@ -134,6 +142,10 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
       }
     }
   }
+
+  when(ecc.fire()) {
+    ecc_code := ecc.bits.errCode
+  }
 }
 
 class CtrlReq() extends Bundle {
@@ -149,6 +161,14 @@ class CtrlReq() extends Bundle {
 class CtrlResp() extends Bundle {
   val cmd = UInt(8.W)
   val data = Vec(8, UInt(64.W))
+}
+
+class EccInfo() extends Bundle {
+  val errCode = UInt(8.W)
+  def ERR_NO = 0.U(8.W)
+  def ERR_SELF_DIR = 1.U(8.W)
+  def ERR_CLIENT_DIR = 2.U(8.W)
+  def ERR_DATA = 3.U(8.W)
 }
 
 object CacheCMD {
