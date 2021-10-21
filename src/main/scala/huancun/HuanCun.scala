@@ -65,6 +65,13 @@ trait HasHuanCunParameters {
 
   val alwaysReleaseData = cacheParams.alwaysReleaseData
 
+  val numCSRPCntHc    = 5
+  val numPCntHcMSHR   = 7
+  val numPCntHcDir    = 11
+  val numPCntHcReqb   = 6
+  val numPCntHcProb   = 1
+  val numPCntHc       = numPCntHcMSHR + numPCntHcDir + numPCntHcReqb + numPCntHcProb
+
   lazy val edgeIn = p(EdgeInKey)
   lazy val edgeOut = p(EdgeOutKey)
 
@@ -202,13 +209,17 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   }
 
   lazy val module = new LazyModuleImp(this) {
+    val banks = node.in.size
+    val io = IO(new Bundle {
+      val perfEvents = Vec(banks, Vec(numPCntHc,(Output(UInt(6.W)))))
+    })
+
     val sizeBytes = cacheParams.sets * cacheParams.ways * cacheParams.blockBytes
     val sizeStr = sizeBytes match {
       case _ if sizeBytes > 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
       case _ if sizeBytes > 1024        => (sizeBytes / 1024) + "KB"
       case _                            => "B"
     }
-    val banks = node.in.size
     val bankBits = if(banks == 1) 0 else log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
@@ -269,6 +280,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             prefetchReqsReady(i) := s.req.ready && bank_eq(p.io.req.bits.set, i, bankBits)
             prefetchResps.get(i) <> s.resp
         }
+        io.perfEvents(i) := slice.perfinfo
         slice
     }
     ctrl_unit.map { c =>
