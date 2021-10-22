@@ -113,6 +113,6 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   )
 
   for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
-    perf_out := perf
+    perf_out := RegNext(perf)
   }
 }

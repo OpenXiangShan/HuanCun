@@ -71,6 +71,7 @@ trait HasHuanCunParameters {
   val numPCntHcReqb   = 6
   val numPCntHcProb   = 1
   val numPCntHc       = numPCntHcMSHR + numPCntHcDir + numPCntHcReqb + numPCntHcProb
+  val print_hcperfcounter  = false
 
   lazy val edgeIn = p(EdgeInKey)
   lazy val edgeOut = p(EdgeOutKey)

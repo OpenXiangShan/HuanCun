@@ -67,6 +67,6 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   )
 
   for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
-    perf_out := perf
+    perf_out := RegNext(perf)
   }
 }
