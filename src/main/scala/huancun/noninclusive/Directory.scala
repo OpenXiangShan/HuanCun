@@ -342,6 +342,6 @@ class Directory(implicit p: Parameters)
   )
 
   for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
-    perf_out := perf
+    perf_out := RegNext(perf)
   }
 }

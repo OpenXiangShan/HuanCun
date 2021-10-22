@@ -218,6 +218,6 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   )
 
   for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
-    perf_out := perf
+    perf_out := RegNext(perf)
   }
 }
