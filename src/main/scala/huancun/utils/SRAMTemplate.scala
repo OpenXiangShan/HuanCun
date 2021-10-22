@@ -88,28 +88,12 @@ class SRAMWriteBus[T <: Data](private val gen: T, val set: Int, val way: Int = 1
   }
 }
 
-class SRAMTemplate[T <: Data](
-  gen:         T,
-  set:         Int,
-  way:         Int = 1,
-  shouldReset: Boolean = false,
-  holdRead:    Boolean = false,
-  singlePort:  Boolean = false,
-  bypassWrite: Boolean = false,
-  cycleFactor: Int = 1)
-    extends Module {
+class SRAMTemplate[T <: Data](gen: T, set: Int, way: Int = 1,
+                              shouldReset: Boolean = false, holdRead: Boolean = false, singlePort: Boolean = false, bypassWrite: Boolean = false) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
   })
-
-  if(cycleFactor != 1){
-    require(!shouldReset)
-    require(!holdRead)
-    require(singlePort)
-    require(!bypassWrite)
-    require(isPow2(cycleFactor))
-  }
 
   val wordType = UInt(gen.getWidth.W)
   val array = SyncReadMem(set, Vec(way, wordType))
@@ -118,41 +102,25 @@ class SRAMTemplate[T <: Data](
   if (shouldReset) {
     val _resetState = RegInit(true.B)
     val (_resetSet, resetFinish) = Counter(_resetState, set)
-    when(resetFinish) { _resetState := false.B }
+    when (resetFinish) { _resetState := false.B }
 
     resetState := _resetState
     resetSet := _resetSet
   }
 
-  val cycleBits = if(cycleFactor == 1) 1 else log2Ceil(cycleFactor)
-  val counter = RegInit(0.U(cycleBits.W))
-  counter := counter + 1.U
-  val busy = if(cycleFactor == 1) false.B else counter =/= 0.U
-
-  val ren_reg = RegEnable(io.r.req.valid, false.B, !busy)
-  val wen_reg = RegEnable(io.w.req.valid, false.B, !busy)
-
-  val ren = Mux(busy, ren_reg, io.r.req.valid)
-  val wen = Mux(busy, wen_reg, io.w.req.valid || resetState)
-
-  val rreq_reg = RegEnable(io.r.req.bits, !busy)
-  val wreq_reg = RegEnable(io.w.req.bits, !busy)
-
-  val rreq = Mux(busy, rreq_reg, io.r.req.bits)
-  val wreq = Mux(busy, wreq_reg, io.w.req.bits)
-
+  val (ren, wen) = (io.r.req.valid, io.w.req.valid || resetState)
   val realRen = (if (singlePort) ren && !wen else ren)
 
-  val setIdx = Mux(resetState, resetSet, wreq.setIdx)
-  val wdata = VecInit(Mux(resetState, 0.U.asTypeOf(Vec(way, gen)), wreq.data).map(_.asTypeOf(wordType)))
-  val waymask = Mux(resetState, Fill(way, "b1".U), wreq.waymask.getOrElse("b1".U))
-  when(wen) { array.write(setIdx, wdata, waymask.asBools) }
+  val setIdx = Mux(resetState, resetSet, io.w.req.bits.setIdx)
+  val wdata = VecInit(Mux(resetState, 0.U.asTypeOf(Vec(way, gen)), io.w.req.bits.data).map(_.asTypeOf(wordType)))
+  val waymask = Mux(resetState, Fill(way, "b1".U), io.w.req.bits.waymask.getOrElse("b1".U))
+  when (wen) { array.write(setIdx, wdata, waymask.asBools) }
 
-  val raw_rdata = array.read(rreq.setIdx, realRen)
+  val raw_rdata = array.read(io.r.req.bits.setIdx, realRen)
 
   // bypass for dual-port SRAMs
   require(!bypassWrite || bypassWrite && !singlePort)
-  def need_bypass(wen: Bool, waddr: UInt, wmask: UInt, ren: Bool, raddr: UInt): UInt = {
+  def need_bypass(wen: Bool, waddr: UInt, wmask: UInt, ren: Bool, raddr: UInt) : UInt = {
     val need_check = RegNext(ren && wen)
     val waddr_reg = RegNext(waddr)
     val raddr_reg = RegNext(raddr)
@@ -160,27 +128,19 @@ class SRAMTemplate[T <: Data](
     val bypass = Fill(way, need_check && waddr_reg === raddr_reg) & RegNext(wmask)
     bypass.asTypeOf(UInt(way.W))
   }
-  val bypass_wdata =
-    if (bypassWrite) VecInit(RegNext(io.w.req.bits.data).map(_.asTypeOf(wordType)))
-    else VecInit((0 until way).map(_ => LFSR64().asTypeOf(wordType)))
-  val bypass_mask = need_bypass(
-    io.w.req.valid,
-    io.w.req.bits.setIdx,
-    io.w.req.bits.waymask.getOrElse("b1".U),
-    io.r.req.valid,
-    io.r.req.bits.setIdx
-  )
+  val bypass_wdata = if (bypassWrite) VecInit(RegNext(io.w.req.bits.data).map(_.asTypeOf(wordType)))
+  else VecInit((0 until way).map(_ => LFSR64().asTypeOf(wordType)))
+  val bypass_mask = need_bypass(io.w.req.valid, io.w.req.bits.setIdx, io.w.req.bits.waymask.getOrElse("b1".U), io.r.req.valid, io.r.req.bits.setIdx)
   val mem_rdata = {
     if (singlePort) raw_rdata
-    else
-      VecInit(bypass_mask.asBools.zip(raw_rdata).zip(bypass_wdata).map {
-        case ((m, r), w) => Mux(m, w, r)
-      })
+    else VecInit(bypass_mask.asBools.zip(raw_rdata).zip(bypass_wdata).map {
+      case ((m, r), w) => Mux(m, w, r)
+    })
   }
 
   // hold read data for SRAMs
   val rdata = (if (holdRead) HoldUnless(mem_rdata, RegNext(realRen))
-               else mem_rdata).map(_.asTypeOf(gen))
+  else mem_rdata).map(_.asTypeOf(gen))
 
   io.r.resp.data := VecInit(rdata)
   io.r.req.ready := !resetState && (if (singlePort) !wen else true.B)
@@ -188,8 +148,8 @@ class SRAMTemplate[T <: Data](
 
 }
 
-class SRAMTemplateWithArbiter[T <: Data](nRead: Int, gen: T, set: Int, way: Int = 1, shouldReset: Boolean = false)
-    extends Module {
+class SRAMTemplateWithArbiter[T <: Data](nRead: Int, gen: T, set: Int, way: Int = 1,
+                                         shouldReset: Boolean = false) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(Vec(nRead, new SRAMReadBus(gen, set, way)))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
@@ -203,9 +163,7 @@ class SRAMTemplateWithArbiter[T <: Data](nRead: Int, gen: T, set: Int, way: Int 
   ram.io.r.req <> readArb.io.out
 
   // latch read results
-  io.r.map {
-    case r => {
-      r.resp.data := HoldUnless(ram.io.r.resp.data, RegNext(r.req.fire()))
-    }
-  }
+  io.r.map{ case r => {
+    r.resp.data := HoldUnless(ram.io.r.resp.data, RegNext(r.req.fire()))
+  }}
 }

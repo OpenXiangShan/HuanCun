@@ -60,18 +60,26 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val eccDataBits = dataCode.width(8*bankBytes)
   println(s"extra ECC Databits:${eccDataBits - (8*bankBytes)}")
 
+  val sram_clk = if(cacheParams.sramCycleFactor == 1) {
+    this.clock
+  } else {
+    val clk = RegInit(false.B)
+    clk := !clk
+    clk.asClock()
+  }
   val bankedData = Seq.fill(nrBanks)(
-    Module(
-      new SRAMTemplate(
-        UInt(eccDataBits.W),
-        set = nrRows,
-        way = 1,
-        shouldReset = false,
-        holdRead = false,
-        singlePort = sramSinglePort,
-        cycleFactor = cacheParams.sramCycleFactor
+    withClock(sram_clk){
+      Module(
+        new SRAMTemplate(
+          UInt(eccDataBits.W),
+          set = nrRows,
+          way = 1,
+          shouldReset = false,
+          holdRead = false,
+          singlePort = sramSinglePort
+        )
       )
-    )
+    }
   )
 
   /* Convert to internal request signals */
@@ -133,13 +141,10 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   }
 
   val outData = Wire(Vec(nrBanks, UInt((8 * bankBytes).W)))
-  val data_en = Wire(Vec(nrBanks, Bool()))
-  val errVec = Wire(Vec(nrBanks, Bool()))
 
   for (i <- 0 until nrBanks) {
     val en = reqs.map(_.bankEn(i)).reduce(_ || _) && SReg.sren()
     val selectedReq = PriorityMux(reqs.map(_.bankSel(i)), reqs)
-
     // Write
     bankedData(i).io.w.req.valid := en && selectedReq.wen
     bankedData(i).io.w.req.bits.apply(
@@ -150,28 +155,46 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     // Read
     bankedData(i).io.r.req.valid := en && !selectedReq.wen
     bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
-    data_en(i) := SReg.pipe(en && !selectedReq.wen)
     val decode = dataCode.decode(bankedData(i).io.r.resp.data(0))
-    outData(i) := RegEnable(decode.uncorrected, data_en(i))
-    errVec(i) := decode.error
-    // when(data_en(i)) {
-    //   assert(!decode.error)
-    // }
+    outData(i) := decode.uncorrected
   }
 
-  io.ecc.errCode := Mux(Cat(errVec).orR(), io.ecc.ERR_DATA, io.ecc.ERR_NO)
+  io.ecc := DontCare
 
-  /* Pack out-data to channels */
-  val sourceDlatch = RegNext(SReg.pipe(sourceD_rreq.bankEn))
-  val sourceClatch = RegNext(SReg.pipe(sourceC_req.bankEn))
+  val dataSelModules = Array.fill(stackSize){
+    Module(new DataSel(nrStacks, 2, bankBytes * 8))
+  }
+  val data_grps = outData.grouped(stackSize).toList.transpose
+  val d_sel = sourceD_rreq.bankEn.asBools().grouped(stackSize).toList.transpose
+  val c_sel = sourceC_req.bankEn.asBools().grouped(stackSize).toList.transpose
+  for(i <- 0 until stackSize){
+    val dataSel = dataSelModules(i)
+    dataSel.io.in := VecInit(data_grps(i))
+    dataSel.io.sel(0) := Cat(d_sel(i).reverse)
+    dataSel.io.sel(1) := Cat(c_sel(i).reverse)
+    dataSel.io.en(0) := io.sourceD_raddr.fire()
+    dataSel.io.en(1) := io.sourceC_raddr.fire()
+  }
 
-  val sourceDrdata = outData.zipWithIndex.map {
-    case (r, i) => Mux(sourceDlatch(i), r, 0.U)
-  }.grouped(stackSize).toList.transpose.map(s => s.reduce(_ | _))
-  val sourceCrdata = outData.zipWithIndex.map {
-    case (r, i) => Mux(sourceClatch(i), r, 0.U)
-  }.grouped(stackSize).toList.transpose.map(s => s.reduce(_ | _))
+  io.sourceD_rdata.data := Cat(dataSelModules.map(_.io.out(0)).reverse)
+  io.sourceC_rdata.data := Cat(dataSelModules.map(_.io.out(1)).reverse)
 
-  io.sourceD_rdata.data := Cat(sourceDrdata.reverse)
-  io.sourceC_rdata.data := Cat(sourceCrdata.reverse)
+}
+
+class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) extends Module {
+
+  val io = IO(new Bundle() {
+    val in = Input(Vec(inNum, UInt(width.W)))
+    val sel = Input(Vec(outNum, UInt(inNum.W))) // one-hot sel mask
+    val en = Input(Vec(outNum, Bool()))
+    val out = Output(Vec(outNum, UInt(width.W)))
+  })
+
+  for(i <- 0 until outNum){
+    val sel_r = SReg.pipe(io.sel(i))
+    val odata = Mux1H(sel_r, io.in)
+    val en = SReg.pipe(io.en(i), false.B)
+    io.out(i) := RegEnable(odata, en)
+  }
+
 }
