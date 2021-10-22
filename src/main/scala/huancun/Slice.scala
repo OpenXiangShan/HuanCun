@@ -578,6 +578,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val perfinfo = IO(Output(Vec(numPCntHc, (UInt(6.W)))))
   for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(huancun_perf).zipWithIndex) {
     perf_out := perf
-    println(s"frontend perf $i: $perf_name")
+    if(print_hcperfcounter){
+      println(s"Huancun perf $i: $perf_name")
+    }
   }
 }
