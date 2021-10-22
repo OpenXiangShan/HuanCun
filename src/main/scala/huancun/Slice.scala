@@ -569,17 +569,20 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     io.ctl_resp.valid := false.B
     io.ctl_ecc.valid := false.B
   }
-  val reqbuff_perf     = a_req_buffer.perfEvents.map(_._1).zip(a_req_buffer.perfinfo)
-  val mshralloc_perf   = mshrAlloc.perfEvents.map(_._1).zip(mshrAlloc.perfinfo)
-  val probq_perf       = probeHelperOpt.get.perfEvents.map(_._1).zip(probeHelperOpt.get.perfinfo)
-  val direct_perf      = directory.asInstanceOf[noninclusive.Directory].perfEvents.map(_._1).zip(directory.asInstanceOf[noninclusive.Directory].perfinfo)
-  val huancun_perf = reqbuff_perf ++ mshralloc_perf ++ probq_perf ++ direct_perf
-
   val perfinfo = IO(Output(Vec(numPCntHc, (UInt(6.W)))))
-  for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(huancun_perf).zipWithIndex) {
-    perf_out := perf
-    if(print_hcperfcounter){
-      println(s"Huancun perf $i: $perf_name")
+  perfinfo := DontCare
+  if(!cacheParams.inclusive){
+    val reqbuff_perf     = a_req_buffer.perfEvents.map(_._1).zip(a_req_buffer.perfinfo)
+    val mshralloc_perf   = mshrAlloc.perfEvents.map(_._1).zip(mshrAlloc.perfinfo)
+    val probq_perf       = probeHelperOpt.get.perfEvents.map(_._1).zip(probeHelperOpt.get.perfinfo)
+    val direct_perf      = directory.asInstanceOf[noninclusive.Directory].perfEvents.map(_._1).zip(directory.asInstanceOf[noninclusive.Directory].perfinfo)
+    val huancun_perf = reqbuff_perf ++ mshralloc_perf ++ probq_perf ++ direct_perf
+
+    for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(huancun_perf).zipWithIndex) {
+      perf_out := perf
+      if(print_hcperfcounter){
+        println(s"Huancun perf $i: $perf_name")
+      }
     }
   }
 }
