@@ -64,6 +64,9 @@ trait HasHuanCunParameters {
 
   val alwaysReleaseData = cacheParams.alwaysReleaseData
 
+  val commitWidth = cacheParams.clientCaches.head.commitWidth
+  val vaddrBits = cacheParams.clientCaches.head.vaddrBits
+
   lazy val edgeIn = p(EdgeInKey)
   lazy val edgeOut = p(EdgeOutKey)
 
@@ -234,6 +237,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
 
     val io = IO(new Bundle() {
       val commit = Flipped(new CoreCommitInfos()(pftParams))
+      val miss = Flipped(ValidIO(new CoreMissInfo()(pftParams)))
     })
 
     val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
@@ -241,8 +245,18 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
     prefetchOpt.foreach {
-      case _ =>
-        arbTasks(prefetcher.get.io.train, prefetchTrains.get, Some("prefetch_train"))
+      case opt =>
+//        arbTasks(prefetcher.get.io.train, prefetchTrains.get, Some("prefetch_train"))
+        opt match {
+          case param: BOPParameters =>
+            arbTasks(prefetcher.get.io.train, prefetchTrains.get, Some("prefetch_train"))
+          case _: PCParameters =>
+            prefetchTrains.get.foreach(_.ready := true.B)
+            prefetcher.get.io.train.valid := io.miss.valid
+            prefetcher.get.io.train.bits := DontCare
+            prefetcher.get.io.train.bits.vaddr := io.miss.bits.vaddr
+            prefetcher.get.io.train.bits.needT := io.miss.bits.needT
+        }
         prefetcher.get.io.req.ready := Cat(prefetchReqsReady).orR
         arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
         prefetcher.get.io.update.commit := io.commit

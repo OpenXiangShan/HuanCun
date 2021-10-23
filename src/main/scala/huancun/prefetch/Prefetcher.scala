@@ -33,6 +33,9 @@ class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
   // prefetch only when L2 receives a miss or prefetched hit req
   // val miss = Bool()
   // val prefetched = Bool()
+
+  val vaddr = UInt(cacheParams.clientCaches.head.vaddrBits.W)
+
   def addr = Cat(tag, set, 0.U(offsetBits.W))
 }
 
@@ -47,18 +50,18 @@ class PrefetchIO(implicit p: Parameters) extends PrefetchBundle {
   val resp = Flipped(DecoupledIO(new PrefetchResp))
 }
 
-class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
+class PrefetchQueue[T <: Data](val gen: T, val entries: Int)(implicit p: Parameters) extends PrefetchModule {
   val io = IO(new Bundle {
-    val enq = Flipped(DecoupledIO(new PrefetchReq))
-    val deq = DecoupledIO(new PrefetchReq)
+    val enq = Flipped(DecoupledIO(gen))
+    val deq = DecoupledIO(gen)
   })
   /*  Here we implement a queue that
    *  1. is pipelined  2. flows
    *  3. always has the latest reqs, which means the queue is always ready for enq and deserting the eldest ones
    */
-  val queue = RegInit(VecInit(Seq.fill(inflightEntries)(0.U.asTypeOf(new PrefetchReq))))
-  val valids = RegInit(VecInit(Seq.fill(inflightEntries)(false.B)))
-  val idxWidth = log2Up(inflightEntries)
+  val queue = RegInit(VecInit(Seq.fill(entries)(0.U.asTypeOf(gen))))
+  val valids = RegInit(VecInit(Seq.fill(entries)(false.B)))
+  val idxWidth = log2Up(entries)
   val head = RegInit(0.U(idxWidth.W))
   val tail = RegInit(0.U(idxWidth.W))
   val empty = head === tail && !valids.last
@@ -89,7 +92,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
   prefetchOpt.get match {
     case bop: BOPParameters =>
       val pft = Module(new BestOffsetPrefetch)
-      val pftQueue = Module(new PrefetchQueue)
+      val pftQueue = Module(new PrefetchQueue(new PrefetchReq, inflightEntries))
       pft.io.train <> io.train
       pft.io.resp <> io.resp
       pftQueue.io.enq <> pft.io.req
@@ -111,6 +114,8 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       io.req.bits.bufIdx := DontCare
       io.req.bits.dirty := false.B
       io.req.bits.needProbeAckData.foreach(_ := false.B)
+    case pc: PCParameters =>
+
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }

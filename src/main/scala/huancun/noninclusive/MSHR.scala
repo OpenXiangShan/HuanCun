@@ -1029,6 +1029,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   io.tasks.prefetch_train.foreach { train =>
+    train.bits := DontCare
     train.bits.tag := req.tag
     train.bits.set := req.set
     train.bits.needT := req_needT
