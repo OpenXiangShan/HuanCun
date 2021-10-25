@@ -323,4 +323,25 @@ class Directory(implicit p: Parameters)
   XSPerfAccumulate(cacheParams, "selfdir_BRANCH", resp.valid && resp.bits.self.state === BRANCH)
   XSPerfAccumulate(cacheParams, "selfdir_TRUNK", resp.valid && resp.bits.self.state === TRUNK)
   XSPerfAccumulate(cacheParams, "selfdir_INVALID", resp.valid && resp.bits.self.state === INVALID)
+  //val perfinfo = IO(new Bundle(){
+  //  val perfEvents = Output(new PerfEventsBundle(numPCntHcDir))
+  //})
+  val perfinfo = IO(Output(Vec(numPCntHcDir, (UInt(6.W)))))
+  val perfEvents = Seq(
+    ("selfdir_A_req     ", req_r.replacerInfo.channel(0) && resp.valid                      ),
+    ("selfdir_A_hit     ", req_r.replacerInfo.channel(0) && resp.valid && resp.bits.self.hit),
+    ("selfdir_B_req     ", req_r.replacerInfo.channel(1) && resp.valid                      ),
+    ("selfdir_B_hit     ", req_r.replacerInfo.channel(1) && resp.valid && resp.bits.self.hit),
+    ("selfdir_C_req     ", req_r.replacerInfo.channel(2) && resp.valid                      ),
+    ("selfdir_C_hit     ", req_r.replacerInfo.channel(2) && resp.valid && resp.bits.self.hit),
+    ("selfdir_dirty     ", resp.valid && resp.bits.self.dirty                               ),
+    ("selfdir_TIP       ", resp.valid && resp.bits.self.state === TIP                       ),
+    ("selfdir_BRANCH    ", resp.valid && resp.bits.self.state === BRANCH                    ),
+    ("selfdir_TRUNK     ", resp.valid && resp.bits.self.state === TRUNK                     ),
+    ("selfdir_INVALID   ", resp.valid && resp.bits.self.state === INVALID                   ),
+  )
+
+  for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
+    perf_out := RegNext(perf)
+  }
 }

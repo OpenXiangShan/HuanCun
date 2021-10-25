@@ -8,6 +8,10 @@ compile:
 test:
 	mill -i HuanCun.test.test
 
+
+test-top:
+	mill -i HuanCun.test.runMain huancun.TestTop -td build
+
 basic-test:
 	mill -i HuanCun.test.testOnly -o -s huancun.ConnectionTester
 
@@ -15,7 +19,7 @@ bsp:
 	mill -i mill.bsp.BSP/install
 
 clean:
-	git clean -fd
+	rm -rf ./build
 
 reformat:
 	mill -i __.reformat

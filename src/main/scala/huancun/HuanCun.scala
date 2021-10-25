@@ -26,6 +26,7 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.prefetch._
+import huancun.utils.NoopNode
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -66,6 +67,14 @@ trait HasHuanCunParameters {
 
   val commitWidth = cacheParams.clientCaches.head.commitWidth
   val vaddrBits = cacheParams.clientCaches.head.vaddrBits
+
+  val numCSRPCntHc    = 5
+  val numPCntHcMSHR   = 7
+  val numPCntHcDir    = 11
+  val numPCntHcReqb   = 6
+  val numPCntHcProb   = 1
+  val numPCntHc       = numPCntHcMSHR + numPCntHcDir + numPCntHcReqb + numPCntHcProb
+  val print_hcperfcounter  = false
 
   lazy val edgeIn = p(EdgeInKey)
   lazy val edgeOut = p(EdgeOutKey)
@@ -198,15 +207,29 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
 
   val ctrl_unit = cacheParams.ctrl.map(_ => LazyModule(new CtrlUnit(node)))
   val ctlnode = ctrl_unit.map(_.ctlnode)
+  if (ctlnode.nonEmpty) {
+    val noopNode = LazyModule(new NoopNode())
+    ctlnode.get := noopNode.clientNode
+  }
 
   lazy val module = new LazyModuleImp(this) {
+    val banks = node.in.size
+    val pftParams: Parameters = p.alterPartial {
+      case EdgeInKey => node.in.head._2
+      case EdgeOutKey => node.out.head._2
+    }
+    val io = IO(new Bundle {
+      val perfEvents = Vec(banks, Vec(numPCntHc,(Output(UInt(6.W)))))
+      val commit = Flipped(new CoreCommitInfos()(pftParams))
+      val miss = Flipped(ValidIO(new CoreMissInfo()(pftParams)))
+    })
+
     val sizeBytes = cacheParams.sets * cacheParams.ways * cacheParams.blockBytes
     val sizeStr = sizeBytes match {
       case _ if sizeBytes > 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
       case _ if sizeBytes > 1024        => (sizeBytes / 1024) + "KB"
       case _                            => "B"
     }
-    val banks = node.in.size
     val bankBits = if(banks == 1) 0 else log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
@@ -220,10 +243,6 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     print_bundle_fields(node.in.head._2.bundle.requestFields, "usr")
     print_bundle_fields(node.in.head._2.bundle.echoFields, "echo")
 
-    val pftParams: Parameters = p.alterPartial {
-      case EdgeInKey => node.in.head._2
-      case EdgeOutKey => node.out.head._2
-    }
     def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
       val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), in.size))
       if (name.nonEmpty) {
@@ -234,11 +253,6 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
       out <> arbiter.io.out
     }
-
-    val io = IO(new Bundle() {
-      val commit = Flipped(new CoreCommitInfos()(pftParams))
-      val miss = Flipped(ValidIO(new CoreMissInfo()(pftParams)))
-    })
 
     val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
     val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
@@ -284,6 +298,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             prefetchReqsReady(i) := s.req.ready && bank_eq(p.io.req.bits.set, i, bankBits)
             prefetchResps.get(i) <> s.resp
         }
+        io.perfEvents(i) := slice.perfinfo
         slice
     }
     ctrl_unit.map { c =>
@@ -297,11 +312,16 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       val arb = Module(new Arbiter(new CtrlResp, slices.size))
       arb.io.in <> VecInit(slices.map(_.io.ctl_resp))
       c.module.resp <> arb.io.out
+
+      val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
+      ecc_arb.io.in <> VecInit(slices.map(_.io.ctl_ecc))
+      c.module.ecc <> ecc_arb.io.out
     }
-    if(ctrl_unit.isEmpty){
+    if (ctrl_unit.isEmpty) {
       slices.foreach(_.io.ctl_req <> DontCare)
       slices.foreach(_.io.ctl_req.valid := false.B)
       slices.foreach(_.io.ctl_resp.ready := false.B)
+      slices.foreach(_.io.ctl_ecc.ready := false.B)
     }
     node.edges.in.headOption.foreach { n =>
       n.client.clients.zipWithIndex.foreach {

@@ -250,7 +250,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         false.B,
         Mux(self_meta.hit,
           Mux(req_promoteT, false.B, self_meta.dirty || probe_dirty),
-          gotDirty
+          gotDirty || probe_dirty
         )
       ),
       Mux(req.opcode(2,1) === 0.U,
@@ -694,12 +694,23 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     })
   }
 
+  def handleEcc() = {
+    // assert(!io.dirResult.bits.self.hit || !io.dirResult.bits.self.error)
+    // io.dirResult.bits.clients.foreach(r => assert(!r.hit || !r.error))
+    when(io.dirResult.bits.self.hit && io.dirResult.bits.self.error) {
+      io.ecc.errCode := io.ecc.ERR_SELF_DIR
+    }
+    when(Cat(io.dirResult.bits.clients.map{r => r.hit && r.error}).orR()) {
+      io.ecc.errCode := io.ecc.ERR_CLIENT_DIR
+    }
+  }
+
+  io.ecc.errCode := io.ecc.ERR_NO
+
   when(io.dirResult.valid) {
 
     reset_all_flags()
-
-    assert(!io.dirResult.bits.self.hit || !io.dirResult.bits.self.error)
-    io.dirResult.bits.clients.foreach(r => assert(!r.hit || !r.error))
+    handleEcc()
 
     when(req.fromC) {
       c_schedule()
@@ -762,20 +773,20 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   val can_start = Mux(client_dir_conflict, probe_helper_finish, true.B)
-  io.tasks.source_a.valid := (!s_acquire || !s_transferput) && s_release && s_probe && can_start
-  io.tasks.source_b.valid := !s_probe && s_release
-  io.tasks.source_c.valid := !s_release || !s_probeack && s_writerelease && w_probeack
-  io.tasks.source_d.valid := !s_execute && can_start && w_grant && s_writeprobe && w_probeacklast // TODO: is there dependency between s_writeprobe and w_probeack?
+  io.tasks.source_a.valid := io.enable && (!s_acquire || !s_transferput) && s_release && s_probe && can_start
+  io.tasks.source_b.valid := io.enable && !s_probe && s_release
+  io.tasks.source_c.valid := io.enable && !s_release || !s_probeack && s_writerelease && w_probeack
+  io.tasks.source_d.valid := io.enable && !s_execute && can_start && w_grant && s_writeprobe && w_probeacklast // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
-  io.tasks.dir_write.valid := !s_wbselfdir && no_wait && can_start
-  io.tasks.tag_write.valid := !s_wbselftag && no_wait && can_start
+  io.tasks.dir_write.valid := io.enable && !s_wbselfdir && no_wait && can_start
+  io.tasks.tag_write.valid := io.enable && !s_wbselftag && no_wait && can_start
   for(i <- 0 until clientBits){
-    io.tasks.client_dir_write(i).valid := !s_wbclientsdir(i) && no_wait && can_start
-    io.tasks.client_tag_write(i).valid := !s_wbclientstag(i) && no_wait && can_start
+    io.tasks.client_dir_write(i).valid := io.enable && !s_wbclientsdir(i) && no_wait && can_start
+    io.tasks.client_tag_write(i).valid := io.enable && !s_wbclientstag(i) && no_wait && can_start
   }
   // io.tasks.sink_a.valid := !s_writeput && w_grant && s_writeprobe && w_probeacklast
   io.tasks.sink_a.valid := false.B
-  io.tasks.sink_c.valid := (!s_writerelease && (!releaseSave || s_release)) || (!s_writeprobe)
+  io.tasks.sink_c.valid := io.enable && (!s_writerelease && (!releaseSave || s_release)) || (!s_writeprobe)
   io.tasks.prefetch_train.foreach(_.valid := !s_triggerprefetch.get)
   io.tasks.prefetch_resp.foreach(_.valid := !s_prefetchack.get && w_grantfirst)
 
@@ -1220,7 +1231,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val nest_c_way_match = io_c_status.way === self_meta.way
   io_c_status.releaseThrough := req_valid && io_c_status.nestedReleaseData && nest_c_set_match &&
     ((nest_c_way_match && (
-      (req.fromA && !nest_c_tag_match && (preferCache || self_meta.hit) && !acquirePermMiss) ||
+      (req.fromA && !nest_c_tag_match && (preferCache || self_meta.hit) && (!acquirePermMiss || cache_alias)) ||
       (req.fromA && nest_c_tag_match && !self_meta.hit && io_c_status.tag =/= self_meta.tag && !acquirePermMiss) ||
       (req.fromB && Mux(self_meta.hit, !nest_c_tag_match, nest_c_tag_match))
     )) ||

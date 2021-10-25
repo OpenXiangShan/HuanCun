@@ -58,4 +58,15 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   io.probe <> queue.io.deq
 
   XSPerfAccumulate(cacheParams, "client_dir_conflict", queue.io.enq.fire())
+  //val perfinfo = IO(new Bundle(){
+  //  val perfEvents = Output(new PerfEventsBundle(numPCntHcReqb))
+  //})
+  val perfinfo = IO(Output(Vec(numPCntHcProb, (UInt(6.W)))))
+  val perfEvents = Seq(
+    ("client_dir_conflict        ", queue.io.enq.fire()             ),
+  )
+
+  for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
+    perf_out := RegNext(perf)
+  }
 }

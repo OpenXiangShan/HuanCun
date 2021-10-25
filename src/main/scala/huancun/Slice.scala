@@ -23,6 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
+import freechips.rocketchip.util.leftOR
 import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
 import huancun.prefetch._
 
@@ -33,18 +34,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
+    val ctl_ecc = DecoupledIO(new EccInfo())
   })
 
   val ctrl = cacheParams.ctrl.map(_ => Module(new SliceCtrl()))
-  if(ctrl.nonEmpty){
-    ctrl.get.io.req <> io.ctl_req
-    io.ctl_resp <> ctrl.get.io.resp
-  } else {
-    io.ctl_req <> DontCare
-    io.ctl_resp <> DontCare
-    io.ctl_req.ready := false.B
-    io.ctl_resp.valid := false.B
-  }
 
   def ctrl_arb[T <: Data](source: DecoupledIO[T], ctrl: Option[DecoupledIO[T]]): DecoupledIO[T] ={
     if(ctrl.nonEmpty){
@@ -169,6 +162,23 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   val select_c = c_mshr.io.status.valid
   val select_bc = bc_mshr.io.status.valid
+
+  val bc_mask_latch = RegInit(0.U.asTypeOf(mshrAlloc.io.bc_mask.bits))
+  val c_mask_latch = RegInit(0.U.asTypeOf(mshrAlloc.io.c_mask.bits))
+  when(mshrAlloc.io.bc_mask.valid) {
+    bc_mask_latch := mshrAlloc.io.bc_mask.bits
+  }
+  when(mshrAlloc.io.c_mask.valid) {
+    c_mask_latch := mshrAlloc.io.c_mask.bits
+  }
+  abc_mshr.zipWithIndex.foreach {
+    case (mshr, i) =>
+      val bc_disable = bc_mask_latch(i) && select_bc
+      val c_disable = c_mask_latch(i) && select_c
+      mshr.io.enable := !(bc_disable || c_disable)
+  }
+  bc_mshr.io.enable := !(c_mask_latch(mshrsAll-2) && select_c)
+  c_mshr.io.enable := true.B
 
   def non_inclusive[T <: RawModule](m: T): noninclusive.MSHR = {
     m.asInstanceOf[noninclusive.MSHR]
@@ -542,4 +552,38 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   sinkA.io.a_pb_pop <> sourceA.io.pb_pop
   sinkA.io.a_pb_beat <> sourceA.io.pb_beat
+
+  if (ctrl.nonEmpty) {
+    ctrl.get.io.req <> io.ctl_req
+    io.ctl_resp <> ctrl.get.io.resp
+    io.ctl_ecc <> DontCare
+    val eccMask = Cat(ms.map(m => m.io.ecc.errCode =/= 0.U && m.io.status.valid))
+    val valid_eccMask = ~(leftOR(eccMask) << 1) & eccMask
+    val ms_errCode = VecInit(ms.map(_.io.ecc.errCode))(OHToUInt(valid_eccMask))
+    io.ctl_ecc.bits.errCode := Mux(dataStorage.io.ecc.errCode =/= 0.U, dataStorage.io.ecc.errCode, ms_errCode)
+    io.ctl_ecc.valid := Cat(eccMask).orR()
+  } else {
+    io.ctl_req <> DontCare
+    io.ctl_resp <> DontCare
+    io.ctl_ecc <> DontCare
+    io.ctl_req.ready := false.B
+    io.ctl_resp.valid := false.B
+    io.ctl_ecc.valid := false.B
+  }
+  val perfinfo = IO(Output(Vec(numPCntHc, (UInt(6.W)))))
+  perfinfo := DontCare
+  if(!cacheParams.inclusive){
+    val reqbuff_perf     = a_req_buffer.perfEvents.map(_._1).zip(a_req_buffer.perfinfo)
+    val mshralloc_perf   = mshrAlloc.perfEvents.map(_._1).zip(mshrAlloc.perfinfo)
+    val probq_perf       = probeHelperOpt.get.perfEvents.map(_._1).zip(probeHelperOpt.get.perfinfo)
+    val direct_perf      = directory.asInstanceOf[noninclusive.Directory].perfEvents.map(_._1).zip(directory.asInstanceOf[noninclusive.Directory].perfinfo)
+    val huancun_perf = reqbuff_perf ++ mshralloc_perf ++ probq_perf ++ direct_perf
+
+    for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(huancun_perf).zipWithIndex) {
+      perf_out := perf
+      if(print_hcperfcounter){
+        println(s"Huancun perf $i: $perf_name")
+      }
+    }
+  }
 }
