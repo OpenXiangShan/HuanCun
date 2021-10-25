@@ -115,7 +115,30 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       io.req.bits.dirty := false.B
       io.req.bits.needProbeAckData.foreach(_ := false.B)
     case pc: PCParameters =>
-
+      val pft = Module(new PointerChasePrefetch)
+      val pftQueue = Module(new PrefetchQueue(new PrefetchReq, inflightEntries))
+      pft.io.update := io.update
+      pft.io.train <> io.train
+      pftQueue.io.enq <> pft.io.req
+      pftQueue.io.deq.ready := io.req.ready
+      io.req.valid := pftQueue.io.deq.valid
+      io.req.bits.opcode := TLMessages.Hint
+      io.req.bits.param := Mux(pftQueue.io.deq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
+      io.req.bits.size := log2Up(blockBytes).U
+      io.req.bits.source := pftQueue.io.deq.bits.source
+      io.req.bits.set := pftQueue.io.deq.bits.set
+      io.req.bits.tag := pftQueue.io.deq.bits.tag
+      io.req.bits.off := 0.U
+      io.req.bits.channel := "b001".U
+      io.req.bits.needHint.foreach(_ := false.B)
+      io.req.bits.isPrefetch.foreach(_ := true.B)
+      io.req.bits.alias.foreach(_ := pftQueue.io.deq.bits.alias.get)
+      io.req.bits.preferCache := true.B
+      io.req.bits.fromProbeHelper := false.B
+      io.req.bits.bufIdx := DontCare
+      io.req.bits.dirty := false.B
+      io.req.bits.needProbeAckData.foreach(_ := false.B)
+      io.resp.ready := true.B
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }

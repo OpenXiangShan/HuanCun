@@ -48,16 +48,18 @@ class DataWriteReq(implicit p: Parameters) extends DataReadReq {
   val diffAddr = UInt(diffAddrBits.W)
 }
 
-class PointerCache(implicit p: Parameters) extends PCModule {
-  val io = IO(new Bundle() {
-    val tag_read = Flipped(DecoupledIO(new TagReadReq))
-    val tag_resp = Output(new TagReadResp)
-    val tag_write = Flipped(DecoupledIO(new TagWriteReq))
+class PointerCacheIO(implicit p: Parameters) extends PCBundle {
+  val tag_read = Flipped(DecoupledIO(new TagReadReq))
+  val tag_resp = Output(new TagReadResp)
+  val tag_write = Flipped(DecoupledIO(new TagWriteReq))
 
-    val data_read = Flipped(DecoupledIO(new DataReadReq))
-    val data_resp = Output(new DataReadResp)
-    val data_write = Flipped(DecoupledIO(new DataWriteReq))
-  })
+  val data_read = Flipped(DecoupledIO(new DataReadReq))
+  val data_resp = Output(new DataReadResp)
+  val data_write = Flipped(DecoupledIO(new DataWriteReq))
+}
+
+class PointerCache(implicit p: Parameters) extends PCModule {
+  val io = IO(new PointerCacheIO)
 
   val valids = Reg(Vec(pcSets, Vec(pcWays, Bool())))
   when (reset.asBool()) {
@@ -122,7 +124,7 @@ class PointerCache(implicit p: Parameters) extends PCModule {
 
   io.data_read.ready := !data_rwconflict.asUInt.orR && !reset.asBool()
   io.data_resp.diffAddr := PriorityMux(
-    RegNext(io.data_read.bits.way_en).asBools,
+    RegNext(io.data_read.bits.way_en),
     data_array.map(_.io.r.resp.data(0))
   )
   io.data_write.ready := !reset.asBool()

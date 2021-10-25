@@ -4,6 +4,7 @@ import chipsalliance.rocketchip.config.{Parameters, Field}
 import chisel3._
 import chisel3.util._
 import huancun._
+import huancun.utils._
 
 case object PCParamsKey extends Field[PCParameters]
 
@@ -31,6 +32,7 @@ trait HasPCParams extends HasHuanCunParameters {
   // The pointer cache store only if the address of the pointer and the address of the object
   // it points to fall within the range of the heap.
   val heapTagBits = 6 // the N most significant bits of vaddr
+  val aboveTagBits = vaddrBits - pcTagBits - pcIdxBits - wordOffBits
 
   val replacer = Some("setplru")
 
@@ -99,12 +101,7 @@ class PointerCachePipelineReq(implicit p: Parameters) extends PCBundle {
 class PointerCachePipeline(implicit p: Parameters) extends PCModule {
   val io = IO(new Bundle() {
     val req = Flipped(Decoupled(new PointerCachePipelineReq()))
-    val tag_read = DecoupledIO(new TagReadReq)
-    val tag_resp = Input(new TagReadResp)
-    val tag_write = Decoupled(new TagWriteReq)
-    val data_read = DecoupledIO(new DataReadReq)
-    val data_resp = Input(new DataReadResp)
-    val data_write = DecoupledIO(new DataWriteReq)
+    val access_pc = Flipped(new PointerCacheIO)
     val prefetch_req = ValidIO(new Bundle() {
       val vaddr = UInt(vaddrBits.W)
       val needT = Bool()
@@ -114,22 +111,23 @@ class PointerCachePipeline(implicit p: Parameters) extends PCModule {
 
   val s0_valid = io.req.valid
   val s0_req = io.req.bits
-  val s0_can_go = s1_ready && io.tag_read.ready
+  val s0_can_go = s1_ready && io.access_pc.tag_read.ready
   val s0_fire = s0_valid && s0_can_go
 
   val s1_valid = RegInit(false.B)
   val s1_req = RegEnable(s0_req, s0_fire)
-  val s1_tag_resp = Mux(RegNext(s0_fire), io.tag_resp, RegNext(s1_tag_resp))
+  val s1_tag_resp = Wire(io.access_pc.tag_resp.cloneType)
+  s1_tag_resp := Mux(RegNext(s0_fire), io.access_pc.tag_resp, RegNext(s1_tag_resp))
   val s1_tag_eq_way = s1_tag_resp.tags.map(_ === get_pc_partial_tag(s1_req.vaddr))
-  val s1_tag_match_way = s1_tag_eq_way.zip(s1_tag_resp.valids).map((eq, v) => eq && v)
+  val s1_tag_match_way = s1_tag_eq_way.zip(s1_tag_resp.valids).map { case (eq, v) => eq && v }
   val s1_hit = Cat(s1_tag_match_way).orR
   val s1_need_r_data = s1_req.train && s1_hit
   val s1_need_w_tag = s1_req.loadCmt && !s1_hit
   val s1_need_w_data = s1_req.loadCmt || s1_req.storeCmt && s1_hit
   assert(RegNext(!s1_valid || !(s1_need_r_data && s1_need_w_data)))
-  val s1_can_go = (!s1_need_r_data || io.data_read.ready) &&
-    (!s1_need_w_data || io.data_write.ready) &&
-    (!s1_need_w_tag || io.tag_write.ready)
+  val s1_can_go = (!s1_need_r_data || io.access_pc.data_read.ready) &&
+    (!s1_need_w_data || io.access_pc.data_write.ready) &&
+    (!s1_need_w_tag || io.access_pc.tag_write.ready)
   val s1_fire = s1_valid && s1_can_go
   s1_ready := !s1_valid || s1_fire
   when (s0_fire) { s1_valid := true.B }
@@ -142,27 +140,33 @@ class PointerCachePipeline(implicit p: Parameters) extends PCModule {
 
   io.req.ready := s0_can_go
 
-  io.tag_read.valid := s0_valid && s1_ready
-  io.tag_read.bits.idx := get_pc_idx(s0_req.vaddr)
-  io.tag_read.bits.way_en := (-1).asSInt.asUInt
+  io.access_pc.tag_read.valid := s0_valid && s1_ready
+  io.access_pc.tag_read.bits.idx := get_pc_idx(s0_req.vaddr)
+  io.access_pc.tag_read.bits.way_en := (-1).asSInt.asUInt
 
-  io.tag_write.valid := s1_valid && s1_need_w_tag &&
-    (!s1_need_w_data || io.data_write.ready)
-  io.tag_write.bits.idx := get_pc_idx(s1_req.vaddr)
-  io.tag_write.bits.way_en := s1_way_en
-  io.tag_write.bits.tag := get_pc_partial_tag(s1_req.vaddr)
+  io.access_pc.tag_write.valid := s1_valid && s1_need_w_tag &&
+    (!s1_need_w_data || io.access_pc.data_write.ready)
+  io.access_pc.tag_write.bits.idx := get_pc_idx(s1_req.vaddr)
+  io.access_pc.tag_write.bits.way_en := s1_way_en
+  io.access_pc.tag_write.bits.tag := get_pc_partial_tag(s1_req.vaddr)
 
-  io.data_read.valid := s1_valid && s1_need_r_data
-  io.date_read.bits.idx := get_pc_idx(s1_req.vaddr)
-  io.data_read.bits.way_en := s1_way_en
+  io.access_pc.data_read.valid := s1_valid && s1_need_r_data
+  io.access_pc.data_read.bits.idx := get_pc_idx(s1_req.vaddr)
+  io.access_pc.data_read.bits.way_en := s1_way_en
 
-  io.data_write.valid := s1_valid && s1_need_w_data &&
-    (!s1_need_w_tag || io.tag_write.ready)
-  io.data_write.bits.idx := get_pc_idx(s1_req.vaddr)
-  io.data_write.bits.way_en := s1_way_en
-  io.data_write.bits.diffAddr := get_diff_addr(s1_req.data)
+  io.access_pc.data_write.valid := s1_valid && s1_need_w_data &&
+    (!s1_need_w_tag || io.access_pc.tag_write.ready)
+  io.access_pc.data_write.bits.idx := get_pc_idx(s1_req.vaddr)
+  io.access_pc.data_write.bits.way_en := s1_way_en
+  io.access_pc.data_write.bits.diffAddr := get_diff_addr(s1_req.data)
 
-//  io.prefetch_req.valid
+  io.prefetch_req.valid := RegNext(s1_valid && s1_need_r_data && io.access_pc.data_read.ready)
+  io.prefetch_req.bits.vaddr := Cat(
+    RegNext(s1_req.vaddr.head(aboveTagBits)),
+    io.access_pc.data_resp.diffAddr,
+    0.U(wordOffBits.W)
+  )
+  io.prefetch_req.bits.needT := RegNext(s1_req.needT)
 }
 
 class PointerChasePrefetch(implicit p: Parameters) extends PCModule {
@@ -185,6 +189,7 @@ class PointerChasePrefetch(implicit p: Parameters) extends PCModule {
     val res = Wire(Valid(new CommitInfo))
     res.bits := cmt.bits
     res.valid := cmt.valid && isPointerAddr(cmt.bits.vaddr, cmt.bits.data)
+    res
   }
   val pointerLoads = io.update.commit.ld.map(cmt => pointerFilter(cmt))
   val pointerStores = io.update.commit.st.map(cmt => pointerFilter(cmt))
@@ -200,13 +205,48 @@ class PointerChasePrefetch(implicit p: Parameters) extends PCModule {
 
   /*  3. Choose one req from the 3 queues above to access pointer cache  */
   val arb = Module(new RRArbiter(new CommitInfo, 3))
-  arb.io.in(0) <> pointerLdQueue.io.deq
-  arb.io.in(1) <> pointerStQueue.io.deq
+  val loadCmtPort = 0
+  val storeCmtPort = 1
+  val prefetchTrainPort = 2
+  arb.io.in(loadCmtPort) <> pointerLdQueue.io.deq
+  arb.io.in(storeCmtPort) <> pointerStQueue.io.deq
   val trainReq = Wire(DecoupledIO(new CommitInfo))
   trainReq.valid := trainReqQueue.io.deq.valid
   trainReq.bits := DontCare
   trainReq.bits.vaddr := trainReqQueue.io.deq.bits.vaddr
-  io.deq.ready := trainReq.ready
-  arb.io.in(2) <> trainReq
+  trainReqQueue.io.deq.ready := trainReq.ready
+  arb.io.in(prefetchTrainPort) <> trainReq
 
+  /*  4. Access pointer cache  */
+  val pipe = Module(new PointerCachePipeline)
+  val pc = Module(new PointerCache)
+  pc.io <> pipe.io.access_pc
+  pipe.io.req.valid := arb.io.out.valid
+  pipe.io.req.bits.loadCmt := arb.io.chosen === loadCmtPort.U
+  pipe.io.req.bits.storeCmt := arb.io.chosen === storeCmtPort.U
+  pipe.io.req.bits.train := arb.io.chosen === prefetchTrainPort.U
+  pipe.io.req.bits.vaddr := arb.io.out.bits.vaddr
+  pipe.io.req.bits.data := arb.io.out.bits.data
+  pipe.io.req.bits.needT := trainReqQueue.io.deq.bits.needT
+  arb.io.out.ready := pipe.io.req.ready
+
+  /*  5. Translate vaddr to paddr  */
+  val prefetch_vaddr = Wire(ValidIO(UInt(vaddrBits.W)))
+  val prefetch_paddr = Wire(ValidIO(UInt(addressBits.W)))
+  prefetch_paddr := DontCare
+  ExcitingUtils.addSource(prefetch_vaddr.valid, "POINT_CHASE_TLB_REQ_VALID")
+  ExcitingUtils.addSource(prefetch_vaddr.bits, "POINT_CHASE_TLB_REQ_VADDR")
+  ExcitingUtils.addSink(prefetch_paddr.valid, "POINT_CHASE_TLB_RESP_VALID")
+  ExcitingUtils.addSink(prefetch_paddr.bits, "POINT_CHASE_TLB_RESP_PADDR")
+  prefetch_vaddr.valid := pipe.io.prefetch_req.valid
+  prefetch_vaddr.bits := pipe.io.prefetch_req.bits.vaddr
+
+  io.req.valid := prefetch_paddr.valid
+  io.req.bits := DontCare
+  val (tag, set, _) = parseAddress(prefetch_paddr.bits)
+  io.req.bits.tag := tag
+  io.req.bits.set := set
+  io.req.bits.needT := pipe.io.prefetch_req.bits.needT
+  io.req.bits.source := 0.U // TODO
+  io.req.bits.alias.foreach(_ := pipe.io.prefetch_req.bits.vaddr(pageOffsetBits + aliasBitsOpt.get - 1, pageOffsetBits))
 }

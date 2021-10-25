@@ -474,6 +474,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io.tasks.prefetch_train.foreach(_.ready := true.B)
       mshr.io.tasks.prefetch_resp.foreach(_.ready := true.B)
     }
+    pft.update := DontCare
   }
 
   // Resps to MSHRs
