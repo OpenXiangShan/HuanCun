@@ -24,7 +24,7 @@ case class BankedXbarNode
     require(p.size >= banks, "client banks should >= manager banks")
     val params = p.grouped(banks).toList.transpose.map(clientFn)
     val res = Seq.fill(n / banks){params}.flatten
-    println(res.mkString("\n"))
+    //println(res.mkString("\n"))
     res
   }
 
@@ -33,7 +33,7 @@ case class BankedXbarNode
     val masters = n / banks
     val params = p.grouped(banks).toList.transpose.map(managerFn)
     val res = Seq.fill(masters){params}.flatten
-    println(res.mkString("\n"))
+    //println(res.mkString("\n"))
     res
   }
 
