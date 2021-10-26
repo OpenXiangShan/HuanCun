@@ -274,13 +274,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val nestedWb_c_set_hit = c_mshr match {
     case c: inclusive.MSHR =>
       ms.map {
-        case m =>
+        m =>
           select_c && c.io.tasks.tag_write.valid &&
-          c.io.tasks.tag_write.bits.tag === m.io.status.bits.tag
+            c.io.tasks.tag_write.bits.tag === m.io.status.bits.tag
       }
     case c: noninclusive.MSHR =>
       ms.map {
-        case m =>
+        m =>
           select_c && c.io.tasks.tag_write.valid &&
             c.io.tasks.tag_write.bits.tag === m.io.status.bits.tag
       }
@@ -293,17 +293,17 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
         case (n, i) =>
           n.isToN := Mux(
             select_c,
-            c_mshr.io.tasks.client_dir_write(i).valid &&
-              c_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.INVALID,
-            bc_mshr.io.tasks.client_dir_write(i).valid &&
-              bc_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.INVALID
+            c_mshr.io.tasks.client_dir_write.valid &&
+              c_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.INVALID,
+            bc_mshr.io.tasks.client_dir_write.valid &&
+              bc_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.INVALID
           )
           n.isToB := Mux(
             select_c,
-            c_mshr.io.tasks.client_dir_write(i).valid &&
-              c_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.BRANCH,
-            bc_mshr.io.tasks.client_dir_write(i).valid &&
-              bc_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.BRANCH
+            c_mshr.io.tasks.client_dir_write.valid &&
+              c_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.BRANCH,
+            bc_mshr.io.tasks.client_dir_write.valid &&
+              bc_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.BRANCH
           )
       }
     case (bc_mshr: inclusive.MSHR, c_mshr: inclusive.MSHR) =>
@@ -410,16 +410,20 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   )
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
-      for ((dirW, idx) <- dir.io.clientDirWReqs.zipWithIndex) {
-        block_b_c(dirW, add_ctrl(ms.map(_.io.tasks.client_dir_write(idx)), ctrl.map(_.io.c_dir_w(idx))))
-      }
-      for ((tagW, idx) <- dir.io.clientTagWreq.zipWithIndex) {
-        arbTasks(
-          tagW,
-          add_ctrl(ms.map(_.io.tasks.client_tag_write(idx)), ctrl.map(_.io.c_tag_w(idx))),
-          Some(s"client_${idx}_tagWrite")
+      block_b_c(
+        dir.io.clientDirWReq,
+        add_ctrl(
+          ms.map(_.io.tasks.client_dir_write),
+          ctrl.map(_.io.c_dir_w)
         )
-      }
+      )
+      arbTasks(
+        dir.io.clientTagWreq,
+        add_ctrl(
+          ms.map(_.io.tasks.client_tag_write),
+          ctrl.map(_.io.c_tag_w)
+        )
+      )
     case (_: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
     // skip
     case _ =>

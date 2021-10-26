@@ -12,9 +12,9 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     val req = Flipped(DecoupledIO(new CtrlReq))
     val resp = DecoupledIO(new CtrlResp)
     val s_dir_w = DecoupledIO(new SelfDirWrite())
-    val c_dir_w = Vec(clientBits, DecoupledIO(new ClientDirWrite()))
+    val c_dir_w = DecoupledIO(new ClientDirWrite())
     val s_tag_w = DecoupledIO(new SelfTagWrite())
-    val c_tag_w = Vec(clientBits, DecoupledIO(new ClientTagWrite()))
+    val c_tag_w = DecoupledIO(new ClientTagWrite())
     val bs_w_addr = DecoupledIO(new DSAddress())
     val bs_w_data = Output(new DSData())
     val dir_read = DecoupledIO(new DirRead())
@@ -96,13 +96,13 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
         req_reg.data(0) := io.dir_result.bits.self.asTypeOf(new SelfDirEntry()).asUInt()
       }
       is(CacheCMD.CMD_R_C_DIR){
-        req_reg.data(0) := io.dir_result.bits.clients(req_reg.client).asTypeOf(new ClientDirEntry()).asUInt()
+        req_reg.data(0) := io.dir_result.bits.clients.states.asUInt()
       }
       is(CacheCMD.CMD_R_S_TAG){
         req_reg.data(0) := io.dir_result.bits.self.tag
       }
       is(CacheCMD.CMD_R_C_TAG){
-        req_reg.data(0) := io.dir_result.bits.clients(req_reg.client).tag
+        req_reg.data(0) := io.dir_result.bits.clients.tag
       }
     }
     s_dir_read := false.B
@@ -111,31 +111,25 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
 
 
   io.s_dir_w.valid := s_wb_self_dir
-  io.c_dir_w.zipWithIndex.foreach{
-    case (w, i) =>
-      w.valid := s_wb_client_dir && req_reg.client === i.U
-  }
+  io.c_dir_w.valid := s_wb_client_dir
   io.s_tag_w.valid := s_wb_self_tag
-  io.c_tag_w.zipWithIndex.foreach{
-    case (w, i) =>
-      w.valid := s_wb_client_tag && req_reg.client === i.U
-  }
+  io.c_tag_w.valid := s_wb_client_tag
 
   io.s_dir_w.bits.set := req_reg.set
   io.s_dir_w.bits.way := req_reg.way
-  io.s_dir_w.bits.data := req_reg.dir.asTypeOf(new SelfDirEntry())
+  io.s_dir_w.bits.data := req_reg.dir.asTypeOf(io.s_dir_w.bits.data)
 
-  io.c_dir_w.foreach(_.bits.set := req_reg.set)
-  io.c_dir_w.foreach(_.bits.way := req_reg.way)
-  io.c_dir_w.foreach(_.bits.data := req_reg.dir.asTypeOf(new ClientDirEntry()))
+  io.c_dir_w.bits.set := req_reg.set
+  io.c_dir_w.bits.way := req_reg.way
+  io.c_dir_w.bits.data := req_reg.dir.asTypeOf(io.c_dir_w.bits.data)
 
   io.s_tag_w.bits.set := req_reg.set
   io.s_tag_w.bits.way := req_reg.way
   io.s_tag_w.bits.tag := req_reg.tag
 
-  io.c_tag_w.foreach(_.bits.set := req_reg.set)
-  io.c_tag_w.foreach(_.bits.way := req_reg.way)
-  io.c_tag_w.foreach(_.bits.tag := req_reg.tag)
+  io.c_tag_w.bits.set := req_reg.set
+  io.c_tag_w.bits.way := req_reg.way
+  io.c_tag_w.bits.tag := req_reg.tag
 
   io.bs_r_addr.valid := s_data_read =/= beatSize.U
   io.bs_r_addr.bits.way := req_reg.way
@@ -179,7 +173,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     s_wb_self_dir := false.B
     done := true.B
   }
-  when(io.c_dir_w(req_reg.client).fire()){
+  when(io.c_dir_w.fire()){
     s_wb_client_dir := false.B
     done := true.B
   }
@@ -187,7 +181,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     s_wb_self_tag := false.B
     done := true.B
   }
-  when(io.c_tag_w(req_reg.client).fire()){
+  when(io.c_tag_w.fire()){
     s_wb_client_tag := false.B
     done := true.B
   }

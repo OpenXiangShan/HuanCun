@@ -67,7 +67,6 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_way = RegInit(0.U(64.W))
   val ctl_dir = RegInit(0.U(64.W))
   val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
-  val ctl_client = RegInit(0.U(64.W))
   val ctl_cmd = RegInit(0.U(64.W))
 
   val ecc_code = RegInit(0.U(64.W)) // assume non-zero as ECC error
@@ -86,7 +85,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_config_regs = (
     Seq(ctl_tag, ctl_set, ctl_way) ++
     ctl_data ++
-    Seq(ctl_dir, ctl_client) ++
+    Seq(ctl_dir) ++
     Seq(ecc_code, ecc_tag, ecc_set, ecc_way)
   ).map(reg => RegField(64, reg, RegWriteFn(reg)))
 
@@ -121,7 +120,6 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   req.bits.set := ctl_set
   req.bits.way := ctl_way
   req.bits.dir := ctl_dir
-  req.bits.client := ctl_client
 
   when(resp.fire()) {
     switch(resp.bits.cmd){
@@ -155,7 +153,6 @@ class CtrlReq() extends Bundle {
   val tag = UInt(64.W)
   val way = UInt(64.W)
   val dir = UInt(64.W)
-  val client = UInt(64.W)
 }
 
 class CtrlResp() extends Bundle {

@@ -41,10 +41,12 @@ class SelfDirResult(implicit p: Parameters) extends SelfDirEntry {
   val error = Bool()
 }
 
-class ClientDirResult(implicit p: Parameters) extends ClientDirEntry with HasClientInfo {
-  val hit = Bool()
-  val way = UInt(clientWayBits.W)
+class ClientDirResult(implicit p: Parameters) extends HuanCunBundle with HasClientInfo {
+  val states = Vec(clientBits, new ClientDirEntry {
+    val hit = Bool()
+  })
   val tag = UInt(clientTagBits.W)
+  val way = UInt(clientWayBits.W)
   val error = Bool()
 
   def parseTag(lineAddr: UInt): UInt = {
@@ -52,9 +54,9 @@ class ClientDirResult(implicit p: Parameters) extends ClientDirEntry with HasCli
   }
 }
 
-class DirResult(implicit p: Parameters) extends BaseDirResult {
+class DirResult(implicit p: Parameters) extends BaseDirResult with HasClientInfo {
   val self = new SelfDirResult
-  val clients = Vec(clientBits, new ClientDirResult)
+  val clients = new ClientDirResult
   val sourceId = UInt(sourceIdBits.W)
   val set = UInt(setBits.W)
   val replacerInfo = new ReplacerInfo
@@ -87,9 +89,9 @@ class SelfDirWrite(implicit p: Parameters) extends BaseDirWrite {
 class ClientDirWrite(implicit p: Parameters) extends HuanCunBundle with HasClientInfo {
   val set = UInt(clientSetBits.W)
   val way = UInt(clientWayBits.W)
-  val data = new ClientDirEntry()
+  val data = Vec(clientBits, new ClientDirEntry())
 
-  def apply(lineAddr: UInt, way: UInt, data: ClientDirEntry) = {
+  def apply(lineAddr: UInt, way: UInt, data: Vec[ClientDirEntry]) = {
     this.set := lineAddr(clientSetBits - 1, 0)
     this.way := way
     this.data := data
@@ -109,8 +111,8 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Sel
   val result = ValidIO(new DirResult)
   val dirWReq = Flipped(DecoupledIO(new SelfDirWrite))
   val tagWReq = Flipped(DecoupledIO(new SelfTagWrite))
-  val clientDirWReqs = Vec(clientBits, Flipped(DecoupledIO(new ClientDirWrite)))
-  val clientTagWreq = Vec(clientBits, Flipped(DecoupledIO(new ClientTagWrite)))
+  val clientDirWReq = Flipped(DecoupledIO(new ClientDirWrite))
+  val clientTagWreq = Flipped(DecoupledIO(new ClientTagWrite))
 }
 
 class Directory(implicit p: Parameters)
@@ -120,6 +122,7 @@ class Directory(implicit p: Parameters)
 
   val stamp = GTimer()
   val selfDirW = io.dirWReq
+  // dump self dir
   DirectoryLogger(cacheParams.name, TypeId.self_dir)(
     selfDirW.bits.set,
     selfDirW.bits.way,
@@ -130,6 +133,7 @@ class Directory(implicit p: Parameters)
     this.clock,
     this.reset
   )
+  // dump self tag
   DirectoryLogger(cacheParams.name, TypeId.self_tag)(
     io.tagWReq.bits.set,
     io.tagWReq.bits.way,
@@ -141,56 +145,54 @@ class Directory(implicit p: Parameters)
     this.reset
   )
 
-  for ((dirW, tagW) <- io.clientDirWReqs.zip(io.clientTagWreq)) {
-    DirectoryLogger(cacheParams.name, TypeId.client_dir)(
-      dirW.bits.set,
-      dirW.bits.way,
-      0.U,
-      dirW.bits.data,
-      stamp,
-      dirW.fire(),
-      this.clock,
-      this.reset
-    )
-    DirectoryLogger(cacheParams.name, TypeId.client_tag)(
-      tagW.bits.set,
-      tagW.bits.way,
-      tagW.bits.tag,
-      0.U,
-      stamp,
-      tagW.fire(),
-      this.clock,
-      this.reset
-    )
-  }
+  // dump client dir
+  DirectoryLogger(cacheParams.name, TypeId.client_dir)(
+    io.clientDirWReq.bits.set,
+    io.clientDirWReq.bits.way,
+    0.U,
+    io.clientDirWReq.bits.data,
+    stamp,
+    io.clientDirWReq.fire(),
+    this.clock,
+    this.reset
+  )
+  // dump client tag
+  DirectoryLogger(cacheParams.name, TypeId.client_tag)(
+    io.clientTagWreq.bits.set,
+    io.clientTagWreq.bits.way,
+    io.clientTagWreq.bits.tag,
+    0.U,
+    stamp,
+    io.clientTagWreq.fire(),
+    this.clock,
+    this.reset
+  )
 
   def clientHitFn(dir: ClientDirEntry): Bool = dir.state =/= MetaData.INVALID
-  def client_invalid_way_fn(metaVec: Seq[ClientDirEntry], repl: UInt): (Bool, UInt) = {
-    val invalid_vec = metaVec.map(_.state === MetaData.INVALID)
+  def client_invalid_way_fn(metaVec: Seq[Vec[ClientDirEntry]], repl: UInt): (Bool, UInt) = {
+    val invalid_vec = metaVec.map(states => Cat(states.map(_.state === INVALID)).andR())
     val has_invalid_way = Cat(invalid_vec).orR()
     val way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(clientWayBits.W)))
     (has_invalid_way, way)
   }
-  val clientDirs = (0 until clientBits).map { _ =>
-    val clientDir = Module(
-      new SubDirectory[ClientDirEntry](
-        wports = mshrsAll,
-        sets = clientSets,
-        ways = clientWays,
-        tagBits = clientTagBits,
-        dir_init_fn = () => {
-          val init = Wire(new ClientDirEntry)
-          init.state := MetaData.INVALID
-          init.alias.foreach( _ := DontCare)
-          init
-        },
-        dir_hit_fn = clientHitFn,
-        invalid_way_sel = client_invalid_way_fn,
-        replacement = "random"
-      )
+
+  val clientDir = Module(
+    new SubDirectory[Vec[ClientDirEntry]](
+      wports = mshrsAll,
+      sets = clientSets,
+      ways = clientWays,
+      tagBits = clientTagBits,
+      dir_init_fn = () => {
+        val init = Wire(Vec(clientBits, new ClientDirEntry))
+        init.foreach(_.state := MetaData.INVALID)
+        init.foreach(_.alias.foreach(_ := DontCare))
+        init
+      },
+      dir_hit_fn = _ => true.B,
+      invalid_way_sel = client_invalid_way_fn,
+      replacement = "random"
     )
-    clientDir
-  }
+  )
 
   def selfHitFn(dir: SelfDirEntry): Bool = dir.state =/= MetaData.INVALID
   def self_invalid_way_sel(metaVec: Seq[SelfDirEntry], repl: UInt): (Bool, UInt) = {
@@ -234,7 +236,7 @@ class Directory(implicit p: Parameters)
     ltag := addr.head(ltag.getWidth)
   }
 
-  val rports = clientDirs.map(_.io.read) :+ selfDir.io.read
+  val rports = Seq(clientDir.io.read, selfDir.io.read)
   val req = io.read
   rports.foreach { p =>
     p.valid := req.valid
@@ -252,10 +254,10 @@ class Directory(implicit p: Parameters)
   val setReg = RegEnable(req.bits.set, req.fire())
   val replacerInfoReg = RegEnable(req.bits.replacerInfo, req.fire())
   val resp = io.result
-  val clientResps = clientDirs.map(_.io.resp)
+  val clientResp = clientDir.io.resp
   val selfResp = selfDir.io.resp
   resp.valid := selfResp.valid
-  val valids = Cat(clientResps.map(_.valid) :+ selfResp.valid)
+  val valids = Cat(clientResp.valid, selfResp.valid)
   assert(valids.andR() || !valids.orR(), "valids must be all 1s or 0s")
   resp.bits.idOH := reqIdOHReg
   resp.bits.sourceId := sourceIdReg
@@ -269,14 +271,14 @@ class Directory(implicit p: Parameters)
   resp.bits.self.error := selfResp.bits.error
   resp.bits.self.clientStates := selfResp.bits.dir.clientStates
   resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
-  resp.bits.clients.zip(clientResps).foreach {
-    case (resp, clientResp) =>
-      resp.hit := clientResp.bits.hit
-      resp.way := clientResp.bits.way
-      resp.tag := clientResp.bits.tag
-      resp.state := clientResp.bits.dir.state
-      resp.alias.foreach(_ := clientResp.bits.dir.alias.get)
-      resp.error := clientResp.bits.error
+  resp.bits.clients.way := clientResp.bits.way
+  resp.bits.clients.tag := clientResp.bits.tag
+  resp.bits.clients.error := clientResp.bits.error
+  resp.bits.clients.states.zip(clientResp.bits.dir).foreach{
+    case (s, dir) =>
+      s.state := dir.state
+      s.hit := clientResp.bits.hit && dir.state =/= INVALID
+      s.alias.foreach(_ := dir.alias.get)
   }
 
   // Self Tag Write
@@ -286,13 +288,11 @@ class Directory(implicit p: Parameters)
   selfDir.io.tag_w.bits.way := io.tagWReq.bits.way
   io.tagWReq.ready := selfDir.io.tag_w.ready
   // Clients Tag Write
-  for ((req, wport) <- io.clientTagWreq.zip(clientDirs.map(_.io.tag_w))) {
-    wport.valid := req.valid
-    wport.bits.tag := req.bits.tag
-    wport.bits.set := req.bits.set
-    wport.bits.way := req.bits.way
-    req.ready := wport.ready
-  }
+  clientDir.io.tag_w.valid := io.clientTagWreq.valid
+  clientDir.io.tag_w.bits.tag := io.clientTagWreq.bits.tag
+  clientDir.io.tag_w.bits.set := io.clientTagWreq.bits.set
+  clientDir.io.tag_w.bits.way := io.clientTagWreq.bits.way
+  io.clientTagWreq.ready := clientDir.io.tag_w.ready
 
   // Self Dir Write
   selfDir.io.dir_w.valid := io.dirWReq.valid
@@ -301,13 +301,11 @@ class Directory(implicit p: Parameters)
   selfDir.io.dir_w.bits.dir := io.dirWReq.bits.data
   io.dirWReq.ready := selfDir.io.dir_w.ready
   // Clients Dir Write
-  for ((req, wport) <- io.clientDirWReqs.zip(clientDirs.map(_.io.dir_w))) {
-    wport.valid := req.valid
-    wport.bits.set := req.bits.set
-    wport.bits.way := req.bits.way
-    wport.bits.dir := req.bits.data
-    req.ready := wport.ready
-  }
+  clientDir.io.dir_w.valid := io.clientDirWReq.valid
+  clientDir.io.dir_w.bits.set := io.clientDirWReq.bits.set
+  clientDir.io.dir_w.bits.way := io.clientDirWReq.bits.way
+  clientDir.io.dir_w.bits.dir := io.clientDirWReq.bits.data
+  io.clientDirWReq.ready := clientDir.io.dir_w.ready
 
   assert(dirReadPorts == 1)
   val req_r = RegEnable(req.bits, req.fire())
