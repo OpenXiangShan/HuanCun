@@ -87,6 +87,12 @@ class MultiInOneOutQueue[T <: Data](val gen: T, val entries: Int, val enqPorts: 
 
   io.deq.valid := !empty || enqValid
   io.deq.bits := Mux(empty, PriorityMux(enqValids, io.enq.map(_.bits)), queue(head))
+
+  if (cacheParams.enablePerf) {
+    XSPerfAccumulate(cacheParams, "enq", PopCount(io.enq.map(_.valid)))
+    XSPerfAccumulate(cacheParams, "deq", io.deq.fire())
+    XSPerfHistogram(cacheParams, "valid_entries", PopCount(valids), true.B, 0, entries, 1)
+  }
 }
 
 class PointerCachePipelineReq(implicit p: Parameters) extends PCBundle {
@@ -167,6 +173,15 @@ class PointerCachePipeline(implicit p: Parameters) extends PCModule {
     0.U(wordOffBits.W)
   )
   io.prefetch_req.bits.needT := RegNext(s1_req.needT)
+
+  if (cacheParams.enablePerf) {
+    XSPerfAccumulate(cacheParams, "req", io.req.fire())
+    XSPerfAccumulate(cacheParams, "req_ld_commit", io.req.fire() && io.req.bits.loadCmt)
+    XSPerfAccumulate(cacheParams, "req_st_commit", io.req.fire() && io.req.bits.storeCmt)
+    XSPerfAccumulate(cacheParams, "req_prefetch_train", io.req.fire() && io.req.bits.train)
+    XSPerfAccumulate(cacheParams, "tag_read_nack", io.access_pc.tag_read.valid && !io.access_pc.tag_read.ready)
+    XSPerfAccumulate(cacheParams, "data_read_nack", io.access_pc.data_read.valid && !io.access_pc.data_read.ready)
+  }
 }
 
 class PointerChasePrefetch(implicit p: Parameters) extends PCModule {
@@ -249,4 +264,14 @@ class PointerChasePrefetch(implicit p: Parameters) extends PCModule {
   io.req.bits.needT := pipe.io.prefetch_req.bits.needT
   io.req.bits.source := 0.U // TODO
   io.req.bits.alias.foreach(_ := pipe.io.prefetch_req.bits.vaddr(pageOffsetBits + aliasBitsOpt.get - 1, pageOffsetBits))
+
+  if (cacheParams.enablePerf) {
+    XSPerfAccumulate(cacheParams, "ld_commit", PopCount(io.update.commit.ld.map(_.valid)))
+    XSPerfAccumulate(cacheParams, "pointer_ld_commit", PopCount(pointerLoads.map(_.valid)))
+    XSPerfAccumulate(cacheParams, "st_commit", PopCount(io.update.commit.st.map(_.valid)))
+    XSPerfAccumulate(cacheParams, "pointer_st_commit", PopCount(pointerStores.map(_.valid)))
+    XSPerfAccumulate(cacheParams, "l1d_miss", io.train.fire())
+    XSPerfAccumulate(cacheParams, "pipe_output_pft_req", pipe.io.prefetch_req.valid)
+    XSPerfAccumulate(cacheParams, "after_tlb_pft_req", pipe.io.prefetch_req.valid && prefetch_paddr.valid)
+  }
 }

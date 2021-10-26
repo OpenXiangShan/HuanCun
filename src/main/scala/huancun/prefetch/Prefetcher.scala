@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import huancun._
+import huancun.utils._
 
 class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   // val addr = UInt(addressBits.W)
@@ -84,6 +85,12 @@ class PrefetchQueue[T <: Data](val gen: T, val entries: Int)(implicit p: Paramet
   io.enq.ready := true.B
   io.deq.valid := !empty || io.enq.valid
   io.deq.bits := Mux(empty, io.enq.bits, queue(head))
+
+  if (cacheParams.enablePerf) {
+    XSPerfAccumulate(cacheParams, "enq", io.enq.fire())
+    XSPerfAccumulate(cacheParams, "deq", io.deq.fire())
+    XSPerfHistogram(cacheParams, "valid_entries", PopCount(valids), true.B, 0, entries, 1)
+  }
 }
 
 class Prefetcher(implicit p: Parameters) extends PrefetchModule {
