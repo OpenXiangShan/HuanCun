@@ -117,6 +117,19 @@ class PointerCache(implicit p: Parameters) extends PCModule {
       array.io.r.req.bits.apply(setIdx = io.data_read.bits.idx)
   }
 
+  when (io.tag_write.fire()) {
+    valids(io.tag_write.bits.idx).zipWithIndex.foreach {
+      case (v, i) =>
+        v := io.tag_write.bits.way_en(i).asBool || v
+    }
+  }
+  when (io.data_write.fire()) {
+    valids(io.data_write.bits.idx).zipWithIndex.foreach {
+      case (v, i) =>
+        v := io.data_write.bits.way_en(i).asBool || v
+    }
+  }
+
   io.tag_read.ready := !tag_rwconflict.asUInt.orR && !reset.asBool()
   io.tag_resp.tags := VecInit(tag_array.map(_.io.r.resp.data(0)))
   io.tag_resp.valids := RegNext(valids(io.tag_read.bits.idx))
