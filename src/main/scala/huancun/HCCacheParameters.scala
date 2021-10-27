@@ -90,7 +90,9 @@ case class DirtyField() extends BundleField(DirtyKey) {
 case class CacheCtrl
 (
   address: BigInt,
-  beatBytes: Int = 8
+  beatBytes: Int = 8,
+  // used to generate core soft reset
+  numCores: Int = 1
 )
 
 case class HCCacheParameters

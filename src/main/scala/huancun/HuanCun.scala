@@ -203,6 +203,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
 
   val ctrl_unit = cacheParams.ctrl.map(_ => LazyModule(new CtrlUnit(node)))
   val ctlnode = ctrl_unit.map(_.ctlnode)
+  val rst_nodes = ctrl_unit.map(_.core_reset_nodes)
 
   lazy val module = new LazyModuleImp(this) {
     val banks = node.in.size
