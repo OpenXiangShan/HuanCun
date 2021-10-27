@@ -26,7 +26,6 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.prefetch._
-import huancun.utils.NoopNode
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -204,10 +203,6 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
 
   val ctrl_unit = cacheParams.ctrl.map(_ => LazyModule(new CtrlUnit(node)))
   val ctlnode = ctrl_unit.map(_.ctlnode)
-  if (ctlnode.nonEmpty) {
-    val noopNode = LazyModule(new NoopNode())
-    ctlnode.get := noopNode.clientNode
-  }
 
   lazy val module = new LazyModuleImp(this) {
     val banks = node.in.size
