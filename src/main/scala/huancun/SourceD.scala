@@ -67,7 +67,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s1_needData = s1_req.fromA && (
     s1_req.opcode === TLMessages.GrantData ||
     s1_req.opcode === TLMessages.AccessAckData ||
-    s1_req.opcode === TLMessages.AccessAck // Put should also read data TODO: no need for full-sized PutFullData
+    s1_req.opcode === TLMessages.AccessAck && !s1_req.bypassPut // Put should also read data TODO: no need for full-sized PutFullData
   )
   val s1_need_pb = s1_req.fromA && (s1_req.opcode === TLMessages.AccessAck)
   val s1_counter = RegInit(0.U(beatBits.W)) // how many beats have been sent

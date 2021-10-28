@@ -64,6 +64,7 @@ class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val bufIdx = UInt(bufIdxBits.W)
   val denied = Bool()
   val sinkId = UInt(mshrBits.W)
+  val bypassPut = Bool()
   val dirty = Bool()
 }
 
