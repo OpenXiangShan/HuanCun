@@ -143,6 +143,10 @@ class PointerCachePipeline(implicit p: Parameters) extends PCModule {
   val repl = new SetAssocReplacer(pcSets, pcWays, "plru")
   val s1_repl_way_en = UIntToOH(repl.way(get_pc_idx(s1_req.vaddr)))
   val s1_way_en = Mux(s1_hit, VecInit(s1_tag_match_way).asUInt, s1_repl_way_en)
+  val repl_access = Wire(ValidIO(UInt(log2Up(pcWays).W)))
+  repl_access.valid := s1_fire && (s1_req.loadCmt || s1_hit && (s1_req.storeCmt || s1_req.train))
+  repl_access.bits := OHToUInt(s1_way_en)
+  repl.access(Seq(get_pc_idx(s1_req.vaddr)), Seq(repl_access))
 
   io.req.ready := s0_can_go
 
@@ -181,6 +185,10 @@ class PointerCachePipeline(implicit p: Parameters) extends PCModule {
     XSPerfAccumulate(cacheParams, "req_prefetch_train", io.req.fire() && io.req.bits.train)
     XSPerfAccumulate(cacheParams, "tag_read_nack", io.access_pc.tag_read.valid && !io.access_pc.tag_read.ready)
     XSPerfAccumulate(cacheParams, "data_read_nack", io.access_pc.data_read.valid && !io.access_pc.data_read.ready)
+    for (i <- 0 until pcWays) {
+      XSPerfAccumulate(cacheParams, "tag_write_way_" + Integer.toString(i, 10),
+        io.access_pc.tag_write.valid && s1_way_en(i).asBool)
+    }
   }
 }
 

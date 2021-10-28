@@ -1246,7 +1246,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   if (cacheParams.enablePerf && hasPrefetchBit) {
     // prefetch coverage = acquire_hit_on_pft / acquire_cnt
-    XSPerfAccunulate(cacheParams, "acquire_hit_on_pft",
+    XSPerfAccumulate(cacheParams, "acquire_hit_on_pft",
       io.dirResult.valid && req_acquire && self_meta.hit && self_meta.prefetch.get)
     XSPerfAccumulate(cacheParams, "acquire_cnt",
       io.dirResult.valid && req_acquire)
