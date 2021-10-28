@@ -272,6 +272,6 @@ class PointerChasePrefetch(implicit p: Parameters) extends PCModule {
     XSPerfAccumulate(cacheParams, "pointer_st_commit", PopCount(pointerStores.map(_.valid)))
     XSPerfAccumulate(cacheParams, "l1d_miss", io.train.fire())
     XSPerfAccumulate(cacheParams, "pipe_output_pft_req", pipe.io.prefetch_req.valid)
-    XSPerfAccumulate(cacheParams, "after_tlb_pft_req", pipe.io.prefetch_req.valid && prefetch_paddr.valid)
+    XSPerfAccumulate(cacheParams, "after_tlb_pft_req", /* RegNext(pipe.io.prefetch_req.valid) && */prefetch_paddr.valid)
   }
 }
