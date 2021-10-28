@@ -1243,4 +1243,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData &&
     req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
+
+  if (cacheParams.enablePerf && hasPrefetchBit) {
+    // prefetch coverage = acquire_hit_on_pft / acquire_cnt
+    XSPerfAccunulate(cacheParams, "acquire_hit_on_pft",
+      io.dirResult.valid && req_acquire && self_meta.hit && self_meta.prefetch.get)
+    XSPerfAccumulate(cacheParams, "acquire_cnt",
+      io.dirResult.valid && req_acquire)
+  }
 }
