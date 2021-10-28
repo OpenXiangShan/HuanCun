@@ -75,6 +75,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val new_self_meta = WireInit(self_meta)
   val new_clients_meta = WireInit(clients_meta)
   val req_acquire = req.opcode === AcquireBlock || req.opcode === AcquirePerm
+  val req_put = req.opcode(2,1) === 0.U
   val req_needT = needT(req.opcode, req.param)
   val gotT = RegInit(false.B)
   val gotDirty = RegInit(false.B)
@@ -253,7 +254,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           gotDirty || probe_dirty
         )
       ),
-      Mux(req.opcode(2,1) === 0.U,
+      Mux(req_put,
         true.B,  // Put
         gotDirty || probe_dirty, // Hint & Get
       )
@@ -578,6 +579,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val preferCache = req.preferCache || cache_alias // Cache alias will always preferCache to avoid trifle
   val bypassGet = req.opcode === Get && !preferCache
+  val bypassPut = req_put && !self_meta.hit
 
   def set_probe(): Unit = {
     s_probe := false.B
@@ -620,7 +622,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantfirst := false.B
       w_grantlast := false.B
       w_grant := false.B
-      when (!bypassGet) {
+      when (!bypassGet && !req_put) {
         s_grantack := false.B
       }
       // for acquirePermMiss and (miss && !preferCache):
@@ -680,11 +682,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_wbselftag := false.B
     }
     // need to transfer exactly the request to sourceA when Put miss
-    when(req.opcode(2,1) === 0.U && !self_meta.hit && !Cat(clients_meta.map(m => m.hit && isT(m.state))).orR()) {
+    when(req_put && !self_meta.hit && !Cat(clients_meta.map(m => m.hit && isT(m.state))).orR()) {
       s_transferput := false.B
     }
     // Put needs to write
-    when(req.opcode(2,1) === 0.U && self_meta.hit && !self_meta.dirty) {
+    when(req_put && self_meta.hit && !self_meta.dirty) {
       s_wbselfdir := false.B
     }
     prefetchOpt.map(_ => {
@@ -842,7 +844,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U // TODO: this is deprecated?
-  oa.putData := req.opcode(2,1) === 0.U
+  oa.putData := req_put
   oa.bufIdx := req.bufIdx
 
   ob.tag := req.tag
@@ -977,6 +979,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     false.B
   )
   od.bufIdx := req.bufIdx
+  od.bypassPut := bypassPut
 
   oe.sink := sink
 
@@ -1134,7 +1137,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantfirst := false.B
       w_grantlast := false.B
       w_grant := false.B
-      when (!bypassGet) {
+      when (!bypassGet && !req_put) {
         s_grantack := false.B
       }
       need_block_downwards := true.B
@@ -1150,7 +1153,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
   when(req_valid && io.resps.sink_d.valid) {
-    when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData || io.resps.sink_d.bits.opcode === AccessAckData) {
+    when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData || io.resps.sink_d.bits.opcode === AccessAckData || io.resps.sink_d.bits.opcode === AccessAck) {
       sink := io.resps.sink_d.bits.sink
       w_grantfirst := true.B
       w_grantlast := w_grantlast || io.resps.sink_d.bits.last
