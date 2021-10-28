@@ -780,7 +780,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val can_start = Mux(client_dir_conflict, probe_helper_finish, true.B)
   io.tasks.source_a.valid := io.enable && (!s_acquire || !s_transferput) && s_release && s_probe && can_start
   io.tasks.source_b.valid := io.enable && !s_probe && s_release
-  io.tasks.source_c.valid := io.enable && !s_release || !s_probeack && s_writerelease && w_probeack
+  io.tasks.source_c.valid := io.enable && (!s_release || !s_probeack && s_writerelease && w_probeack)
   io.tasks.source_d.valid := io.enable && !s_execute && can_start && w_grant && s_writeprobe && w_probeacklast // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
   io.tasks.dir_write.valid := io.enable && !s_wbselfdir && no_wait && can_start
@@ -789,7 +789,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.tasks.client_tag_write.valid := io.enable && !s_wbclientstag && no_wait && can_start
   // io.tasks.sink_a.valid := !s_writeput && w_grant && s_writeprobe && w_probeacklast
   io.tasks.sink_a.valid := false.B
-  io.tasks.sink_c.valid := io.enable && (!s_writerelease && (!releaseSave || s_release)) || (!s_writeprobe)
+  io.tasks.sink_c.valid := io.enable && ((!s_writerelease && (!releaseSave || s_release)) || (!s_writeprobe))
   io.tasks.prefetch_train.foreach(_.valid := !s_triggerprefetch.get)
   io.tasks.prefetch_resp.foreach(_.valid := !s_prefetchack.get && w_grantfirst)
 
