@@ -130,10 +130,35 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     b_arb.io.in(1) <> sinkB.io.alloc
     mshrAlloc.io.b_req <> b_arb.io.out
   }
+
+  // control the inflight entries of prefetch
+  val max_inflight_pft_cnt = ms_abc.size >> 2
+  val inflight_pft_cnt = prefetchOpt.map(_ => RegInit(0.U(log2Up(max_inflight_pft_cnt).W)))
+  val block_pft = prefetchOpt.map(_ => WireInit(false.B))
+  if (prefetchOpt.nonEmpty) {
+    val full = inflight_pft_cnt.get.andR
+    val empty = inflight_pft_cnt.get === 0.U
+    when (io.prefetch.get.req.fire()) {
+      inflight_pft_cnt.get := Mux(
+        full,
+        inflight_pft_cnt.get,
+        inflight_pft_cnt.get + !io.prefetch.get.resp.fire().asUInt
+      )
+    }.elsewhen (io.prefetch.get.resp.fire()) {
+      inflight_pft_cnt.get := Mux(empty, 0.U, inflight_pft_cnt.get - 1.U)
+    }
+    block_pft.get := full && !io.prefetch.get.resp.fire()
+  }
+
+
   if(prefetchOpt.nonEmpty){
     val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
     alloc_A_arb.io.in(0) <> a_req
     alloc_A_arb.io.in(1) <> io.prefetch.get.req
+    when (block_pft.get) {
+      alloc_A_arb.io.in(1).valid := false.B
+      io.prefetch.get.req.ready := false.B
+    }
     a_req_buffer.io.in <> alloc_A_arb.io.out
   } else {
     a_req_buffer.io.in <> a_req
