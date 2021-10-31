@@ -9,7 +9,7 @@ import huancun.utils._
 case object PCParamsKey extends Field[PCParameters]
 
 case class PCParameters (
-  sets: Int = 64 * 1024, // 64K
+  sets: Int = 256,// 64 * 1024, // 64K
   ways: Int = 4
 ) extends PrefetchParameters {
   override val hasPrefetchBit: Boolean = true
@@ -152,7 +152,7 @@ class PointerCachePipeline(implicit p: Parameters) extends PCModule {
 
   io.access_pc.tag_read.valid := s0_valid && s1_ready
   io.access_pc.tag_read.bits.idx := get_pc_idx(s0_req.vaddr)
-  io.access_pc.tag_read.bits.way_en := (-1).asSInt.asUInt
+  io.access_pc.tag_read.bits.way_en := ~0.U(pcWays.W)
 
   io.access_pc.tag_write.valid := s1_valid && s1_need_w_tag &&
     (!s1_need_w_data || io.access_pc.data_write.ready)
