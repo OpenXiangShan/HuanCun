@@ -89,7 +89,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s1_queue.io.enq.bits := s1_bypass_data
   assert(!s1_queue.io.enq.valid || s1_queue.io.enq.ready)
 
-  io.bs_raddr.valid := s1_valid_r
+  io.bs_raddr.valid := s1_valid_r && !data_from_refill_buffer
   io.bs_raddr.bits.way := s1_req.way
   io.bs_raddr.bits.set := s1_req.set
   io.bs_raddr.bits.beat := s1_beat // TODO: support unaligned address

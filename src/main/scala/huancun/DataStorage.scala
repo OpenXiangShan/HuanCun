@@ -108,7 +108,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         }
         .reverse
     )
-    addr.ready := accessVec(innerAddr(stackBits - 1, 0)) && SReg.sren()
+    addr.ready := accessVec(innerAddr(stackBits - 1, 0)) && SReg.sren() && RegNext(addr.valid && !addr.bits.noop, false.B)
 
     out.wen := wen.B
     out.index := innerIndex
@@ -142,9 +142,15 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   val outData = Wire(Vec(nrBanks, UInt((8 * bankBytes).W)))
 
+  val bank_en = Wire(Vec(nrBanks, Bool()))
+  val sel_req = Wire(Vec(nrBanks, new DSRequest))
+  dontTouch(bank_en)
+  dontTouch(sel_req)
   for (i <- 0 until nrBanks) {
-    val en = reqs.map(_.bankEn(i)).reduce(_ || _) && SReg.sren()
+    val en = reqs.map(_.bankEn(i)).reduce(_ || _) //&& SReg.sren()
     val selectedReq = PriorityMux(reqs.map(_.bankSel(i)), reqs)
+    bank_en(i) := en
+    sel_req(i) := selectedReq
     // Write
     bankedData(i).io.w.req.valid := en && selectedReq.wen
     bankedData(i).io.w.req.bits.apply(
