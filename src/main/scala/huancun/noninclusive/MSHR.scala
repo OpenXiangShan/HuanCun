@@ -77,10 +77,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val req_acquire = req.opcode === AcquireBlock || req.opcode === AcquirePerm
   val req_put = req.opcode(2,1) === 0.U
   val req_needT = needT(req.opcode, req.param)
+  val promoteT_safe = RegInit(true.B)
   val gotT = RegInit(false.B)
   val gotDirty = RegInit(false.B)
   val meta_no_clients = Cat(self_meta.clientStates.map(_ === INVALID)).andR()
-  val req_promoteT = req_acquire && Mux(self_meta.hit, meta_no_clients && self_meta.state === TIP, gotT)
+  val req_promoteT = req_acquire && Mux(
+    self_meta.hit,
+    meta_no_clients && self_meta.state === TIP,
+    gotT && promoteT_safe
+  )
   val probe_dirty = RegInit(false.B) // probe a block that is dirty
   val probes_done = RegInit(0.U(clientBits.W))
   val client_shrink_perm =
@@ -272,7 +277,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           transmit_from_other_client || cache_alias, // For cache alias, !promoteT is granteed
           highest_perm,
           Mux(gotT,
-            Mux(req_acquire, TRUNK, TIP),
+            Mux(req_acquire && promoteT_safe, TRUNK, TIP),
             // for prefetch, if client already hit, self meta won't update,
             // so we don't care new_self_meta.state.
             // if client miss, we will be BRANCH
@@ -498,6 +503,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_releaseack := true.B
     w_grantack := true.B
 
+    promoteT_safe := true.B
     gotT := false.B
     probe_dirty := false.B
     probes_done := 0.U
@@ -1133,6 +1139,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
     probe_dirty := probe_dirty || resp.hasData && isShrink(resp.param) && !w_probeackfirst
     when (a_need_data && probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit) {
+      promoteT_safe := false.B
       s_acquire := false.B
       w_grantfirst := false.B
       w_grantlast := false.B
