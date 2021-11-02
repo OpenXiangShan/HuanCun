@@ -82,21 +82,21 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     s1_bypass_hit_wire
   )
   val s1_bypass_data = io.bypass_read.buffer_data
-  val data_from_refill_buffer = Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire)
+  val data_from_refill_buffer = s1_req.useBypass
 
   val s1_queue = Module(new Queue(new DSData, 2, flow = false, pipe = false))
   s1_queue.io.enq.valid := s1_bypass_hit
   s1_queue.io.enq.bits := s1_bypass_data
   assert(!s1_queue.io.enq.valid || s1_queue.io.enq.ready)
 
-  io.bs_raddr.valid := s1_valid_r && !data_from_refill_buffer
+  io.bs_raddr.valid := s1_valid_r && !s1_req.useBypass
   io.bs_raddr.bits.way := s1_req.way
   io.bs_raddr.bits.set := s1_req.set
   io.bs_raddr.bits.beat := s1_beat // TODO: support unaligned address
   io.bs_raddr.bits.write := false.B
   io.bs_raddr.bits.noop := false.B
 
-  io.bypass_read.r_valid := s1_valid_r && !(busy && !s1_bypass_hit_reg)
+  io.bypass_read.r_valid := s1_valid_r && s1_req.useBypass
   io.bypass_read.r_id := s1_req.sinkId
   io.bypass_read.r_beat := s1_beat
 

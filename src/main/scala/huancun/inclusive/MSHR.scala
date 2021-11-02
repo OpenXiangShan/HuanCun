@@ -432,6 +432,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   od.off := req.off
   od.denied := bad_grant
   od.dirty := false.B // TODO
+  od.useBypass := false.B
   od.bufIdx := req.bufIdx
   od.bypassPut := false.B
 

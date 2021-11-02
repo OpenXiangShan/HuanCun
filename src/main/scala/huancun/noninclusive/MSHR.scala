@@ -950,6 +950,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oc.dirty := Mux(req.fromB, probe_dirty || self_meta.hit && self_meta.dirty, self_meta.dirty)
 
   od.sinkId := io.id
+  od.useBypass := !self_meta.hit && !probe_dirty && !nested_c_hit
   od.sourceId := req.source
   od.set := req.set
   od.tag := req.tag
@@ -1136,8 +1137,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_probeackfirst := w_probeackfirst || probeack_last
     w_probeacklast := w_probeacklast || probeack_last && resp.last
     w_probeack := w_probeack || probeack_last && (resp.last || req.off === 0.U)
-
-    probe_dirty := probe_dirty || resp.hasData && isShrink(resp.param) && !w_probeackfirst
+    probe_dirty := probe_dirty || resp.hasData
     when (a_need_data && probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit) {
       promoteT_safe := false.B
       s_acquire := false.B
