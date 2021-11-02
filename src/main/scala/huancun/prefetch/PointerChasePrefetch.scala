@@ -24,20 +24,19 @@ trait HasPCParams extends HasHuanCunParameters {
   val pcSets = pcParams.sets
   val pcWays = pcParams.ways
 
-  val wordOffBits = log2Up(64 / 8) // TODO: parameterize this
   val pcIdxBits = log2Up(pcSets)
   val pcTagBits = 10 // partial tag
   val diffAddrBits = pcIdxBits + pcTagBits
-  require((diffAddrBits + wordOffBits) <= vaddrBits)
+  require((diffAddrBits + offsetBits) <= vaddrBits)
   // The pointer cache store only if the address of the pointer and the address of the object
   // it points to fall within the range of the heap.
-  val heapTagBits = 6 // the N most significant bits of vaddr
-  val aboveTagBits = vaddrBits - pcTagBits - pcIdxBits - wordOffBits
+  val heapTagBits = 6 + 7 // the N most significant bits of vaddr
+  val aboveTagBits = vaddrBits - pcTagBits - pcIdxBits - offsetBits
 
   val replacer = Some("setplru")
 
-  def get_pc_idx(vaddr: UInt) = vaddr(wordOffBits + pcIdxBits - 1, wordOffBits)
-  def get_pc_partial_tag(vaddr: UInt) = vaddr(wordOffBits + pcIdxBits + pcTagBits - 1, wordOffBits + pcIdxBits)
+  def get_pc_idx(vaddr: UInt) = vaddr(offsetBits + pcIdxBits - 1, offsetBits)
+  def get_pc_partial_tag(vaddr: UInt) = vaddr(offsetBits + pcIdxBits + pcTagBits - 1, offsetBits + pcIdxBits)
   def get_diff_addr(vaddr: UInt) = Cat(get_pc_partial_tag(vaddr), get_pc_idx(vaddr))
 }
 
@@ -174,7 +173,7 @@ class PointerCachePipeline(implicit p: Parameters) extends PCModule {
   io.prefetch_req.bits.vaddr := Cat(
     RegNext(s1_req.vaddr.head(aboveTagBits)),
     io.access_pc.data_resp.diffAddr,
-    0.U(wordOffBits.W)
+    0.U(offsetBits.W)
   )
   io.prefetch_req.bits.needT := RegNext(s1_req.needT)
 
