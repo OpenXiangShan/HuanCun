@@ -45,6 +45,7 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   req.preferCache := true.B
   req.dirty := false.B // ignored
   req.needProbeAckData.foreach(_ := false.B)
+  req.fromCmoHelper := false.B
 
   val client_dir = dir.clients(req_client)
   val dir_conflict = !client_dir.hit && client_dir.state =/= MetaData.INVALID

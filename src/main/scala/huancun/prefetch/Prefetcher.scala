@@ -103,6 +103,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       io.req.bits.alias.foreach(_ := pftQueue.io.deq.bits.alias.get)
       io.req.bits.preferCache := true.B
       io.req.bits.fromProbeHelper := false.B
+      io.req.bits.fromCmoHelper := false.B
       io.req.bits.bufIdx := DontCare
       io.req.bits.dirty := false.B
       io.req.bits.needProbeAckData.foreach(_ := false.B)
