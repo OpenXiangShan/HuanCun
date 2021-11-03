@@ -51,6 +51,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     io.id,
     OHToUInt(io.dirResult.bits.idOH)
   )
+  assert(!req_valid || !req.fromCmoHelper, "TODO: Inclusive cache support CMO operation")
   when(io.dirResult.valid) {
     meta_valid := true.B
     meta_reg := io.dirResult.bits
