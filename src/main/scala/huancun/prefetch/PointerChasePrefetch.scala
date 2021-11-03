@@ -9,7 +9,7 @@ import huancun.utils._
 case object PCParamsKey extends Field[PCParameters]
 
 case class PCParameters (
-  sets: Int = 256,// 64 * 1024, // 64K
+  sets: Int = 64 * 1024, // 64K
   ways: Int = 4
 ) extends PrefetchParameters {
   override val hasPrefetchBit: Boolean = true
