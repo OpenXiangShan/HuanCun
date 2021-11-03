@@ -24,7 +24,7 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   val req_client = OHToUInt(getClientBitOH(dir.sourceId))
   val req = Wire(new MSHRRequest)
 
-  val full_addr = Cat(dir.clients(req_client).tag, dir.set(clientSetBits - 1, 0))
+  val full_addr = Cat(dir.clients.tag, dir.set(clientSetBits - 1, 0))
   val tgt_tag = full_addr.head(tagBits)
   val tgt_set = full_addr.tail(tagBits).head(setBits)
   val tgt_off = full_addr.tail(tagBits).tail(setBits)
@@ -47,7 +47,7 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   req.needProbeAckData.foreach(_ := false.B)
   req.fromCmoHelper := false.B
 
-  val client_dir = dir.clients(req_client)
+  val client_dir = dir.clients.states(req_client)
   val dir_conflict = !client_dir.hit && client_dir.state =/= MetaData.INVALID
   val formA = dir.replacerInfo.channel === 1.U
   val req_acquire = formA && (dir.replacerInfo.opcode === TLMessages.AcquirePerm ||
@@ -59,4 +59,15 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   io.probe <> queue.io.deq
 
   XSPerfAccumulate(cacheParams, "client_dir_conflict", queue.io.enq.fire())
+  //val perfinfo = IO(new Bundle(){
+  //  val perfEvents = Output(new PerfEventsBundle(numPCntHcReqb))
+  //})
+  val perfinfo = IO(Output(Vec(numPCntHcProb, (UInt(6.W)))))
+  val perfEvents = Seq(
+    ("client_dir_conflict        ", queue.io.enq.fire()             ),
+  )
+
+  for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
+    perf_out := RegNext(perf)
+  }
 }

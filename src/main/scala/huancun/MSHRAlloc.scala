@@ -48,6 +48,9 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     val alloc = Vec(mshrsAll, ValidIO(new MSHRRequest))
     // To directory
     val dirRead = DecoupledIO(new DirRead)
+    val bc_mask = ValidIO(Vec(mshrsAll, Bool()))
+    val c_mask = ValidIO(Vec(mshrsAll, Bool()))
+
   })
 
   // Allocate one MSHR per cycle
@@ -146,6 +149,11 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   c_mshr_alloc.valid := nestC_valid && dirRead.ready
   c_mshr_alloc.bits := io.c_req.bits
 
+  io.bc_mask.valid := bc_mshr_alloc.valid
+  io.bc_mask.bits := b_match_vec
+  io.c_mask.valid := c_mshr_alloc.valid
+  io.c_mask.bits := c_match_vec
+
   dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR() && dirRead.ready
   dirRead.bits.source := request.bits.source
   dirRead.bits.tag := request.bits.tag
@@ -157,6 +165,8 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   )
   dirRead.bits.replacerInfo.channel := request.bits.channel
   dirRead.bits.replacerInfo.opcode := request.bits.opcode
+  dirRead.bits.wayMode := false.B
+  dirRead.bits.way := DontCare
 
   val cntStart = RegInit(false.B)
   when(dirRead.ready) {
@@ -193,4 +203,21 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && Cat(pretch_block_vec).orR())
   XSPerfAccumulate(cacheParams, "conflictB", io.b_req.valid && conflict_b)
   XSPerfAccumulate(cacheParams, "conflictC", io.c_req.valid && conflict_c)
+  //val perfinfo = IO(new Bundle(){
+  //  val perfEvents = Output(new PerfEventsBundle(numPCntHcMSHR))
+  //})
+  val perfinfo = IO(Output(Vec(numPCntHcMSHR, (UInt(6.W)))))
+  val perfEvents = Seq(
+    ("nrWorkingABCmshr    ", PopCount(io.status.init.init.map(_.valid)) ),
+    ("nrWorkingBmshr      ", io.status.take(mshrs+1).last.valid         ),
+    ("nrWorkingCmshr      ", io.status.last.valid                       ),
+    ("conflictA           ", io.a_req.valid && conflict_a               ),
+    ("conflictByPrefetch  ", io.a_req.valid && Cat(pretch_block_vec).orR),
+    ("conflictB           ", io.b_req.valid && conflict_b               ),
+    ("conflictC           ", io.c_req.valid && conflict_c               ),
+  )
+
+  for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
+    perf_out := RegNext(perf)
+  }
 }

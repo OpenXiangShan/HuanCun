@@ -51,6 +51,8 @@ trait HasHuanCunParameters {
   val offsetBits = log2Ceil(blockBytes)
   val beatBits = offsetBits - log2Ceil(beatBytes)
   val pageOffsetBits = log2Ceil(cacheParams.pageBytes)
+  val clientMaxWays = cacheParams.clientCaches.map(_.ways).fold(0)(math.max)
+  val maxWays = math.max(clientMaxWays, cacheParams.ways)
 
   val stateBits = MetaData.stateBits
 
@@ -61,6 +63,14 @@ trait HasHuanCunParameters {
   val bufIdxBits = log2Ceil(bufBlocks)
 
   val alwaysReleaseData = cacheParams.alwaysReleaseData
+
+  val numCSRPCntHc    = 5
+  val numPCntHcMSHR   = 7
+  val numPCntHcDir    = 11
+  val numPCntHcReqb   = 6
+  val numPCntHcProb   = 1
+  val numPCntHc       = numPCntHcMSHR + numPCntHcDir + numPCntHcReqb + numPCntHcProb
+  val print_hcperfcounter  = false
 
   lazy val edgeIn = p(EdgeInKey)
   lazy val edgeOut = p(EdgeOutKey)
@@ -191,14 +201,22 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
   )
 
+  val ctrl_unit = cacheParams.ctrl.map(_ => LazyModule(new CtrlUnit(node)))
+  val ctlnode = ctrl_unit.map(_.ctlnode)
+  val rst_nodes = ctrl_unit.map(_.core_reset_nodes)
+
   lazy val module = new LazyModuleImp(this) {
+    val banks = node.in.size
+    val io = IO(new Bundle {
+      val perfEvents = Vec(banks, Vec(numPCntHc,(Output(UInt(6.W)))))
+    })
+
     val sizeBytes = cacheParams.sets * cacheParams.ways * cacheParams.blockBytes
     val sizeStr = sizeBytes match {
       case _ if sizeBytes > 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
       case _ if sizeBytes > 1024        => (sizeBytes / 1024) + "KB"
       case _                            => "B"
     }
-    val banks = node.in.size
     val bankBits = if(banks == 1) 0 else log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
@@ -240,7 +258,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
       if(bankBits == 0) true.B else set(bankBits - 1, 0) === bankId.U
     }
-    node.in.zip(node.out).zipWithIndex.foreach {
+
+    val slices = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
         val slice = Module(new Slice()(p.alterPartial {
@@ -258,6 +277,30 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             prefetchReqsReady(i) := s.req.ready && bank_eq(p.io.req.bits.set, i, bankBits)
             prefetchResps.get(i) <> s.resp
         }
+        io.perfEvents(i) := slice.perfinfo
+        slice
+    }
+    ctrl_unit.map { c =>
+      val bank_match = slices.map(_ => Wire(Bool()))
+      c.module.req.ready := Mux1H(bank_match, slices.map(_.io.ctl_req.ready))
+      for((s, i) <- slices.zipWithIndex){
+        bank_match(i) := bank_eq(c.module.req.bits.set, i, bankBits)
+        s.io.ctl_req.valid := c.module.req.valid && bank_match(i)
+        s.io.ctl_req.bits := c.module.req.bits
+      }
+      val arb = Module(new Arbiter(new CtrlResp, slices.size))
+      arb.io.in <> VecInit(slices.map(_.io.ctl_resp))
+      c.module.resp <> arb.io.out
+
+      val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
+      ecc_arb.io.in <> VecInit(slices.map(_.io.ctl_ecc))
+      c.module.ecc <> ecc_arb.io.out
+    }
+    if (ctrl_unit.isEmpty) {
+      slices.foreach(_.io.ctl_req <> DontCare)
+      slices.foreach(_.io.ctl_req.valid := false.B)
+      slices.foreach(_.io.ctl_resp.ready := false.B)
+      slices.foreach(_.io.ctl_ecc.ready := false.B)
     }
     node.edges.in.headOption.foreach { n =>
       n.client.clients.zipWithIndex.foreach {

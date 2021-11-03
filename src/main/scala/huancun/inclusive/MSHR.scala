@@ -433,7 +433,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   od.off := req.off
   od.denied := bad_grant
   od.dirty := false.B // TODO
+  od.useBypass := false.B
   od.bufIdx := req.bufIdx
+  od.bypassPut := false.B
 
   oe.sink := sink
 
@@ -591,4 +593,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   io.status.bits.blockC := !meta_valid
   // C nest B | C nest A
   io.status.bits.nestC := meta_valid && (!w_rprobeackfirst || !w_pprobeackfirst || !w_grantfirst)
+
+  io.ecc.errCode := DontCare
 }

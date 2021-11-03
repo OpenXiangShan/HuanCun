@@ -38,6 +38,8 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val set = UInt(setBits.W)
   val replacerInfo = new ReplacerInfo()
   val source = UInt(sourceIdBits.W)
+  val wayMode = Bool()
+  val way = UInt(log2Ceil(maxWays).W)
 }
 
 abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
@@ -75,6 +77,8 @@ class SubDirectory[T <: Data](
       val tag = UInt(tagBits.W)
       val set = UInt(setBits.W)
       val replacerInfo = new ReplacerInfo()
+      val wayMode = Bool()
+      val way = UInt(wayBits.W)
     }))
     val resp = ValidIO(new Bundle() {
       val hit = Bool()
@@ -143,7 +147,7 @@ class SubDirectory[T <: Data](
   val tag_decode = tagCode.decode(tagRead(io.resp.bits.way))
   val tag = tag_decode.uncorrected
   io.resp.bits.hit := Cat(hitVec).orR()
-  io.resp.bits.way := Mux(io.resp.bits.hit, hitWay, chosenWay)
+  io.resp.bits.way := Mux(reqReg.wayMode, reqReg.way, Mux(io.resp.bits.hit, hitWay, chosenWay))
   io.resp.bits.dir := meta
   io.resp.bits.tag := tag
   io.resp.bits.error := tag_decode.error

@@ -23,8 +23,8 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
-import huancun.inclusive.MSHR
-import huancun.noninclusive.{MSHR, ProbeHelper}
+import freechips.rocketchip.util.leftOR
+import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
 import huancun.prefetch._
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
@@ -32,7 +32,23 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
     val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
+    val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
+    val ctl_resp = DecoupledIO(new CtrlResp())
+    val ctl_ecc = DecoupledIO(new EccInfo())
   })
+
+  val ctrl = cacheParams.ctrl.map(_ => Module(new SliceCtrl()))
+
+  def ctrl_arb[T <: Data](source: DecoupledIO[T], ctrl: Option[DecoupledIO[T]]): DecoupledIO[T] ={
+    if(ctrl.nonEmpty){
+      val arbiter = Module(new Arbiter(chiselTypeOf(source.bits), 2))
+      arbiter.io.in(0) <> ctrl.get
+      arbiter.io.in(1) <> source
+      arbiter.io.out
+    } else {
+      source
+    }
+  }
 
   // Inner channels
   val sinkA = Module(new SinkA)
@@ -81,13 +97,22 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   dataStorage.io.sinkD_wdata := sinkD.io.bs_wdata
   dataStorage.io.sinkD_waddr <> sinkD.io.bs_waddr
   sourceC.io.bs_rdata := dataStorage.io.sourceC_rdata
-  dataStorage.io.sourceC_raddr <> sourceC.io.bs_raddr
+  if(ctrl.nonEmpty){
+    ctrl.get.io.bs_r_data := dataStorage.io.sourceC_rdata
+  }
   sourceD.io.bs_rdata := dataStorage.io.sourceD_rdata
   dataStorage.io.sourceD_raddr <> sourceD.io.bs_raddr
   dataStorage.io.sourceD_waddr <> sourceD.io.bs_waddr
   dataStorage.io.sourceD_wdata <> sourceD.io.bs_wdata
-  dataStorage.io.sinkC_waddr <> sinkC.io.bs_waddr
-  dataStorage.io.sinkC_wdata <> sinkC.io.bs_wdata
+  dataStorage.io.sourceC_raddr <> ctrl_arb(sourceC.io.bs_raddr, ctrl.map(_.io.bs_r_addr))
+  dataStorage.io.sinkC_waddr <> ctrl_arb(sinkC.io.bs_waddr, ctrl.map(_.io.bs_w_addr))
+  dataStorage.io.sinkC_wdata <> (if(ctrl.nonEmpty){
+    Mux(ctrl.get.io.bs_w_addr.valid,
+      ctrl.get.io.bs_w_data,
+      sinkC.io.bs_wdata
+    )
+  } else sinkC.io.bs_wdata)
+
 
   val mshrAlloc = Module(new MSHRAlloc)
   val a_req_buffer = Module(new RequestBuffer())
@@ -145,6 +170,23 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   val select_c = c_mshr.io.status.valid
   val select_bc = bc_mshr.io.status.valid
+
+  val bc_mask_latch = RegInit(0.U.asTypeOf(mshrAlloc.io.bc_mask.bits))
+  val c_mask_latch = RegInit(0.U.asTypeOf(mshrAlloc.io.c_mask.bits))
+  when(mshrAlloc.io.bc_mask.valid) {
+    bc_mask_latch := mshrAlloc.io.bc_mask.bits
+  }
+  when(mshrAlloc.io.c_mask.valid) {
+    c_mask_latch := mshrAlloc.io.c_mask.bits
+  }
+  abc_mshr.zipWithIndex.foreach {
+    case (mshr, i) =>
+      val bc_disable = bc_mask_latch(i) && select_bc
+      val c_disable = c_mask_latch(i) && select_c
+      mshr.io.enable := !(bc_disable || c_disable)
+  }
+  bc_mshr.io.enable := !(c_mask_latch(mshrsAll-2) && select_c)
+  c_mshr.io.enable := true.B
 
   def non_inclusive[T <: RawModule](m: T): noninclusive.MSHR = {
     m.asInstanceOf[noninclusive.MSHR]
@@ -231,19 +273,22 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   nestedWb.b_clr_dirty := select_bc &&
     bc_mshr.io.tasks.dir_write.valid &&
     !MetaData.isT(bc_wb_state)
+  nestedWb.b_set_dirty := select_bc &&
+    bc_mshr.io.tasks.dir_write.valid &&
+    bc_wb_dirty
   nestedWb.c_set_dirty := select_c &&
     c_mshr.io.tasks.dir_write.valid &&
     c_wb_dirty
   val nestedWb_c_set_hit = c_mshr match {
     case c: inclusive.MSHR =>
       ms.map {
-        case m =>
+        m =>
           select_c && c.io.tasks.tag_write.valid &&
-          c.io.tasks.tag_write.bits.tag === m.io.status.bits.tag
+            c.io.tasks.tag_write.bits.tag === m.io.status.bits.tag
       }
     case c: noninclusive.MSHR =>
       ms.map {
-        case m =>
+        m =>
           select_c && c.io.tasks.tag_write.valid &&
             c.io.tasks.tag_write.bits.tag === m.io.status.bits.tag
       }
@@ -256,17 +301,17 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
         case (n, i) =>
           n.isToN := Mux(
             select_c,
-            c_mshr.io.tasks.client_dir_write(i).valid &&
-              c_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.INVALID,
-            bc_mshr.io.tasks.client_dir_write(i).valid &&
-              bc_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.INVALID
+            c_mshr.io.tasks.client_dir_write.valid &&
+              c_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.INVALID,
+            bc_mshr.io.tasks.client_dir_write.valid &&
+              bc_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.INVALID
           )
           n.isToB := Mux(
             select_c,
-            c_mshr.io.tasks.client_dir_write(i).valid &&
-              c_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.BRANCH,
-            bc_mshr.io.tasks.client_dir_write(i).valid &&
-              bc_mshr.io.tasks.client_dir_write(i).bits.data.state === MetaData.BRANCH
+            c_mshr.io.tasks.client_dir_write.valid &&
+              c_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.BRANCH,
+            bc_mshr.io.tasks.client_dir_write.valid &&
+              bc_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.BRANCH
           )
       }
     case (bc_mshr: inclusive.MSHR, c_mshr: inclusive.MSHR) =>
@@ -316,7 +361,11 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     if (cacheParams.inclusive) new inclusive.Directory()
     else new noninclusive.Directory()
   })
-  directory.io.read <> mshrAlloc.io.dirRead
+  directory.io.read <> ctrl_arb(mshrAlloc.io.dirRead, ctrl.map(_.io.dir_read))
+  ctrl.map(c => {
+    c.io.dir_result.valid := directory.io.result.valid && directory.io.result.bits.idOH(1, 0) === "b11".U
+    c.io.dir_result.bits := directory.io.result.bits
+  })
 
   // Send tasks
 
@@ -348,8 +397,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     sink <> arbiter.io.out
   }
 
+  def add_ctrl[T <: Data](xs: Seq[DecoupledIO[T]], ctrl: Option[DecoupledIO[T]]): Seq[DecoupledIO[T]] = {
+    val last = if(ctrl.nonEmpty) ctrl_arb(xs.last, ctrl) else xs.last
+    xs.init :+ last
+  }
+
   // don't allow b write back when c is valid to simplify 'NestedWriteBack'
-  block_b_c(directory.io.dirWReq, ms.map(_.io.tasks.dir_write))
+  block_b_c(directory.io.dirWReq, add_ctrl(ms.map(_.io.tasks.dir_write), ctrl.map(_.io.s_dir_w)))
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
@@ -359,21 +413,25 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"))
   arbTasks(
     directory.io.tagWReq,
-    ms.map(_.io.tasks.tag_write),
+    add_ctrl(ms.map(_.io.tasks.tag_write), ctrl.map(_.io.s_tag_w)),
     Some("tagWrite")
   )
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
-      for ((dirW, idx) <- dir.io.clientDirWReqs.zipWithIndex) {
-        block_b_c(dirW, ms.map(_.io.tasks.client_dir_write(idx)))
-      }
-      for ((tagW, idx) <- dir.io.clientTagWreq.zipWithIndex) {
-        arbTasks(
-          tagW,
-          ms.map(_.io.tasks.client_tag_write(idx)),
-          Some(s"client_${idx}_tagWrite")
+      block_b_c(
+        dir.io.clientDirWReq,
+        add_ctrl(
+          ms.map(_.io.tasks.client_dir_write),
+          ctrl.map(_.io.c_dir_w)
         )
-      }
+      )
+      arbTasks(
+        dir.io.clientTagWreq,
+        add_ctrl(
+          ms.map(_.io.tasks.client_tag_write),
+          ctrl.map(_.io.c_tag_w)
+        )
+      )
     case (_: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
     // skip
     case _ =>
@@ -464,9 +522,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     } else x
   }
 
+  val is_ctrl_dir_res = directory.io.result.bits.idOH(1, 0) === "b11".U
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
-      val dirResultMatch = directory.io.result.valid && directory.io.result.bits.idOH(i)
+      val dirResultMatch = !is_ctrl_dir_res && directory.io.result.valid && directory.io.result.bits.idOH(i)
       val dirResult = WireInit(directory.io.result)
       // override valid
       dirResult.valid := dirResultMatch
@@ -504,4 +563,38 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   sinkA.io.a_pb_pop <> sourceA.io.pb_pop
   sinkA.io.a_pb_beat <> sourceA.io.pb_beat
+
+  if (ctrl.nonEmpty) {
+    ctrl.get.io.req <> io.ctl_req
+    io.ctl_resp <> ctrl.get.io.resp
+    io.ctl_ecc <> DontCare
+    val eccMask = Cat(ms.map(m => m.io.ecc.errCode =/= 0.U && m.io.status.valid))
+    val valid_eccMask = ~(leftOR(eccMask) << 1) & eccMask
+    val ms_errCode = VecInit(ms.map(_.io.ecc.errCode))(OHToUInt(valid_eccMask))
+    io.ctl_ecc.bits.errCode := Mux(dataStorage.io.ecc.errCode =/= 0.U, dataStorage.io.ecc.errCode, ms_errCode)
+    io.ctl_ecc.valid := Cat(eccMask).orR()
+  } else {
+    io.ctl_req <> DontCare
+    io.ctl_resp <> DontCare
+    io.ctl_ecc <> DontCare
+    io.ctl_req.ready := false.B
+    io.ctl_resp.valid := false.B
+    io.ctl_ecc.valid := false.B
+  }
+  val perfinfo = IO(Output(Vec(numPCntHc, (UInt(6.W)))))
+  perfinfo := DontCare
+  if(!cacheParams.inclusive){
+    val reqbuff_perf     = a_req_buffer.perfEvents.map(_._1).zip(a_req_buffer.perfinfo)
+    val mshralloc_perf   = mshrAlloc.perfEvents.map(_._1).zip(mshrAlloc.perfinfo)
+    val probq_perf       = probeHelperOpt.get.perfEvents.map(_._1).zip(probeHelperOpt.get.perfinfo)
+    val direct_perf      = directory.asInstanceOf[noninclusive.Directory].perfEvents.map(_._1).zip(directory.asInstanceOf[noninclusive.Directory].perfinfo)
+    val huancun_perf = reqbuff_perf ++ mshralloc_perf ++ probq_perf ++ direct_perf
+
+    for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(huancun_perf).zipWithIndex) {
+      perf_out := perf
+      if(print_hcperfcounter){
+        println(s"Huancun perf $i: $perf_name")
+      }
+    }
+  }
 }

@@ -67,9 +67,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s1_needData = s1_req.fromA && (
     s1_req.opcode === TLMessages.GrantData ||
     s1_req.opcode === TLMessages.AccessAckData ||
-    s1_req.opcode === TLMessages.AccessAck // Put should also read data TODO: no need for full-sized PutFullData
+    s1_req.opcode === TLMessages.AccessAck && !s1_req.bypassPut // Put should also read data TODO: no need for full-sized PutFullData
   )
-  val s1_need_pb = s1_req.fromA && (s1_req.opcode === TLMessages.AccessAck)
+  val s1_need_pb = s1_req.fromA && (s1_req.opcode === TLMessages.AccessAck && !s1_req.bypassPut)
   val s1_counter = RegInit(0.U(beatBits.W)) // how many beats have been sent
   val s1_total_beats = Mux(s1_needData, totalBeats(s1_req.size), 0.U(beatBits.W))
   val s1_beat = startBeat(s1_req.off) | s1_counter
@@ -82,21 +82,21 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     s1_bypass_hit_wire
   )
   val s1_bypass_data = io.bypass_read.buffer_data
-  val data_from_refill_buffer = Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire)
+  val data_from_refill_buffer = s1_req.useBypass
 
   val s1_queue = Module(new Queue(new DSData, 2, flow = false, pipe = false))
   s1_queue.io.enq.valid := s1_bypass_hit
   s1_queue.io.enq.bits := s1_bypass_data
   assert(!s1_queue.io.enq.valid || s1_queue.io.enq.ready)
 
-  io.bs_raddr.valid := s1_valid_r
+  io.bs_raddr.valid := s1_valid_r && !s1_req.useBypass
   io.bs_raddr.bits.way := s1_req.way
   io.bs_raddr.bits.set := s1_req.set
   io.bs_raddr.bits.beat := s1_beat // TODO: support unaligned address
   io.bs_raddr.bits.write := false.B
   io.bs_raddr.bits.noop := false.B
 
-  io.bypass_read.r_valid := s1_valid_r && !(busy && !s1_bypass_hit_reg)
+  io.bypass_read.r_valid := s1_valid_r && s1_req.useBypass
   io.bypass_read.r_id := s1_req.sinkId
   io.bypass_read.r_beat := s1_beat
 

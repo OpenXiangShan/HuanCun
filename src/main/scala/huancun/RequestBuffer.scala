@@ -37,7 +37,8 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   val full = Cat(valids).andR()
   val no_ready_entry = !Cat(issue_arb.io.in.map(_.valid)).orR()
   io.out.bits := Mux(no_ready_entry && flow.B, io.in.bits, issue_arb.io.out.bits)
-  io.out.valid := (flow.B && no_ready_entry && io.in.valid) | issue_arb.io.out.valid
+  // TODO: flow new request even buffer is full
+  io.out.valid := (flow.B && no_ready_entry && io.in.valid && !full) | issue_arb.io.out.valid
   issue_arb.io.out.ready := io.out.ready
 
   io.in.ready := !full
@@ -101,5 +102,17 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   }
   XSPerfAccumulate(cacheParams, "recv_prefetch", io.in.fire() && io.in.bits.isPrefetch.getOrElse(false.B))
   XSPerfAccumulate(cacheParams, "recv_normal", io.in.fire() && !io.in.bits.isPrefetch.getOrElse(false.B))
+  val perfinfo = IO(Output(Vec(numPCntHcReqb, (UInt(6.W)))))
+  val perfEvents = Seq(
+    ("req_buffer_merge          ", dup && !full                                             ),
+    ("req_buffer_flow           ", no_ready_entry && io.in.fire                             ),
+    ("req_buffer_alloc          ", alloc                                                    ),
+    ("req_buffer_full           ", full                                                     ),
+    ("recv_prefetch             ", io.in.fire() && io.in.bits.isPrefetch.getOrElse(false.B) ),
+    ("recv_normal               ", io.in.fire() && !io.in.bits.isPrefetch.getOrElse(false.B)),
+  )
 
+  for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
+    perf_out := RegNext(perf)
+  }
 }
