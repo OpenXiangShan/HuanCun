@@ -268,9 +268,9 @@ class PointerChasePrefetch(implicit p: Parameters) extends PCModule {
   val (tag, set, _) = parseAddress(prefetch_paddr.bits)
   io.req.bits.tag := tag
   io.req.bits.set := set
-  io.req.bits.needT := pipe.io.prefetch_req.bits.needT
+  io.req.bits.needT := RegNext(pipe.io.prefetch_req.bits.needT)
   io.req.bits.source := 0.U // TODO
-  io.req.bits.alias.foreach(_ := pipe.io.prefetch_req.bits.vaddr(pageOffsetBits + aliasBitsOpt.get - 1, pageOffsetBits))
+  io.req.bits.alias.foreach(_ := RegNext(pipe.io.prefetch_req.bits.vaddr(pageOffsetBits + aliasBitsOpt.get - 1, pageOffsetBits)))
 
   if (cacheParams.enablePerf) {
     XSPerfAccumulate(cacheParams, "ld_commit", PopCount(io.update.commit.ld.map(_.valid)))
