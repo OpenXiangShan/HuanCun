@@ -43,6 +43,51 @@ trait HasPCParams extends HasHuanCunParameters {
 abstract class PCBundle(implicit val p: Parameters) extends Bundle with HasPCParams
 abstract class PCModule(implicit val p: Parameters) extends Module with HasPCParams
 
+class TimerQueue[T <: Data](val gen: T, val entries: Int, val timeoutCycles: Int)(implicit p: Parameters) extends PrefetchModule {
+  val io = IO(new Bundle {
+    val enq = Flipped(DecoupledIO(gen))
+    val deq = DecoupledIO(gen)
+  })
+  def timerBits = log2Down(timeoutCycles) + 1
+  val queue = RegInit(VecInit(Seq.fill(entries)(0.U.asTypeOf(gen))))
+  val valids = RegInit(VecInit(Seq.fill(entries)(false.B)))
+  val timers = RegInit(VecInit(Seq.fill(entries)(0.U(timerBits.W))))
+
+  val enqIdx = PriorityMux(valids.map(v => !v), (0 until entries).map(_.U))
+  when (io.enq.fire()) {
+    assert(!valids(enqIdx))
+    valids(enqIdx) := true.B
+    queue(enqIdx) := io.enq.bits
+    timers(enqIdx) := 0.U
+  }
+  val deqValids = WireInit(VecInit(0.U(entries.W).asBools))
+  val deqIdx = PriorityMux(deqValids.asUInt, (0 until entries).map(_.U))
+  queue.zipWithIndex.foreach {
+    case (entry, i) =>
+      val valid = valids(i)
+      val timer = timers(i)
+      when (valid) {
+        when (timer =/= timeoutCycles.U) {
+          timer := timer + 1.U
+        }.otherwise {
+          deqValids(i) := true.B
+          when (io.deq.ready && deqIdx === i.U) { // deq
+            valid := false.B
+            timer := 0.U
+          }
+        }
+      }
+  }
+  io.enq.ready := (~Cat(valids)).orR
+  io.deq.valid := Cat(deqValids).orR
+  io.deq.bits := queue(deqIdx)
+
+  if (cacheParams.enablePerf) {
+    XSPerfAccumulate(cacheParams, "enq", io.enq.fire())
+    XSPerfHistogram(cacheParams, "valid_entries", PopCount(valids), true.B, 0, entries, 1)
+  }
+}
+
 class MultiInOneOutQueue[T <: Data](val gen: T, val entries: Int, val enqPorts: Int)(implicit p: Parameters) extends PrefetchModule {
   val io = IO(new Bundle() {
     val enq = Flipped(Vec(enqPorts, ValidIO(gen)))
@@ -103,14 +148,17 @@ class PointerCachePipelineReq(implicit p: Parameters) extends PCBundle {
   val needT = Bool()
 }
 
+class TLBReq(implicit p: Parameters) extends PCBundle {
+  val vaddr = UInt(vaddrBits.W)
+  val needT = Bool()
+  val replay = Bool()
+}
+
 class PointerCachePipeline(implicit p: Parameters) extends PCModule {
   val io = IO(new Bundle() {
     val req = Flipped(Decoupled(new PointerCachePipelineReq()))
     val access_pc = Flipped(new PointerCacheIO)
-    val prefetch_req = ValidIO(new Bundle() {
-      val vaddr = UInt(vaddrBits.W)
-      val needT = Bool()
-    })
+    val prefetch_req = ValidIO(new TLBReq)
   })
   val s1_ready = Wire(Bool())
 
@@ -176,6 +224,7 @@ class PointerCachePipeline(implicit p: Parameters) extends PCModule {
     0.U(offsetBits.W)
   )
   io.prefetch_req.bits.needT := RegNext(s1_req.needT)
+  io.prefetch_req.bits.replay := false.B
 
   if (cacheParams.enablePerf) {
     XSPerfAccumulate(cacheParams, "req", io.req.fire())
@@ -253,24 +302,32 @@ class PointerChasePrefetch(implicit p: Parameters) extends PCModule {
   arb.io.out.ready := pipe.io.req.ready
 
   /*  5. Translate vaddr to paddr  */
-  val prefetch_vaddr = Wire(ValidIO(UInt(vaddrBits.W)))
-  val prefetch_paddr = Wire(ValidIO(UInt(addressBits.W)))
-  prefetch_paddr := DontCare
-  ExcitingUtils.addSource(prefetch_vaddr.valid, "POINT_CHASE_TLB_REQ_VALID")
-  ExcitingUtils.addSource(prefetch_vaddr.bits, "POINT_CHASE_TLB_REQ_VADDR")
-  ExcitingUtils.addSink(prefetch_paddr.valid, "POINT_CHASE_TLB_RESP_VALID")
-  ExcitingUtils.addSink(prefetch_paddr.bits, "POINT_CHASE_TLB_RESP_PADDR")
-  prefetch_vaddr.valid := pipe.io.prefetch_req.valid
-  prefetch_vaddr.bits := pipe.io.prefetch_req.bits.vaddr
+  val tlbReplayBuf = Module(new TimerQueue(new TLBReq, entries = 16, timeoutCycles = 10))
+  val tlbResp = Wire(ValidIO(UInt(addressBits.W)))
+  val tlbArb = Module(new Arbiter(new TLBReq, 2))
+  tlbArb.io.in(0).valid := pipe.io.prefetch_req.valid
+  tlbArb.io.in(0).bits := pipe.io.prefetch_req.bits
+  tlbArb.io.in(1) <> tlbReplayBuf.io.deq
+  tlbArb.io.out.ready := true.B
+  ExcitingUtils.addSource(tlbArb.io.out.valid, "POINT_CHASE_TLB_REQ_VALID")
+  ExcitingUtils.addSource(tlbArb.io.out.bits.vaddr, "POINT_CHASE_TLB_REQ_VADDR")
+  tlbResp := DontCare
+  ExcitingUtils.addSink(tlbResp.valid, "POINT_CHASE_TLB_RESP_VALID")
+  ExcitingUtils.addSink(tlbResp.bits, "POINT_CHASE_TLB_RESP_PADDR")
+  tlbReplayBuf.io.enq.valid := RegNext(tlbArb.io.out.valid && !tlbArb.io.out.bits.replay) && !tlbResp.valid
+  tlbReplayBuf.io.enq.bits.vaddr := RegNext(tlbArb.io.out.bits.vaddr)
+  val needT = RegNext(tlbArb.io.out.bits.needT)
+  tlbReplayBuf.io.enq.bits.needT := needT
+  tlbReplayBuf.io.enq.bits.replay := true.B
 
-  io.req.valid := prefetch_paddr.valid
+  io.req.valid := tlbResp.valid
   io.req.bits := DontCare
-  val (tag, set, _) = parseAddress(prefetch_paddr.bits)
+  val (tag, set, _) = parseAddress(tlbResp.bits)
   io.req.bits.tag := tag
   io.req.bits.set := set
-  io.req.bits.needT := RegNext(pipe.io.prefetch_req.bits.needT)
+  io.req.bits.needT := needT
   io.req.bits.source := 0.U // TODO
-  io.req.bits.alias.foreach(_ := RegNext(pipe.io.prefetch_req.bits.vaddr(pageOffsetBits + aliasBitsOpt.get - 1, pageOffsetBits)))
+  io.req.bits.alias.foreach(_ := RegNext(tlbArb.io.out.bits.vaddr(pageOffsetBits + aliasBitsOpt.get - 1, pageOffsetBits)))
 
   if (cacheParams.enablePerf) {
     XSPerfAccumulate(cacheParams, "ld_commit", PopCount(io.update.commit.ld.map(_.valid)))
@@ -279,6 +336,10 @@ class PointerChasePrefetch(implicit p: Parameters) extends PCModule {
     XSPerfAccumulate(cacheParams, "pointer_st_commit", PopCount(pointerStores.map(_.valid)))
     XSPerfAccumulate(cacheParams, "l1d_miss", io.train.fire())
     XSPerfAccumulate(cacheParams, "pipe_output_pft_req", pipe.io.prefetch_req.valid)
-    XSPerfAccumulate(cacheParams, "after_tlb_pft_req", /* RegNext(pipe.io.prefetch_req.valid) && */prefetch_paddr.valid)
+    XSPerfAccumulate(cacheParams, "tlb_hit", tlbResp.valid)
+    XSPerfAccumulate(cacheParams, "tlb_hit_on_the_first_time", tlbResp.valid && !RegNext(tlbArb.io.out.bits.replay))
+    XSPerfAccumulate(cacheParams, "tlb_miss_on_the_first_time", RegNext(tlbArb.io.out.valid && !tlbArb.io.out.bits.replay) && !tlbResp.valid)
+    XSPerfAccumulate(cacheParams, "tlb_miss_on_the_second_time", RegNext(tlbArb.io.out.valid && tlbArb.io.out.bits.replay) && !tlbResp.valid)
+//    XSPerfAccumulate(cacheParams, "after_tlb_pft_req", /* RegNext(pipe.io.prefetch_req.valid) && */prefetch_paddr.valid)
   }
 }
