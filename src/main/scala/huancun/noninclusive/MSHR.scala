@@ -1172,9 +1172,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
+  val sink_c_resp_valid = io.resps.sink_c.valid && !w_probeacklast
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
   val probeack_last = (probes_done | probeack_bit) === probe_clients // This is the last client sending probeack
-  when(req_valid && io.resps.sink_c.valid && probeack_last && io.resps.sink_c.bits.last){
+  when(req_valid && sink_c_resp_valid && probeack_last && io.resps.sink_c.bits.last){
     when(io.resps.sink_c.bits.hasData){
       // TODO: this is slow, optimize this
       s_writeprobe := false.B
@@ -1193,7 +1194,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
     }
   }
-  when(req_valid && io.resps.sink_c.valid) {
+  when(req_valid && sink_c_resp_valid) {
     val resp = io.resps.sink_c.bits
     probes_done := probes_done | probeack_bit
     w_probeackfirst := w_probeackfirst || probeack_last
