@@ -973,7 +973,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     io.dirResult.valid
   )
   ob.clients := probe_clients
-  ob.needData.foreach(_ := a_need_data && !self_meta.hit)
+  ob.needData.foreach(_ :=
+    (a_need_data && !self_meta.hit) || (req.fromB && req.needProbeAckData.getOrElse(false.B))
+  )
 
   oc.opcode := Mux(
     req.fromB,
