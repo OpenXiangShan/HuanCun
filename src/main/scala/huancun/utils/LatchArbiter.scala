@@ -25,17 +25,27 @@ class LatchArbiter[T <: Data](val gen: T, val n: Int) extends Module {
       io.out.bits := io.in(i).bits
     }
   }
-  val grant = ArbiterCtrl(valids)
-  for ((in, g) <- io.in zip grant)
-    in.ready := g && io.out.ready
-  io.out.valid := !grant.last || valids.last
+  when (inLatchValid) {
+    // e.g. 00001010 -> 00001111
+    val validMask = inLatch.scanLeft(inLatch.head)(_ || _).tail
+    // e.g. 00001010 -> 11111000
+    val grantMask = ArbiterCtrl(inLatch)
+    for ((in, i) <- io.in.zipWithIndex)
+      in.ready := validMask(i) && grantMask(i) && io.out.ready
+    io.out.valid := io.in(io.chosen).valid
+  }.otherwise {
+    val grant = ArbiterCtrl(valids)
+    for ((in, g) <- io.in zip grant)
+      in.ready := g && io.out.ready
+    io.out.valid := !grant.last || valids.last
+  }
 
   val outFire = io.out.valid && io.out.ready
   val maskedInLatch = VecInit(inLatch.zipWithIndex.map {
     case (t,i) => Mux(i.U === io.chosen, false.B, t)
   })
   val maskedIn = VecInit(io.in.zipWithIndex.map {
-    case (t,i) => Mux(i.U === io.chosen, false.B, t)
+    case (t,i) => Mux(i.U === io.chosen, false.B, t.valid)
   })
 
   val inLatchNext = VecInit(Seq.fill(n)(false.B))
