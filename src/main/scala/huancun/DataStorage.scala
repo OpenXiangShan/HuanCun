@@ -128,8 +128,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   val reqs =
     Seq(
-      sinkC_req,
       sourceC_req,
+      sinkC_req,
       sinkD_wreq,
       sourceD_wreq,
       sourceD_rreq
