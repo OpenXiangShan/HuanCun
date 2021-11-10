@@ -628,7 +628,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val preferCache = req.preferCache || cache_alias // Cache alias will always preferCache to avoid trifle
   val bypassGet = req.opcode === Get && !preferCache
-  val bypassPut = req_put && !self_meta.hit
+  val bypassPut = req_put && !self_meta.hit && !Cat(clients_meta.map(_.hit)).orR()
 
   def set_probe(): Unit = {
     s_probe := false.B
@@ -732,7 +732,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_wbselftag := false.B
     }
     // need to transfer exactly the request to sourceA when Put miss
-    when(req_put && !self_meta.hit && !Cat(clients_meta.map(m => m.hit && isT(m.state))).orR()) {
+    when(bypassPut) {
       s_transferput := false.B
     }
     // Put needs to write
