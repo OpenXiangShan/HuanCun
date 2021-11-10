@@ -26,7 +26,6 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.leftOR
 import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
 import huancun.prefetch._
-import huancun.utils.LatchArbiter
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
@@ -391,7 +390,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val c_src = sources.last
     val b_src = sources.init.last
     val abc_src = sources.init.init
-    val arbiter = Module(new LatchArbiter[T](chiselTypeOf(sink.bits), sources.size))
+    val arbiter = Module(new RRArbiter[T](chiselTypeOf(sink.bits), sources.size))
     arbiter.io.in.init.init.zip(abc_src).foreach(x => x._1 <> x._2)
     block_decoupled(arbiter.io.in.init.last, b_src, select_c)
     arbiter.io.in.last <> c_src
@@ -450,7 +449,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       val abc = in.init.init
       val bc = in.init.last
       val c = in.last
-      val arbiter = Module(new LatchArbiter[T](chiselTypeOf(out.bits), abc.size))
+      val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), abc.size))
       if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
       for ((arb, req) <- arbiter.io.in.zip(abc)) {
         arb <> req
@@ -471,7 +470,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
         arbiter.io.out.ready := out.ready && !c.valid && !bc.valid
       }
     } else {
-      val arbiter = Module(new LatchArbiter[T](chiselTypeOf(out.bits), in.size))
+      val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), in.size))
       if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
       for ((arb, req) <- arbiter.io.in.zip(in)) {
         arb <> req
