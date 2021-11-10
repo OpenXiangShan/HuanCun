@@ -129,10 +129,18 @@ class SubDirectory[T <: Data](
   val reqValidReg = RegNext(io.read.fire(), false.B)
 
   val repl = ReplacementPolicy.fromString(replacement, ways)
-  val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
-  val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
-  val next_state = repl.get_next_state(repl_state, io.resp.bits.way)
-  replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
+  val repl_state = if(replacement == "random"){
+    when(io.tag_w.fire()){
+      repl.miss
+    }
+    0.U
+  } else {
+    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
+    val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
+    val next_state = repl.get_next_state(repl_state, io.resp.bits.way)
+    replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
+    repl_state
+  }
 
   io.resp.valid := reqValidReg
   val metas = metaArray.io.r(io.read.fire(), io.read.bits.set).resp.data
