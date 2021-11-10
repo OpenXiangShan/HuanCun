@@ -43,7 +43,7 @@ class SourceB(implicit p: Parameters) extends HuanCunModule {
     case (sel, i) => sel -> UIntToOH(i.U, width = clientBits)
   })
   when(io.b.fire()) {
-    workVec := workVec & ~chosenClient
+    workVec := pendingClient & ~chosenClient
   }
 
   /* Handle B channel */
