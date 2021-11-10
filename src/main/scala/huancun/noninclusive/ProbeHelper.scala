@@ -48,7 +48,9 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   req.fromCmoHelper := false.B
 
   val client_dir = dir.clients.states(req_client)
-  val dir_conflict = !client_dir.hit && client_dir.state =/= MetaData.INVALID
+  val dir_conflict = !dir.clients.tag_match && Cat(
+    dir.clients.states.map(s => !s.hit && s.state =/= MetaData.INVALID)
+  ).orR()
   val formA = dir.replacerInfo.channel === 1.U
   val req_acquire = formA && (dir.replacerInfo.opcode === TLMessages.AcquirePerm ||
     dir.replacerInfo.opcode === TLMessages.AcquireBlock)

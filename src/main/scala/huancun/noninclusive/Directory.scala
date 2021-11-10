@@ -45,6 +45,7 @@ class ClientDirResult(implicit p: Parameters) extends HuanCunBundle with HasClie
   val states = Vec(clientBits, new ClientDirEntry {
     val hit = Bool()
   })
+  val tag_match = Bool()
   val tag = UInt(clientTagBits.W)
   val way = UInt(clientWayBits.W)
   val error = Bool()
@@ -280,6 +281,7 @@ class Directory(implicit p: Parameters)
       s.hit := clientResp.bits.hit && dir.state =/= INVALID
       s.alias.foreach(_ := dir.alias.get)
   }
+  resp.bits.clients.tag_match := clientResp.bits.hit
 
   // Self Tag Write
   selfDir.io.tag_w.valid := io.tagWReq.valid
