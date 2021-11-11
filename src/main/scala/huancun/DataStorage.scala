@@ -108,7 +108,11 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         }
         .reverse
     )
-    addr.ready := accessVec(innerAddr(stackBits - 1, 0)) && SReg.sren() && RegNext(addr.valid && !addr.bits.noop, false.B)
+    if(cacheParams.sramCycleFactor == 1){
+      addr.ready := accessVec(innerAddr(stackBits - 1, 0))
+    } else {
+      addr.ready := accessVec(innerAddr(stackBits - 1, 0)) && SReg.sren() && RegNext(addr.valid && !addr.bits.noop, false.B)
+    }
 
     out.wen := wen.B
     out.index := innerIndex

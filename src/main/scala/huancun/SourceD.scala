@@ -28,6 +28,10 @@ import huancun.utils._
 
 
 class SourceD(implicit p: Parameters) extends HuanCunModule {
+
+  // TODO: set this param correctly
+  def SRAM_LATENCY = 2
+
   /*
       Message         Operation       Channel          Data
       -------------|---------------|------------|--------------
@@ -59,16 +63,20 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s3_valid, s3_ready = Wire(Bool())
   val s4_ready = Wire(Bool())
 
+  def needData(req: SourceDReq): Bool = {
+    req.fromA && (
+      req.opcode === TLMessages.GrantData ||
+        req.opcode === TLMessages.AccessAckData ||
+        req.opcode === TLMessages.AccessAck && !req.bypassPut
+      )
+  }
+
   // stage1
   val busy = RegInit(false.B)
   val s1_block_r = RegInit(false.B)
   val s1_req_reg = RegEnable(io.task.bits, io.task.fire())
   val s1_req = Mux(busy, s1_req_reg, io.task.bits)
-  val s1_needData = s1_req.fromA && (
-    s1_req.opcode === TLMessages.GrantData ||
-    s1_req.opcode === TLMessages.AccessAckData ||
-    s1_req.opcode === TLMessages.AccessAck && !s1_req.bypassPut // Put should also read data TODO: no need for full-sized PutFullData
-  )
+  val s1_needData = needData(s1_req)
   val s1_need_pb = s1_req.fromA && (s1_req.opcode === TLMessages.AccessAck && !s1_req.bypassPut)
   val s1_counter = RegInit(0.U(beatBits.W)) // how many beats have been sent
   val s1_total_beats = Mux(s1_needData, totalBeats(s1_req.size), 0.U(beatBits.W))
@@ -172,39 +180,42 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s2_valid := s2_full && !s2_d.valid && (!s2_valid_pb || pb_ready)
   s2_ready := !s2_full || s2_can_go
 
+  class PipeInfo extends Bundle {
+    val counter = UInt(beatBits.W)
+    val pdata = new PutBufferBeatEntry
+    val needPb = Bool()
+    val need_d = Bool()
+    val isReleaseAck = Bool()
+    val req = new SourceDReq
+  }
+
+  // we read data at s1, -1 here because s2 is hard-written
+  val pipe = Module(new Pipeline(new PipeInfo, SRAM_LATENCY - 1))
+
+  pipe.io.in.valid := s2_valid
+  pipe.io.in.bits.counter := s2_counter
+  pipe.io.in.bits.pdata := s2_pdata
+  pipe.io.in.bits.needPb := s2_need_pb
+  pipe.io.in.bits.need_d := s2_need_d
+  pipe.io.in.bits.isReleaseAck := s2_releaseAck
+  pipe.io.in.bits.req := s2_req
+  s3_ready := pipe.io.in.ready
+
   // stage3
-  val s3_latch = s2_valid && s3_ready
-  val s3_valid_d = RegInit(false.B)
-
-  // wait counter for sram data
-  val s3_wait = Reg(UInt(log2Ceil(cacheParams.sramCycleFactor).W))
-  val s3_needData = RegInit(false.B)
-  val s3_req = RegEnable(s2_req, s3_latch)
-  val s3_counter = RegEnable(s2_counter, s3_latch)
-  val s3_pdata = RegEnable(s2_pdata, s3_latch)
-  val s3_need_pb = RegEnable(s2_need_pb, s3_latch)
-  val s3_releaseAck = RegEnable(s2_releaseAck, s3_latch)
+  val s3_regs = pipe.io.out.bits
+  val s3_req = s3_regs.req
+  val s3_counter = s3_regs.counter
+  val s3_pdata = s3_regs.pdata
+  val s3_need_pb = s3_regs.needPb
+  val s3_releaseAck = s3_regs.isReleaseAck
   val s3_d = Wire(io.d.cloneType)
-  val s3_queue = Module(new Queue(new DSData, 3, flow = true))
-  val s3_can_go = if(cacheParams.sramCycleFactor == 1) true.B else s3_wait === 0.U
+  // stage1 may read two beats, so +1 here
+  val s3_queue = Module(new Queue(new DSData, SRAM_LATENCY + 1, flow = true))
 
-  assert(!s3_valid_d || s3_needData, "Only data task can go to stage3!")
-
-  when(s3_d.ready && s3_can_go) {
-    s3_valid_d := false.B
-    s3_needData := false.B
-  }
-  when(s3_latch) {
-    s3_valid_d := s2_need_d
-    s3_needData := s2_needData
-  }
-  s3_wait := Mux(s3_latch,
-    (cacheParams.sramCycleFactor - 1).U,
-    Mux(s3_can_go, s3_wait, s3_wait - 1.U)
-  )
+  assert(!s3_valid || needData(s3_regs.req), "Only data task can go to stage3!")
 
   val s3_rdata = s3_queue.io.deq.bits.data
-  s3_d.valid := s3_valid_d && s3_can_go
+  s3_d.valid := s3_valid
   s3_d.bits.opcode := s3_req.opcode
   s3_d.bits.param := Mux(s3_releaseAck, 0.U, s3_req.param)
   s3_d.bits.sink := s3_req.sinkId
@@ -215,16 +226,15 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s3_d.bits.corrupt := false.B
   s3_d.bits.echo.lift(DirtyKey).foreach(_ := s3_req.dirty)
 
-  s3_queue.io.enq.valid := RegNext(SReg.pipe(
-    io.bs_raddr.fire() && !Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire),
-    false.B
-  ), false.B)
+  s3_queue.io.enq.valid := (0 until SRAM_LATENCY - 1).foldLeft(
+    RegNext(io.bs_raddr.fire() && !Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire), false.B)
+  )((prev, _) => RegNext(prev, false.B))
   s3_queue.io.enq.bits := io.bs_rdata
   assert(!s3_queue.io.enq.valid || s3_queue.io.enq.ready)
-  s3_queue.io.deq.ready := s3_d.ready && s3_needData && s3_valid && s3_can_go  // TODO: inspect this
+  s3_queue.io.deq.ready := s3_d.ready && s3_valid
 
-  s3_ready := !s3_valid_d || s3_d.ready && s3_can_go
-  s3_valid := s3_valid_d
+  pipe.io.out.ready := !s3_valid || s3_d.ready
+  s3_valid := pipe.io.out.valid
 
   // stage4
   val s4_latch = s3_valid && s4_ready
