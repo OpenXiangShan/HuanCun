@@ -87,19 +87,11 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     s1_beat := beat
   }
 
-  val init_info = Wire(Valid(new SourceCPipe))
-  init_info.valid := false.B
-  init_info.bits.apply(io.task.bits, 0.U)
-
   val s1_info = Wire(Valid(new SourceCPipe))
   s1_info.valid := s1_valid
   s1_info.bits.apply(s1_task, s1_beat)
 
-  val pipeRegs = List.tabulate[Valid[SourceCPipe]](pipeline_latch-1){_ => RegInit(Valid(new SourceCPipe), init_info)}
-  val pipeOut = pipeRegs.fold(s1_info)((a, b) => {
-    when(a.valid && en) { b := a }.otherwise { b.valid := false.B }
-    b
-  })
+  val pipeOut = Pipe(s1_info, pipeline_latch-1)
 
   queue.io.enq.valid := pipeOut.valid
   queue.io.enq.bits.opcode := pipeOut.bits.task.opcode
