@@ -25,6 +25,15 @@ import chisel3.util._
 import freechips.rocketchip.tilelink._
 import huancun.utils.SReg
 
+class SourceCPipe(implicit p: Parameters) extends HuanCunBundle {
+  val task = new SourceCReq
+  val beat = UInt(beatBits.W)
+  def apply(task: SourceCReq, beat: UInt): Unit = {
+    this.task := task
+    this.beat := beat
+  }
+}
+
 class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val c = DecoupledIO(new TLBundleC(edge.bundle))
@@ -33,14 +42,15 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val task = Flipped(DecoupledIO(new SourceCReq))
   })
 
-  val queue_size = 6
+  val pipeline_latch = 2
+  val queue_size = 4 + pipeline_latch
   val queue_flow = true
 
   val en = SReg.sren()
   val bs_busy = RegInit(false.B)
   val back_pressure = RegInit(false.B)
   val queue = Module(new Queue(chiselTypeOf(io.c.bits), entries = queue_size, flow = queue_flow))
-  back_pressure := queue.io.count >= (queue_size - 2 - beatSize).U // 2 in pipeline and beatSize in pending
+  back_pressure := queue.io.count >= (queue_size - pipeline_latch - beatSize).U // 2 in pipeline and beatSize in pending
 
   // Handle task
   val beat = RegInit(0.U(beatBits.W))
@@ -77,25 +87,22 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     s1_beat := beat
   }
 
-  // Stage 1 => Stage 2
-  val s2_valid = RegNext(s1_valid && en, false.B)
-  val s2_task = RegInit(io.task.bits)
-  val s2_beat = RegInit(0.U(beatBits.W))
-  when(s1_valid && en) {
-    s2_task := s1_task
-    s2_beat := s1_beat
-  }
+  val s1_info = Wire(Valid(new SourceCPipe))
+  s1_info.valid := s1_valid
+  s1_info.bits.apply(s1_task, s1_beat)
 
-  queue.io.enq.valid := s2_valid
-  queue.io.enq.bits.opcode := s2_task.opcode
-  queue.io.enq.bits.param := s2_task.param
+  val pipeOut = Pipe(s1_info, pipeline_latch-1)
+
+  queue.io.enq.valid := pipeOut.valid
+  queue.io.enq.bits.opcode := pipeOut.bits.task.opcode
+  queue.io.enq.bits.param := pipeOut.bits.task.param
   queue.io.enq.bits.size := offsetBits.U
-  queue.io.enq.bits.source := s2_task.source
-  queue.io.enq.bits.address := Cat(s2_task.tag, s2_task.set, 0.U(offsetBits.W))
+  queue.io.enq.bits.source := pipeOut.bits.task.source
+  queue.io.enq.bits.address := Cat(pipeOut.bits.task.tag, pipeOut.bits.task.set, 0.U(offsetBits.W))
   queue.io.enq.bits.data := io.bs_rdata.data
   queue.io.enq.bits.corrupt := false.B
   queue.io.enq.bits.user.lift(PreferCacheKey).foreach(_ := true.B)
-  queue.io.enq.bits.echo.lift(DirtyKey).foreach(_ := s2_task.dirty)
+  queue.io.enq.bits.echo.lift(DirtyKey).foreach(_ := pipeOut.bits.task.dirty)
 
   io.c <> queue.io.deq
 }
