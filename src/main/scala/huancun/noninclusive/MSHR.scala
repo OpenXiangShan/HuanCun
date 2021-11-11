@@ -820,8 +820,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val no_wait = w_probeacklast && w_grantlast && w_releaseack && w_grantack
 
+  val clients_meta_busy = Cat(clients_meta.map(s => !s.hit && s.state =/= INVALID)).orR()
   val client_dir_conflict = RegEnable(
-    req.fromA && req_acquire && !clients_meta(iam).hit && clients_meta(iam).state =/= INVALID,
+    req.fromA && req_acquire && clients_meta_busy,
     io.dirResult.valid
   )
   val probe_helper_finish = RegInit(false.B)
@@ -830,7 +831,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probe_helper_finish := true.B
   }
   when(req_valid && req.fromA && req_acquire && client_dir_conflict && probe_helper_finish){
-    assert(RegNext(clients_meta(iam).state === INVALID, true.B),
+    assert(RegNext(!clients_meta_busy, true.B),
       s"Error ${cacheParams.name}: meta still conflict when probe helper finish! mshrId: %d",
       io.id
     )
