@@ -93,13 +93,13 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
   allocInfo.fromCmoHelper := false.B
   allocInfo.needProbeAckData.foreach(_ := false.B)
 
-  io.d_pb_pop.ready := beatVals(io.d_pb_pop.bits.bufIdx).asUInt().andR()
+  io.d_pb_pop.ready := beatVals(io.d_pb_pop.bits.bufIdx)(io.d_pb_pop.bits.count)
   io.d_pb_beat := RegEnable(putBuffer(io.d_pb_pop.bits.bufIdx)(io.d_pb_pop.bits.count), io.d_pb_pop.fire())
   when(io.d_pb_pop.fire() && io.d_pb_pop.bits.last) {
     beatVals(io.d_pb_pop.bits.bufIdx).foreach(_ := false.B)
   }
 
-  io.a_pb_pop.ready := beatVals(io.a_pb_pop.bits.bufIdx).asUInt().andR()
+  io.a_pb_pop.ready := beatVals(io.a_pb_pop.bits.bufIdx)(io.a_pb_pop.bits.count)
   io.a_pb_beat := RegEnable(putBuffer(io.a_pb_pop.bits.bufIdx)(io.a_pb_pop.bits.count), io.a_pb_pop.fire())
   when(io.a_pb_pop.fire() && io.a_pb_pop.bits.last) {
     beatVals(io.a_pb_pop.bits.bufIdx).foreach(_ := false.B)
