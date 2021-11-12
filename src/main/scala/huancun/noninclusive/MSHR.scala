@@ -363,7 +363,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
               // NtoB
               Mux(clients_meta(i).hit, BRANCH, clients_meta(i).state)
             ),
-            clients_meta(i).state
+            Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, BRANCH, INVALID), clients_meta(i).state)
           )
           m.alias.foreach(_ := clients_meta(i).alias.get)
         }
