@@ -23,7 +23,6 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
-import huancun.utils.SReg
 
 class SourceCPipe(implicit p: Parameters) extends HuanCunBundle {
   val task = new SourceCReq
@@ -42,15 +41,13 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val task = Flipped(DecoupledIO(new SourceCReq))
   })
 
-  val pipeline_latch = 2
-  val queue_size = 4 + pipeline_latch
+  val queue_size = 4 + sramLatency
   val queue_flow = true
 
-  val en = SReg.sren()
   val bs_busy = RegInit(false.B)
   val back_pressure = RegInit(false.B)
   val queue = Module(new Queue(chiselTypeOf(io.c.bits), entries = queue_size, flow = queue_flow))
-  back_pressure := queue.io.count >= (queue_size - pipeline_latch - beatSize).U // 2 in pipeline and beatSize in pending
+  back_pressure := queue.io.count >= (queue_size - sramLatency - beatSize).U // 2 in pipeline and beatSize in pending
 
   // Handle task
   val beat = RegInit(0.U(beatBits.W))
@@ -59,10 +56,10 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   }
   val task_latch = RegEnable(io.task.bits, !bs_busy && io.task.valid)
   val task = Mux(!bs_busy, io.task.bits, task_latch)
-  val taskWithData = io.task.valid && !back_pressure && io.task.bits.opcode(0) && en
+  val taskWithData = io.task.valid && !back_pressure && io.task.bits.opcode(0)
   when(taskWithData) { bs_busy := true.B }
   when(io.bs_raddr.fire() && beat === ~0.U(beatBits.W)) { bs_busy := false.B }
-  io.task.ready := !bs_busy && !back_pressure && en
+  io.task.ready := !bs_busy && !back_pressure
 
   // Read Datastorage
   val has_data = taskWithData || bs_busy
@@ -78,7 +75,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val s1_task = RegInit(io.task.bits)
   val s1_beat = RegInit(0.U(beatBits.W))
   val s1_valid = RegInit(false.B)
-  when(s1_valid && en){
+  when(s1_valid){
     s1_valid := false.B
   }
   when(task_handled) {
@@ -91,7 +88,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   s1_info.valid := s1_valid
   s1_info.bits.apply(s1_task, s1_beat)
 
-  val pipeOut = Pipe(s1_info, pipeline_latch-1)
+  val pipeOut = Pipe(s1_info, sramLatency-1)
 
   queue.io.enq.valid := pipeOut.valid
   queue.io.enq.bits.opcode := pipeOut.bits.task.opcode

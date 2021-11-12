@@ -60,12 +60,12 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val eccDataBits = dataCode.width(8*bankBytes)
   println(s"extra ECC Databits:${eccDataBits - (8*bankBytes)}")
 
-  val sram_clk = if(cacheParams.sramCycleFactor == 1) {
-    this.clock
-  } else {
+  val sram_clk = if(cacheParams.sramClkDivBy2) {
     val clk = RegInit(false.B)
     clk := !clk
     clk.asClock()
+  } else {
+    this.clock
   }
   val bankedData = Seq.fill(nrBanks)(
     withClock(sram_clk){
@@ -108,10 +108,12 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         }
         .reverse
     )
-    if(cacheParams.sramCycleFactor == 1){
-      addr.ready := accessVec(innerAddr(stackBits - 1, 0))
+    if(cacheParams.sramClkDivBy2){
+      addr.ready := accessVec(innerAddr(stackBits - 1, 0)) &&
+        sram_clk.asBool() === false.B &&
+        RegNext(addr.valid && !addr.bits.noop, false.B)
     } else {
-      addr.ready := accessVec(innerAddr(stackBits - 1, 0)) && SReg.sren() && RegNext(addr.valid && !addr.bits.noop, false.B)
+      addr.ready := accessVec(innerAddr(stackBits - 1, 0))
     }
 
     out.wen := wen.B
@@ -151,7 +153,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   dontTouch(bank_en)
   dontTouch(sel_req)
   for (i <- 0 until nrBanks) {
-    val en = reqs.map(_.bankEn(i)).reduce(_ || _) //&& SReg.sren()
+    val en = reqs.map(_.bankEn(i)).reduce(_ || _)
     val selectedReq = PriorityMux(reqs.map(_.bankSel(i)), reqs)
     bank_en(i) := en
     sel_req(i) := selectedReq
@@ -191,7 +193,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
 }
 
-class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) extends Module {
+class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) extends HuanCunModule {
 
   val io = IO(new Bundle() {
     val in = Input(Vec(inNum, UInt(width.W)))
@@ -199,11 +201,12 @@ class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) exten
     val en = Input(Vec(outNum, Bool()))
     val out = Output(Vec(outNum, UInt(width.W)))
   })
+  val latency = if(cacheParams.sramClkDivBy2) 2 else 1
 
   for(i <- 0 until outNum){
-    val sel_r = SReg.pipe(io.sel(i))
+    val sel_r = RegNextN(io.sel(i), latency)
     val odata = Mux1H(sel_r, io.in)
-    val en = SReg.pipe(io.en(i), false.B)
+    val en = RegNextN(io.en(i), latency)
     io.out(i) := RegEnable(odata, en)
   }
 
