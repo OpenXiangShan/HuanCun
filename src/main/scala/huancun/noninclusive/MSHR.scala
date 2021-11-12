@@ -694,7 +694,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
                 )
             ) {
               set_probe()
-              when(req_acquire) { s_wbclientsdir := false.B }
+              s_wbclientsdir := false.B
             }
           }.otherwise {
             when(cache_alias) {
