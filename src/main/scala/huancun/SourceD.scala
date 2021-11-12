@@ -146,14 +146,17 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s2_need_pb = RegEnable(s1_need_pb, s2_latch)
   val s2_need_d = RegEnable(!s1_need_pb || s1_counter === 0.U, s2_latch) // AccessAck for Put should only be fired once
   val s2_valid_pb = RegInit(false.B) // put buffer is valid, wait put buffer fire
-  val s2_pdata_raw = io.pb_beat
   val pb_ready = io.pb_pop.ready
-  val s2_pdata = HoldUnless(s2_pdata_raw, s2_valid_pb)
 
   io.pb_pop.valid := s2_valid_pb && s2_req.fromA
   io.pb_pop.bits.bufIdx := s2_req.bufIdx
   io.pb_pop.bits.count := s2_counter
   io.pb_pop.bits.last  := s2_last
+
+  val pbQueue = Module(new Queue(new PutBufferBeatEntry, beatSize, flow = false, pipe = false))
+  pbQueue.io.enq.bits := io.pb_beat
+  pbQueue.io.enq.valid := RegNext(io.pb_pop.fire(), false.B)
+  pbQueue.io.deq.ready := s3_valid
 
   when (pb_ready) { s2_valid_pb := false.B }
   when (s2_latch) { s2_valid_pb := s1_need_pb }
@@ -179,7 +182,6 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
 
   class PipeInfo extends Bundle {
     val counter = UInt(beatBits.W)
-    val pdata = new PutBufferBeatEntry
     val needPb = Bool()
     val need_d = Bool()
     val isReleaseAck = Bool()
@@ -191,7 +193,6 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
 
   pipe.io.in.valid := s2_valid
   pipe.io.in.bits.counter := s2_counter
-  pipe.io.in.bits.pdata := s2_pdata
   pipe.io.in.bits.needPb := s2_need_pb
   pipe.io.in.bits.need_d := s2_need_d
   pipe.io.in.bits.isReleaseAck := s2_releaseAck
@@ -202,7 +203,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s3_regs = pipe.io.out.bits
   val s3_req = s3_regs.req
   val s3_counter = s3_regs.counter
-  val s3_pdata = s3_regs.pdata
+  val s3_pbdata = pbQueue.io.deq.bits
   val s3_need_pb = s3_regs.needPb
   val s3_releaseAck = s3_regs.isReleaseAck
   val s3_d = Wire(io.d.cloneType)
@@ -212,7 +213,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   assert(!s3_valid || needData(s3_regs.req), "Only data task can go to stage3!")
 
   val s3_rdata = s3_queue.io.deq.bits.data
-  s3_d.valid := s3_valid
+  s3_d.valid := s3_valid && (!s3_need_pb || s3_counter === 0.U)
   s3_d.bits.opcode := s3_req.opcode
   s3_d.bits.param := Mux(s3_releaseAck, 0.U, s3_req.param)
   s3_d.bits.sink := s3_req.sinkId
@@ -239,7 +240,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s4_latch = s3_valid && s4_ready
   val s4_req = RegEnable(s3_req, s4_latch)
   val s4_rdata = RegEnable(s3_rdata, s4_latch)
-  val s4_pdata = RegEnable(s3_pdata, s4_latch)
+  val s4_pbdata = RegEnable(s3_pbdata, s4_latch)
   val s4_need_pb = RegEnable(s3_need_pb, s4_latch)
   val s4_beat = RegEnable(s3_counter, s4_latch)
   val s4_full = RegInit(false.B)
@@ -247,9 +248,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   when (io.bs_waddr.ready || !s4_need_pb) { s4_full := false.B }
   when (s4_latch) { s4_full := true.B }
 
-  val selects = s4_pdata.mask.asBools
+  val selects = s4_pbdata.mask.asBools
   val mergedData = Cat(selects.zipWithIndex.map { case (s, i) =>
-    VecInit(Seq(s4_rdata, s4_pdata.data).map(_((i + 1) * 8 - 1, i * 8)))(s)
+    VecInit(Seq(s4_rdata, s4_pbdata.data).map(_((i + 1) * 8 - 1, i * 8)))(s)
   }.reverse)  // merge data according to mask
 
   io.bs_waddr.valid := s4_full && s4_need_pb

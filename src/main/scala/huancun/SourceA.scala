@@ -54,8 +54,8 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_acquire.bits.mask := Fill(edgeOut.manager.beatBytes, 1.U(1.W))
   a_acquire.bits.data := DontCare
   a_acquire.bits.corrupt := false.B
-  a_acquire.bits.user.lift(PreferCacheKey).map( _ := false.B)
-  a_acquire.bits.echo.lift(DirtyKey).map(_ := true.B)
+  a_acquire.bits.user.lift(PreferCacheKey).foreach(_ := false.B)
+  a_acquire.bits.echo.lift(DirtyKey).foreach(_ := true.B)
   a_acquire.valid := io.task.valid && !io.task.bits.putData
 
   val s1_ready = Wire(Bool())
@@ -85,8 +85,7 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val s1_count = RegEnable(s0_count, s1_latch)
   val s1_task = RegEnable(s0_task, s1_latch)
   val s1_cango = Mux(a_put.valid, a_put.ready, false.B)
-  val s1_doput = RegNext(s1_latch)
-  val s1_pb_latch = HoldUnless(io.pb_beat, s1_doput)
+  val s1_pb_latch = HoldUnless(io.pb_beat, RegNext(s1_latch))
 
   s1_ready := s1_cango || !s1_full
 
@@ -98,12 +97,12 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_put.bits.size := offsetBits.U
   a_put.bits.source := s1_task.source
   a_put.bits.address := Cat(s1_task.tag, s1_task.set, 0.U(offsetBits.W))
-  a_put.bits.mask := io.pb_beat.mask
-  a_put.bits.data := io.pb_beat.data
+  a_put.bits.mask := s1_pb_latch.mask
+  a_put.bits.data := s1_pb_latch.data
   a_put.bits.corrupt := false.B
-  a_put.bits.user.lift(PreferCacheKey).map( _ := false.B)
-  a_put.bits.echo.lift(DirtyKey).map(_ := true.B)
-  a_put.valid := s1_doput
+  a_put.bits.user.lift(PreferCacheKey).foreach(_ := false.B)
+  a_put.bits.echo.lift(DirtyKey).foreach(_ := true.B)
+  a_put.valid := s1_full
 
   TLArbiter.lowest(edgeIn, io.a, a_put, a_acquire)
 
