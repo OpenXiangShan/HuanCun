@@ -60,12 +60,12 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val eccDataBits = dataCode.width(8*bankBytes)
   println(s"extra ECC Databits:${eccDataBits - (8*bankBytes)}")
 
-  val sram_clk = if(cacheParams.sramCycleFactor == 1) {
-    this.clock
-  } else {
+  val sram_clk = if(cacheParams.sramClkDivBy2) {
     val clk = RegInit(false.B)
     clk := !clk
     clk.asClock()
+  } else {
+    this.clock
   }
   val bankedData = Seq.fill(nrBanks)(
     withClock(sram_clk){
@@ -108,10 +108,12 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         }
         .reverse
     )
-    if(cacheParams.sramCycleFactor == 1){
-      addr.ready := accessVec(innerAddr(stackBits - 1, 0))
+    if(cacheParams.sramClkDivBy2){
+      addr.ready := accessVec(innerAddr(stackBits - 1, 0)) &&
+        sram_clk.asBool() === false.B &&
+        RegNext(addr.valid && !addr.bits.noop, false.B)
     } else {
-      addr.ready := accessVec(innerAddr(stackBits - 1, 0)) && SReg.sren() && RegNext(addr.valid && !addr.bits.noop, false.B)
+      addr.ready := accessVec(innerAddr(stackBits - 1, 0))
     }
 
     out.wen := wen.B
@@ -151,20 +153,22 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   dontTouch(bank_en)
   dontTouch(sel_req)
   for (i <- 0 until nrBanks) {
-    val en = reqs.map(_.bankEn(i)).reduce(_ || _) //&& SReg.sren()
+    val en = reqs.map(_.bankEn(i)).reduce(_ || _)
     val selectedReq = PriorityMux(reqs.map(_.bankSel(i)), reqs)
     bank_en(i) := en
     sel_req(i) := selectedReq
     // Write
-    bankedData(i).io.w.req.valid := en && selectedReq.wen
+    val wen = en && selectedReq.wen
+    bankedData(i).io.w.req.valid := RegNext(wen, false.B)
     bankedData(i).io.w.req.bits.apply(
-      setIdx = selectedReq.index,
-      data = dataCode.encode(selectedReq.data(i)),
+      setIdx = RegEnable(selectedReq.index, wen),
+      data = RegEnable(dataCode.encode(selectedReq.data(i)), wen),
       waymask = 1.U
     )
     // Read
-    bankedData(i).io.r.req.valid := en && !selectedReq.wen
-    bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
+    val ren = en && !selectedReq.wen
+    bankedData(i).io.r.req.valid := RegNext(ren, false.B)
+    bankedData(i).io.r.req.bits.apply(setIdx = RegEnable(selectedReq.index, ren))
     val decode = dataCode.decode(bankedData(i).io.r.resp.data(0))
     outData(i) := decode.uncorrected
   }
@@ -191,7 +195,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
 }
 
-class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) extends Module {
+class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) extends HuanCunModule {
 
   val io = IO(new Bundle() {
     val in = Input(Vec(inNum, UInt(width.W)))
@@ -201,9 +205,9 @@ class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) exten
   })
 
   for(i <- 0 until outNum){
-    val sel_r = SReg.pipe(io.sel(i))
+    val sel_r = RegNextN(io.sel(i), sramLatency - 1)
     val odata = Mux1H(sel_r, io.in)
-    val en = SReg.pipe(io.en(i), false.B)
+    val en = RegNextN(io.en(i), sramLatency - 1)
     io.out(i) := RegEnable(odata, en)
   }
 

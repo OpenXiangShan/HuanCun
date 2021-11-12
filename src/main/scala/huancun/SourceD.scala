@@ -29,9 +29,6 @@ import huancun.utils._
 
 class SourceD(implicit p: Parameters) extends HuanCunModule {
 
-  // TODO: set this param correctly
-  def SRAM_LATENCY = 2
-
   /*
       Message         Operation       Channel          Data
       -------------|---------------|------------|--------------
@@ -190,7 +187,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   }
 
   // we read data at s1, -1 here because s2 is hard-written
-  val pipe = Module(new Pipeline(new PipeInfo, SRAM_LATENCY - 1))
+  val pipe = Module(new Pipeline(new PipeInfo, sramLatency - 1))
 
   pipe.io.in.valid := s2_valid
   pipe.io.in.bits.counter := s2_counter
@@ -210,7 +207,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s3_releaseAck = s3_regs.isReleaseAck
   val s3_d = Wire(io.d.cloneType)
   // stage1 may read two beats, so +1 here
-  val s3_queue = Module(new Queue(new DSData, SRAM_LATENCY + 1, flow = true))
+  val s3_queue = Module(new Queue(new DSData, sramLatency + 1, flow = true))
 
   assert(!s3_valid || needData(s3_regs.req), "Only data task can go to stage3!")
 
@@ -226,9 +223,11 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s3_d.bits.corrupt := false.B
   s3_d.bits.echo.lift(DirtyKey).foreach(_ := s3_req.dirty)
 
-  s3_queue.io.enq.valid := (0 until SRAM_LATENCY - 1).foldLeft(
-    RegNext(io.bs_raddr.fire() && !Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire), false.B)
-  )((prev, _) => RegNext(prev, false.B))
+  s3_queue.io.enq.valid := RegNextN(
+    io.bs_raddr.fire() && !Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire),
+    n = sramLatency,
+    Some(false.B)
+  )
   s3_queue.io.enq.bits := io.bs_rdata
   assert(!s3_queue.io.enq.valid || s3_queue.io.enq.ready)
   s3_queue.io.deq.ready := s3_d.ready && s3_valid

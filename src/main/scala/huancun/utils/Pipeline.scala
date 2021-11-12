@@ -17,3 +17,15 @@ class Pipeline[T <: Data](gen: T, depth: Int = 1) extends Module {
 
   io.out <> stages.last.io.deq
 }
+
+object RegNextN {
+  def apply[T <: Data](in: T, n: Int, initOpt: Option[T] = None): T = {
+    (0 until n).foldLeft(in){
+      (prev, _) =>
+        initOpt match {
+          case Some(init) => RegNext(prev, init)
+          case None => RegNext(prev)
+        }
+    }
+  }
+}

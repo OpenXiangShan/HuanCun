@@ -64,6 +64,11 @@ trait HasHuanCunParameters {
 
   val alwaysReleaseData = cacheParams.alwaysReleaseData
 
+  // req -> sram ports 1 cycle
+  // sram 1 or 2 cycles
+  // sram ports -> channels 1 cycle
+  val sramLatency = 1 + 1 + (if(cacheParams.sramClkDivBy2) 2 else 1)
+
   val numCSRPCntHc    = 5
   val numPCntHcMSHR   = 7
   val numPCntHcDir    = 11

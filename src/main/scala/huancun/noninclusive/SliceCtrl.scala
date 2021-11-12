@@ -3,8 +3,8 @@ package huancun.noninclusive
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.utils.SReg
-import huancun.{CacheCMD, CtrlReq, CtrlResp, DSAddress, DSData, DirRead, HuanCunModule}
+import huancun._
+import huancun.utils.RegNextN
 
 class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
 
@@ -141,7 +141,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   when(io.bs_r_addr.fire()){
     s_data_read := s_data_read + 1.U
   }
-  val data_wen = RegNext(SReg.pipe(io.bs_r_addr.fire(), false.B), false.B)
+  val data_wen = RegNextN(io.bs_r_addr.fire(), n = sramLatency, initOpt = Some(false.B))
   val w_counter = RegInit(0.U(log2Ceil(beatSize).W))
   when(data_wen){
     w_counter := w_counter + 1.U
