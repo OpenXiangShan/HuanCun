@@ -158,15 +158,17 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     bank_en(i) := en
     sel_req(i) := selectedReq
     // Write
-    bankedData(i).io.w.req.valid := en && selectedReq.wen
+    val wen = en && selectedReq.wen
+    bankedData(i).io.w.req.valid := RegNext(wen, false.B)
     bankedData(i).io.w.req.bits.apply(
-      setIdx = selectedReq.index,
-      data = dataCode.encode(selectedReq.data(i)),
+      setIdx = RegEnable(selectedReq.index, wen),
+      data = RegEnable(dataCode.encode(selectedReq.data(i)), wen),
       waymask = 1.U
     )
     // Read
-    bankedData(i).io.r.req.valid := en && !selectedReq.wen
-    bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
+    val ren = en && !selectedReq.wen
+    bankedData(i).io.r.req.valid := RegNext(ren, false.B)
+    bankedData(i).io.r.req.bits.apply(setIdx = RegEnable(selectedReq.index, ren))
     val decode = dataCode.decode(bankedData(i).io.r.resp.data(0))
     outData(i) := decode.uncorrected
   }
@@ -201,12 +203,11 @@ class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) exten
     val en = Input(Vec(outNum, Bool()))
     val out = Output(Vec(outNum, UInt(width.W)))
   })
-  val latency = if(cacheParams.sramClkDivBy2) 2 else 1
 
   for(i <- 0 until outNum){
-    val sel_r = RegNextN(io.sel(i), latency)
+    val sel_r = RegNextN(io.sel(i), sramLatency - 1)
     val odata = Mux1H(sel_r, io.in)
-    val en = RegNextN(io.en(i), latency)
+    val en = RegNextN(io.en(i), sramLatency - 1)
     io.out(i) := RegEnable(odata, en)
   }
 
