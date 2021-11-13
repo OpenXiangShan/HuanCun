@@ -288,6 +288,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         TRUNK,
         // for prefetch, if client hit, we should not change self_meta
         // however, we won't update self_meta in that case
+        // so this is the case for Put
         TIP
       ),
       Mux(!self_meta.hit,
@@ -331,16 +332,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           )
         }.otherwise {
           state := Mux(
-            req_acquire,
+            req_acquire || req_put,
             Mux(
-              req.param =/= NtoB || req_promoteT,
+              req.param =/= NtoB || req_promoteT || req_put,
               INVALID,
               Mux(clients_meta(i).hit, BRANCH, INVALID)
             ),
             Mux(
               req.opcode === Get,
-              Mux(clients_meta(i).hit, BRANCH, INVALID),
-              Mux(clients_meta(i).hit, clients_meta(i).state, INVALID)
+              Mux(clients_meta(i).hit, BRANCH, INVALID), // Get
+              Mux(clients_meta(i).hit, clients_meta(i).state, INVALID) // Hint
             )
           )
         }
@@ -356,9 +357,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           m.alias.foreach(_ := Mux(req_acquire, req.alias.get, clients_meta(i).alias.get))
         }.otherwise {
           m.state := Mux(
-            req_acquire,
+            req_acquire || req_put,
             Mux(
-              req.param =/= NtoB || req_promoteT,
+              req.param =/= NtoB || req_promoteT || req_put,
               Mux(clients_meta(i).hit, INVALID, clients_meta(i).state),
               // NtoB
               Mux(clients_meta(i).hit, BRANCH, clients_meta(i).state)
@@ -684,7 +685,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // need probe
     clients_meta.zipWithIndex.foreach {
       case (meta, i) =>
-        when (req.opcode =/= Get && req.opcode(2,1) =/= 0.U) {
+        when (req.opcode =/= Get && !req_put) {
           // Acquire / Hint
           when(i.U =/= iam) {
             when(
@@ -704,9 +705,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           }
         }.otherwise {
           // Get / Put
-          when (meta.hit && (isT(meta.state) || !self_meta.hit)) {
+          when (meta.hit && (isT(meta.state) || !self_meta.hit || req_put)) {
             set_probe()
-            when(self_meta.hit) { // For get, self meta hit and need probe, then wbselfdir is necessary
+            when(self_meta.hit) { // For get/put, self meta hit and need probe, then wbselfdir is necessary
               s_wbselfdir := false.B
             }
             s_wbclientsdir := false.B
