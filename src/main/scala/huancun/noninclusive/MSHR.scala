@@ -364,7 +364,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
               // NtoB
               Mux(clients_meta(i).hit, BRANCH, clients_meta(i).state)
             ),
-            clients_meta(i).state
+            Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, BRANCH, INVALID), clients_meta(i).state)
           )
           m.alias.foreach(_ := clients_meta(i).alias.get)
         }
@@ -695,7 +695,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
                 )
             ) {
               set_probe()
-              when(req_acquire) { s_wbclientsdir := false.B }
+              s_wbclientsdir := false.B
             }
           }.otherwise {
             when(cache_alias) {
