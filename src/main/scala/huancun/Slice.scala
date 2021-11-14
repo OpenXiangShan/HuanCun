@@ -264,16 +264,16 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     case mshr: noninclusive.MSHR =>
       mshr.io.tasks.dir_write.bits.data.dirty
   }
-  nestedWb.b_toN := select_bc &&
+  nestedWb.b_toN := select_bc && !select_c &&
     bc_mshr.io.tasks.dir_write.valid &&
     bc_wb_state === MetaData.INVALID
-  nestedWb.b_toB := select_bc &&
+  nestedWb.b_toB := select_bc && !select_c &&
     bc_mshr.io.tasks.dir_write.valid &&
     bc_wb_state === MetaData.BRANCH
-  nestedWb.b_clr_dirty := select_bc &&
+  nestedWb.b_clr_dirty := select_bc && !select_c &&
     bc_mshr.io.tasks.dir_write.valid &&
     !MetaData.isT(bc_wb_state)
-  nestedWb.b_set_dirty := select_bc &&
+  nestedWb.b_set_dirty := select_bc && !select_c &&
     bc_mshr.io.tasks.dir_write.valid &&
     bc_wb_dirty
   nestedWb.c_set_dirty := select_c &&

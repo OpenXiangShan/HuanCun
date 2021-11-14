@@ -1276,7 +1276,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.tag := req.tag
   io.status.bits.reload := false.B // TODO
   io.status.bits.way := self_meta.way
-  io.status.bits.will_grant_data := req.fromA && od.opcode(0)
+  io.status.bits.will_grant_data := req.fromA && od.opcode(0) && io.tasks.source_d.bits.useBypass
   io.status.bits.will_save_data := req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
   io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)
   io.status.bits.blockB := true.B
@@ -1306,10 +1306,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val a_c_through = req.fromA && !acquirePermMiss &&
     !nest_c_tag_match && nest_c_way_match &&
-    (preferCache || cache_alias || transmit_from_other_client)
+    (preferCache || cache_alias || self_meta.hit || transmit_from_other_client)
 
   // TODO: fix this
-  val b_c_through = req.fromB && nest_c_tag_match && !self_meta.hit
+  val b_c_through = req.fromB && (nest_c_tag_match && !self_meta.hit || nest_c_way_match && self_meta.hit =/= nest_c_tag_match)
 
   io_c_status.releaseThrough := req_valid &&
     io_c_status.nestedReleaseData &&
