@@ -1303,13 +1303,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val nest_c_set_match = io_c_status.set === req.set
   val nest_c_tag_match = io_c_status.tag === req.tag
   val nest_c_way_match = io_c_status.way === self_meta.way
-  io_c_status.releaseThrough := req_valid && io_c_status.nestedReleaseData && nest_c_set_match &&
-    ((nest_c_way_match && (
-      (req.fromA && !nest_c_tag_match && (preferCache || self_meta.hit) && (!acquirePermMiss || cache_alias)) ||
-      (req.fromA && nest_c_tag_match && !self_meta.hit && io_c_status.tag =/= self_meta.tag && !acquirePermMiss) ||
-      (req.fromB && Mux(self_meta.hit, !nest_c_tag_match, nest_c_tag_match))
-    )) ||
-    (req.fromB && nest_c_tag_match && !self_meta.hit)) // TODO: Probe miss with nested Release should be handled carefully
+
+  val a_c_through = req.fromA && !acquirePermMiss &&
+    !nest_c_tag_match && nest_c_way_match &&
+    (preferCache || cache_alias || transmit_from_other_client)
+
+  // TODO: fix this
+  val b_c_through = req.fromB && nest_c_tag_match && !self_meta.hit
+
+  io_c_status.releaseThrough := req_valid &&
+    io_c_status.nestedReleaseData &&
+    nest_c_set_match &&
+    (a_c_through || b_c_through)
 
   // B nest A (A -> B)
   io_b_status.probeAckDataThrough := req_valid &&
