@@ -134,6 +134,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s2_latch = s1_valid && s2_ready
   val s2_req = RegEnable(s1_req, s2_latch)
   val s2_needData = RegEnable(s1_needData, s2_latch)
+  val s2_beat = RegEnable(s1_beat, s2_latch)
   val s2_last = RegEnable(s1_last, s2_latch)
   val s2_counter = RegEnable(s1_counter, s2_latch)
   val s2_full = RegInit(false.B)
@@ -182,6 +183,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
 
   class PipeInfo extends Bundle {
     val counter = UInt(beatBits.W)
+    val beat = UInt(beatBits.W)
     val needPb = Bool()
     val need_d = Bool()
     val isReleaseAck = Bool()
@@ -193,6 +195,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
 
   pipe.io.in.valid := s2_valid
   pipe.io.in.bits.counter := s2_counter
+  pipe.io.in.bits.beat := s2_beat
   pipe.io.in.bits.needPb := s2_need_pb
   pipe.io.in.bits.need_d := s2_need_d
   pipe.io.in.bits.isReleaseAck := s2_releaseAck
@@ -203,6 +206,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s3_regs = pipe.io.out.bits
   val s3_req = s3_regs.req
   val s3_counter = s3_regs.counter
+  val s3_beat = s3_regs.beat
   val s3_pbdata = pbQueue.io.deq.bits
   val s3_need_pb = s3_regs.needPb
   val s3_releaseAck = s3_regs.isReleaseAck
@@ -242,7 +246,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s4_rdata = RegEnable(s3_rdata, s4_latch)
   val s4_pbdata = RegEnable(s3_pbdata, s4_latch)
   val s4_need_pb = RegEnable(s3_need_pb, s4_latch)
-  val s4_beat = RegEnable(s3_counter, s4_latch)
+  val s4_beat = RegEnable(s3_beat, s4_latch)
   val s4_full = RegInit(false.B)
 
   when (io.bs_waddr.ready || !s4_need_pb) { s4_full := false.B }
