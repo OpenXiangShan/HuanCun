@@ -52,7 +52,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   assert(!c.valid || (c.bits.size === log2Up(blockBytes).U && off === 0.U), "SinkC must receive aligned message!")
 
-  io.alloc.valid := c.valid && can_recv_req && isReq && first
+  io.alloc.valid := c.valid && !noSpace && isReq && first
   io.alloc.bits.channel := "b100".U
   io.alloc.bits.opcode := c.bits.opcode
   io.alloc.bits.param := c.bits.param
