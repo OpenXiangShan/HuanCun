@@ -110,7 +110,6 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     )
     if(cacheParams.sramClkDivBy2){
       addr.ready := accessVec(innerAddr(stackBits - 1, 0)) && sram_clk.asBool()
-        //RegNext(addr.valid && !addr.bits.noop, false.B)
     } else {
       addr.ready := accessVec(innerAddr(stackBits - 1, 0))
     }
@@ -152,23 +151,22 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   dontTouch(bank_en)
   dontTouch(sel_req)
 
+  /** if `sramClkDivBy2`, we need to make the signal keep 2-cycle at sram's port */
   def sramRegNext[T <: Data](in: T, init: T) = {
     if(cacheParams.sramClkDivBy2){
       val delay1 = RegNext(in, init)
-      val delay2 = RegNext(delay1, init)
-      Mux(sram_clk.asBool(), delay2, delay1)
+      Mux(sram_clk.asBool(), in, delay1)
     } else {
-      RegNext(in, init)
+      in
     }
   }
 
   def sramRegEnable[T <: Data](in: T, enable: Bool) = {
     if(cacheParams.sramClkDivBy2){
       val delay1 = RegEnable(in, enable)
-      val delay2 = RegEnable(delay1, RegNext(enable, false.B))
-      Mux(sram_clk.asBool(), delay2, delay1)
+      Mux(sram_clk.asBool(), in, delay1)
     } else {
-      RegEnable(in, enable)
+      in
     }
   }
 
@@ -225,10 +223,10 @@ class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) exten
   })
 
   for(i <- 0 until outNum){
-    val sel_r = RegNextN(io.sel(i), sramLatency - 1)
+    val sel_r = RegNextN(io.sel(i), sramLatency - 2)
     val odata = Mux1H(sel_r, io.in)
-    val en = RegNextN(io.en(i), sramLatency - 1)
-    io.out(i) := RegEnable(odata, en)
+    val en = RegNextN(io.en(i), sramLatency - 2)
+    io.out(i) := RegNext(RegEnable(odata, en))
   }
 
 }
