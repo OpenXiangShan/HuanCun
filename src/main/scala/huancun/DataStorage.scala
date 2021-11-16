@@ -68,7 +68,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     this.clock
   }
   val bankedData = Seq.fill(nrBanks)(
-    withClock(sram_clk){
+    withClock(if(cacheParams.simulation) clock else sram_clk){
       Module(
         new SRAMTemplate(
           UInt(eccDataBits.W),

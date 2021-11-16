@@ -122,7 +122,9 @@ case class HCCacheParameters
   reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey), // slave
   respField: Seq[BundleFieldBase] = Nil,
   ctrl: Option[CacheCtrl] = None,
-  sramClkDivBy2: Boolean = false) {
+  sramClkDivBy2: Boolean = false,
+  simulation: Boolean = false
+) {
   require(ways > 0)
   require(sets > 0)
   require(channelBytes.d.get >= 8)
