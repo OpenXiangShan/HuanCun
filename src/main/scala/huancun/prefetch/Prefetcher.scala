@@ -7,13 +7,10 @@ import freechips.rocketchip.tilelink._
 import huancun._
 
 class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
-  // val addr = UInt(addressBits.W)
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
-  val alias = if (hasAliasBits) Some(UInt(aliasBitsOpt.get.W)) else None
-  // val id = UInt(sourceIdBits.W)
 }
 
 class PrefetchResp(implicit p: Parameters) extends PrefetchBundle {
@@ -29,7 +26,6 @@ class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
   val set = UInt(setBits.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
-  val alias = if (hasAliasBits) Some(UInt(aliasBitsOpt.get.W)) else None
   // prefetch only when L2 receives a miss or prefetched hit req
   // val miss = Bool()
   // val prefetched = Bool()
@@ -100,7 +96,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       io.req.bits.channel := "b001".U
       io.req.bits.needHint.foreach(_ := false.B)
       io.req.bits.isPrefetch.foreach(_ := true.B)
-      io.req.bits.alias.foreach(_ := pftQueue.io.deq.bits.alias.get)
+      io.req.bits.alias.foreach(_ := DontCare)
       io.req.bits.preferCache := true.B
       io.req.bits.fromProbeHelper := false.B
       io.req.bits.fromCmoHelper := false.B
