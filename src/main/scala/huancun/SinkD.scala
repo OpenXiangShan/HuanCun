@@ -45,8 +45,10 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val needData = io.d.bits.opcode(0)
   val w_safe = !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(io.set, io.way))
 
-  val bypass_ready = io.inner_grant && io.bypass_write.ready
-  val bs_ready = (needData && w_safe || !first) && cache && (bypass_ready || !io.inner_grant)
+  val bypass_ready = io.inner_grant && needData && io.bypass_write.ready
+  val bs_ready = (needData && w_safe || !first) &&
+    cache && io.bs_waddr.ready &&
+    (bypass_ready || !io.inner_grant)
 
   io.d.ready := !needData || bs_ready || bypass_ready
 
