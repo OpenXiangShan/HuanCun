@@ -3,7 +3,7 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.utils.XSPerfAccumulate
+import huancun.utils.{FastArbiter, XSPerfAccumulate}
 
 class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Parameters) extends HuanCunModule {
 
@@ -25,7 +25,7 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   val buffer_dep_mask = Reg(Vec(entries, Vec(entries, Bool())))
   val rdys = RegInit(VecInit(Seq.fill(entries){ false.B }))
 
-  val issue_arb = Module(new RRArbiter(new MSHRRequest, entries))
+  val issue_arb = Module(new FastArbiter(new MSHRRequest, entries))
   for (i <- 0 until entries){
     issue_arb.io.in(i).valid := valids(i) && rdys(i)
     issue_arb.io.in(i).bits := buffer(i)

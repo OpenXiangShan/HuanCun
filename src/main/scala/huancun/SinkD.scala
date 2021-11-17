@@ -29,7 +29,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val d = Flipped(DecoupledIO(new TLBundleD(edge.bundle)))
     val bs_waddr = DecoupledIO(new DSAddress)
     val bs_wdata = Output(new DSData)
-    val bypass_write = Flipped(new SinkDBufferWrite)
+    val bypass_write = DecoupledIO(new SinkDBufferWrite)
     val way = Input(UInt(wayBits.W))
     val set = Input(UInt(setBits.W))
     val inner_grant = Input(Bool())
@@ -45,10 +45,12 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val needData = io.d.bits.opcode(0)
   val w_safe = !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(io.set, io.way))
 
-  io.d.ready := !needData || (!first || w_safe) && Mux(cache,
-    io.bs_waddr.ready,
-    true.B // refill buffer always ready (it is large enough)
-  )
+  val bypass_ready = io.inner_grant && needData && io.bypass_write.ready
+  val bs_ready = (needData && w_safe || !first) &&
+    cache && io.bs_waddr.ready &&
+    (bypass_ready || !io.inner_grant)
+
+  io.d.ready := !needData || bs_ready || bypass_ready
 
   // Generate resp
   io.resp.valid := (first || last) && io.d.fire() // MSHR need to be notified when both first & last
@@ -61,16 +63,15 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.resp.bits.dirty := io.d.bits.echo.lift(DirtyKey).getOrElse(false.B)
 
   // Save data to Datastorage
-  io.bs_waddr.valid := ((needData && io.d.valid && w_safe) || !first) && cache
+  io.bs_waddr.valid := io.d.valid && bs_ready
   io.bs_waddr.bits.way := io.way
   io.bs_waddr.bits.set := io.set
   io.bs_waddr.bits.beat := Mux(io.d.valid, beat, RegEnable(beat + io.bs_waddr.ready.asUInt(), io.d.valid))
   io.bs_waddr.bits.write := true.B
   io.bs_waddr.bits.noop := !io.d.valid
   io.bs_wdata.data := io.d.bits.data
-
-  io.bypass_write.w_valid := io.d.fire() && needData && io.inner_grant
-  io.bypass_write.w_id := io.d.bits.source
-  io.bypass_write.w_beat := beat
-  io.bypass_write.w_data := io.bs_wdata
+  io.bypass_write.valid := io.d.valid && bypass_ready
+  io.bypass_write.bits.w_id := io.d.bits.source
+  io.bypass_write.bits.w_beat := beat
+  io.bypass_write.bits.w_data := io.bs_wdata
 }
