@@ -618,17 +618,19 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       assert(probe_shrink_perm(self_meta.state, req.param), "Probe should always shrink perm")
       s_wbselfdir := false.B
     }
-    when(Cat(clients_meta.map(_.hit)).orR()){
-      for(meta <- clients_meta){
-        when(meta.hit){
-          assert(probe_shrink_perm(meta.state, req.param), "Probe should always shrink perm")
+    when(!(self_meta.hit && self_meta.state(0) && req.param === toB)) { // no need to probe client if self-meta is B/T and param is toB
+      when(Cat(clients_meta.map(_.hit)).orR()) {
+        for (meta <- clients_meta) {
+          when(meta.hit) {
+            assert(probe_shrink_perm(meta.state, req.param), "Probe should always shrink perm")
+          }
         }
+        s_probe := false.B
+        s_wbclientsdir := false.B
+        w_probeackfirst := false.B
+        w_probeacklast := false.B
+        w_probeack := false.B
       }
-      s_probe := false.B
-      s_wbclientsdir := false.B
-      w_probeackfirst := false.B
-      w_probeacklast := false.B
-      w_probeack := false.B
     }
   }
 
