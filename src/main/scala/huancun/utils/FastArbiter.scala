@@ -14,22 +14,34 @@ class FastArbiter[T <: Data](val gen: T, val n: Int) extends Module {
     }
   }
 
-  val rev = RegInit(false.B)
-  rev := !rev
+  val chosenOH = Wire(UInt(n.W))
+  val valids = VecInit(io.in.map(_.valid)).asUInt()
+  // the reqs that we didn't choose in last cycle
+  val pendingMask = RegEnable(
+    valids & (~chosenOH).asUInt(), // make IDEA happy ...
+    io.out.fire()
+  )
+  // select a req from pending reqs by RR
+  /*
+      Eg: chosenOH  0100
+       rrGrantMask  0011
+   */
+  val rrGrantMask = RegEnable(VecInit((0 until n) map { i =>
+    if(i == 0) false.B else chosenOH(i - 1, 0).orR()
+  }).asUInt(), io.out.fire())
+  val rrSelOH = VecInit(maskToOH((rrGrantMask & pendingMask).asBools())).asUInt()
+  val firstOneOH = VecInit(maskToOH(valids.asBools())).asUInt()
+  val rrValid = (rrSelOH & valids).orR()
+  chosenOH := Mux(rrValid, rrSelOH, firstOneOH)
 
-  val firstOneOH = VecInit(maskToOH(io.in.map(_.valid)))
-  val lastOneOH = VecInit(maskToOH(io.in.map(_.valid).reverse).reverse)
+  io.out.valid := valids.orR()
+  io.out.bits := Mux1H(chosenOH, io.in.map(_.bits))
 
-  val selOH = Mux(rev, lastOneOH, firstOneOH)
-
-  io.chosen := OHToUInt(selOH)
-
-  io.in.zip(selOH).foreach{
-    case (in, g) => in.ready := g && io.out.ready
+  io.in.map(_.ready).zip(chosenOH.asBools()).foreach{
+    case (rdy, grant) => rdy := grant && io.out.ready
   }
 
-  io.out.valid := Cat(io.in.map(_.valid)).orR()
-  io.out.bits := Mux1H(selOH, io.in.map(_.bits))
+  io.chosen := OHToUInt(chosenOH)
 
 }
 
