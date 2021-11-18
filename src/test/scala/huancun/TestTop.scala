@@ -11,6 +11,7 @@ import scala.collection.mutable.ArrayBuffer
 
 class TestTop()(implicit p: Parameters) extends LazyModule {
 
+  val delayFactor = 0.5
 
   val cacheParams = p(HCCacheParamsKey)
 
@@ -34,7 +35,7 @@ class TestTop()(implicit p: Parameters) extends LazyModule {
     masterNode
   }
 
-  val l1d_nodes = (0 until 2) map( i => createClientNode(s"l1d$i", 16))
+  val l1d_nodes = (0 until 2) map( i => createClientNode(s"l1d$i", 32))
   val master_nodes = l1d_nodes
 
   val l2 = LazyModule(new HuanCun())
@@ -49,6 +50,7 @@ class TestTop()(implicit p: Parameters) extends LazyModule {
     TLXbar() :=*
       TLFragmenter(32, 64) :=*
       TLCacheCork() :=*
+      TLDelayer(delayFactor) :=*
       l2.node :=* xbar
 
 
