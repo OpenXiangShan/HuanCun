@@ -50,7 +50,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     cache && io.bs_waddr.ready &&
     (bypass_ready || !io.inner_grant)
 
-  io.d.ready := !needData || bs_ready || bypass_ready
+  io.d.ready := !needData || bs_ready || bypass_ready || (!cache && !io.inner_grant)
 
   // Generate resp
   io.resp.valid := (first || last) && io.d.fire() // MSHR need to be notified when both first & last
