@@ -812,9 +812,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   when(req.fromB && io.dirResult.valid) {
-    will_probeack_through := clients_have_T && (io_probeAckDataThrough || !self_meta.hit || req.param === toN)
+    will_probeack_through := clients_have_T
     will_drop_probeack := !clients_have_T
-    will_save_probeack := !(will_probeack_through || will_drop_probeack)
+    will_save_probeack := will_probeack_through && !io_probeAckDataThrough && self_meta.hit && req.param === toB
     probeAckDataThrough := will_probeack_through
     probeAckDataDrop := will_drop_probeack
   }
