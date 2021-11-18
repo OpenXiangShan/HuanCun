@@ -125,6 +125,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val need_block_downwards = RegInit(false.B)
   val inv_self_dir = RegInit(false.B)
+  val client_probeack_param_vec = RegInit(VecInit(Seq.fill(clientBits)(0.U(3.W))))
 
   // When replacing a block in data array, it is not always necessary to send Release,
   // but only when state perm > clientStates' perm or replacing a dirty block
@@ -181,6 +182,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     state,
     Mux(state =/= INVALID && param =/= toN, BRANCH, INVALID)
   )
+
+  def shrink_next_state(param: UInt): UInt = {
+    Mux(param === TtoB, BRANCH, INVALID)
+  }
 
   def probe_shrink_perm(state: UInt, perm: UInt): Bool = state =/= INVALID && perm === toN || isT(state) && perm === toB
 
@@ -261,7 +266,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
-        m.state := Mux(m.hit, probe_next_state(clients_meta(i).state, req.param), clients_meta(i).state)
+        m.state := Mux(m.hit, shrink_next_state(client_probeack_param_vec(i)), clients_meta(i).state)
     }
   }
 
@@ -1179,6 +1184,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
   val probeack_last = (probes_done | probeack_bit) === probe_clients // This is the last client sending probeack
   when(req_valid && sink_c_resp_valid && probeack_last && io.resps.sink_c.bits.last){
+    client_probeack_param_vec(OHToUInt(getClientBitOH(io.resps.sink_c.bits.source))) := io.resps.sink_c.bits.param
     when(io.resps.sink_c.bits.hasData){
       // TODO: this is slow, optimize this
       s_writeprobe := false.B
