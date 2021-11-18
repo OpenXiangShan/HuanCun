@@ -916,19 +916,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.bufIdx := req.bufIdx
 
   ob.tag := req.tag
-  val probe_alias = RegEnable(
-    Mux(
-      req.fromA && req.opcode === Hint,
-      req.alias.getOrElse(0.U), // Hint
-      MuxCase( // Acquire / Probe
-        req.alias.getOrElse(0.U),
-        clients_meta.map(m => ((m.hit && m.alias.getOrElse(0.U) =/= req.alias.getOrElse(0.U)) -> m.alias.getOrElse(0.U)))
-      )
-    ),
-    io.dirResult.valid
-  )
   ob.set := req.set
-  ob.alias.foreach(_ := probe_alias)
+  ob.alias.foreach(a => a.zip(clients_meta.map(_.alias.get)).foreach{
+    case (sink, source) => sink := source
+  })
   assert(ob.set.getWidth == req.set.getWidth)
   ob.param := Mux(
     req.fromB,

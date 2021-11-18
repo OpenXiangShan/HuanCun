@@ -33,21 +33,22 @@ class SourceB(implicit p: Parameters) extends HuanCunModule {
 
   /* Resolve task */
   val workVec = RegInit(0.U(clientBits.W))
-  when(io.task.fire()) {
+  when(io.task.fire) {
     workVec := io.task.bits.clients
   }
   val busy = workVec.orR
   io.task.ready := !busy
   val pendingClient = Mux(busy, workVec, io.task.bits.clients)
-  val chosenClient = ParallelPriorityMux(pendingClient.asBools().zipWithIndex.map {
+  val chosenClient = ParallelPriorityMux(pendingClient.asBools.zipWithIndex.map {
     case (sel, i) => sel -> UIntToOH(i.U, width = clientBits)
   })
-  when(io.b.fire()) {
+  when(io.b.fire) {
     workVec := pendingClient & ~chosenClient
   }
 
   /* Handle B channel */
-  val taskLatch = Mux(!busy, io.task.bits, RegEnable(io.task.bits, io.task.fire()))
+  val taskLatch = Mux(!busy, io.task.bits, RegEnable(io.task.bits, io.task.fire))
+  val probe_alias = taskLatch.alias.map(alias_vec => Mux1H(chosenClient, alias_vec))
   io.b.valid := busy || io.task.valid
   io.b.bits.opcode := TLMessages.Probe
   io.b.bits.param := taskLatch.param
@@ -55,6 +56,9 @@ class SourceB(implicit p: Parameters) extends HuanCunModule {
   io.b.bits.source := getSourceId(chosenClient)
   io.b.bits.address := Cat(taskLatch.tag, taskLatch.set, 0.U(offsetBits.W))
   io.b.bits.mask := ~0.U(beatBytes.W)
-  io.b.bits.data := Cat(taskLatch.alias.getOrElse(0.U), taskLatch.needData.getOrElse(false.B).asUInt)
+  io.b.bits.data := Cat(
+    probe_alias.getOrElse(0.U(clientBits.W)),
+    taskLatch.needData.getOrElse(false.B).asUInt
+  )
   io.b.bits.corrupt := 0.U
 }
