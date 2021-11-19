@@ -76,6 +76,7 @@ class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
   val param = UInt(3.W)
   val source = UInt(mshrBits.W)
   val bufIdx = UInt(bufIdxBits.W)
+  val size = UInt(msgSizeBits.W)
   val needData = Bool()
   val putData = Bool()
 }

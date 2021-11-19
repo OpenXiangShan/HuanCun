@@ -914,6 +914,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U // TODO: this is deprecated?
   oa.putData := req_put
   oa.bufIdx := req.bufIdx
+  oa.size := req.size
 
   ob.tag := req.tag
   val probe_alias = RegEnable(
