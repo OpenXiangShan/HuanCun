@@ -60,27 +60,22 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val eccDataBits = dataCode.width(8*bankBytes)
   println(s"extra ECC Databits:${eccDataBits - (8*bankBytes)}")
 
-  val sram_clk = if(cacheParams.sramClkDivBy2) {
-    val clk = RegInit(false.B)
-    clk := !clk
-    clk.asClock()
-  } else {
-    this.clock
-  }
-  val bankedData = Seq.fill(nrBanks)(
-    withClock(if(cacheParams.simulation) clock else sram_clk){
-      Module(
-        new SRAMTemplate(
-          UInt(eccDataBits.W),
-          set = nrRows,
-          way = 1,
-          shouldReset = false,
-          holdRead = false,
-          singlePort = sramSinglePort
-        )
+  val bankedData = Seq.fill(nrBanks) {
+    Module(
+      new SRAMTemplate(
+        UInt(eccDataBits.W),
+        set = nrRows,
+        way = 1,
+        shouldReset = false,
+        holdRead = cacheParams.sramClkDivBy2,
+        singlePort = sramSinglePort
       )
-    }
-  )
+    )
+  }
+
+  val stackRdy = if(cacheParams.sramClkDivBy2){
+    RegInit(VecInit(Seq.fill(nrStacks){ true.B }))
+  } else VecInit(Seq.fill(nrStacks){ true.B })
 
   /* Convert to internal request signals */
   class DSRequest extends HuanCunBundle {
@@ -95,10 +90,11 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   def req(wen: Boolean, addr: DecoupledIO[DSAddress], data: DSData) = {
     // Remap address
     // [beat, set, way, block] => [way, set, beat, block]
-    //                          aka [index, stack, block]
+    //                            [index, stack, block]
     val innerAddr = Cat(addr.bits.way, addr.bits.set, addr.bits.beat)
     val innerIndex = innerAddr >> stackBits
-    val stackSel = UIntToOH(innerAddr(stackBits - 1, 0), stackSize) // Select which stack to access
+    val stackIdx = innerAddr(stateBits - 1, 0)
+    val stackSel = UIntToOH(stackIdx, stackSize) // Select which stack to access
 
     val out = Wire(new DSRequest)
     val accessVec = Cat(
@@ -108,17 +104,16 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         }
         .reverse
     )
-    if(cacheParams.sramClkDivBy2){
-      addr.ready := accessVec(innerAddr(stackBits - 1, 0)) && sram_clk.asBool()
-    } else {
-      addr.ready := accessVec(innerAddr(stackBits - 1, 0))
-    }
+    addr.ready := accessVec(stackIdx) && stackRdy(stackIdx)
 
     out.wen := wen.B
     out.index := innerIndex
     // FillInterleaved: 0010 => 00000000 00000000 11111111 00000000
     out.bankSel := Mux(addr.valid, FillInterleaved(stackSize, stackSel), 0.U) // TODO: consider mask
-    out.bankEn := Mux(addr.bits.noop, 0.U, out.bankSel & FillInterleaved(stackSize, accessVec))
+    out.bankEn := Mux(addr.bits.noop || !stackRdy(stackIdx),
+      0.U,
+      out.bankSel & FillInterleaved(stackSize, accessVec)
+    )
     out.data := Cat(Seq.fill(nrStacks)(data.data)).asTypeOf(out.data.cloneType)
     out
   }
@@ -150,24 +145,15 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val sel_req = Wire(Vec(nrBanks, new DSRequest))
   dontTouch(bank_en)
   dontTouch(sel_req)
-
-  /** if `sramClkDivBy2`, we need to make the signal keep 2-cycle at sram's port */
-  def sramRegNext[T <: Data](in: T, init: T) = {
-    if(cacheParams.sramClkDivBy2){
-      val delay1 = RegNext(in, init)
-      Mux(sram_clk.asBool(), in, delay1)
-    } else {
-      in
-    }
-  }
-
-  def sramRegEnable[T <: Data](in: T, enable: Bool) = {
-    if(cacheParams.sramClkDivBy2){
-      val delay1 = RegEnable(in, enable)
-      Mux(sram_clk.asBool(), in, delay1)
-    } else {
-      in
-    }
+  // mark accessed banks as busy
+  if(cacheParams.sramClkDivBy2){
+    bank_en.grouped(stackSize).toList
+      .map(banks => Cat(banks).orR())
+      .zip(stackRdy)
+      .foreach
+      {
+        case (accessed, rdy) => rdy := !accessed
+      }
   }
 
   for (i <- 0 until nrBanks) {
@@ -177,16 +163,16 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     sel_req(i) := selectedReq
     // Write
     val wen = en && selectedReq.wen
-    bankedData(i).io.w.req.valid := sramRegNext(wen, false.B)
+    bankedData(i).io.w.req.valid := wen
     bankedData(i).io.w.req.bits.apply(
-      setIdx = sramRegEnable(selectedReq.index, wen),
-      data = sramRegEnable(dataCode.encode(selectedReq.data(i)), wen),
+      setIdx = selectedReq.index,
+      data = dataCode.encode(selectedReq.data(i)),
       waymask = 1.U
     )
     // Read
     val ren = en && !selectedReq.wen
-    bankedData(i).io.r.req.valid := sramRegNext(ren, false.B)
-    bankedData(i).io.r.req.bits.apply(setIdx = sramRegEnable(selectedReq.index, ren))
+    bankedData(i).io.r.req.valid := ren
+    bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
     val decode = dataCode.decode(bankedData(i).io.r.resp.data(0))
     outData(i) := decode.uncorrected
   }
