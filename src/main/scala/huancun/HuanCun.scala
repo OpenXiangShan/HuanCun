@@ -26,6 +26,7 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.prefetch._
+import huancun.utils.FastArbiter
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -240,7 +241,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case EdgeOutKey => node.out.head._2
     }
     def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
-      val arbiter = Module(new RRArbiter[T](chiselTypeOf(out.bits), in.size))
+      val arbiter = Module(new FastArbiter[T](chiselTypeOf(out.bits), in.size))
       if (name.nonEmpty) {
         arbiter.suggestName(s"${name.get}_arb")
       }

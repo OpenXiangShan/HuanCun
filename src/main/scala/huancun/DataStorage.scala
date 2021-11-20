@@ -40,7 +40,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   })
 
   /* Define some internal parameters */
-  val nrStacks = 4
+  val nrStacks = 2
   val bankBytes = 8
   val rowBytes = nrStacks * beatBytes
   val nrRows = sizeBytes / rowBytes
@@ -93,7 +93,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     //                            [index, stack, block]
     val innerAddr = Cat(addr.bits.way, addr.bits.set, addr.bits.beat)
     val innerIndex = innerAddr >> stackBits
-    val stackIdx = innerAddr(stateBits - 1, 0)
+    val stackIdx = innerAddr(stackBits - 1, 0)
     val stackSel = UIntToOH(stackIdx, stackSize) // Select which stack to access
 
     val out = Wire(new DSRequest)
@@ -196,6 +196,12 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   io.sourceD_rdata.data := Cat(dataSelModules.map(_.io.out(0)).reverse)
   io.sourceC_rdata.data := Cat(dataSelModules.map(_.io.out(1)).reverse)
+
+  val debug_stack_used = PopCount(bank_en.grouped(stackSize).toList.map(seq => Cat(seq).orR))
+
+  for(i <- 1 to nrStacks) {
+    XSPerfAccumulate(cacheParams, s"DS_${i}_stacks_used", debug_stack_used === i.U)
+  }
 
 }
 

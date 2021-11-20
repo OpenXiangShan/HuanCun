@@ -37,6 +37,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
   })
+  println(s"clientBits: $clientBits")
 
   val ctrl = cacheParams.ctrl.map(_ => Module(new SliceCtrl()))
 
@@ -116,7 +117,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
 
   val mshrAlloc = Module(new MSHRAlloc)
-  val a_req_buffer = Module(new RequestBuffer())
+  val a_req_buffer = Module(new RequestBuffer(entries = 4))
   val probeHelperOpt = if(cacheParams.inclusive) None else Some(Module(new ProbeHelper))
 
   val a_req = Wire(DecoupledIO(new MSHRRequest()))

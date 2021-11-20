@@ -104,7 +104,7 @@ case class HCCacheParameters
   blockBytes: Int = 64,
   pageBytes: Int = 4096,
   replacement: String = "plru",
-  mshrs: Int = 16,
+  mshrs: Int = 14,
   dirReadPorts: Int = 1,
   dirReg: Boolean = true,
   enableDebug: Boolean = false,
