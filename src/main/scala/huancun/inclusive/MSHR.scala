@@ -376,6 +376,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U
   oa.bufIdx := req.bufIdx
   oa.putData := req.opcode(2,1) === 0.U
+  oa.size := req.size
 
   ob.tag := Mux(!s_rprobe, meta.tag, req.tag)
   ob.set := req.set
