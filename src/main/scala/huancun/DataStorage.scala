@@ -41,13 +41,13 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   /* Define some internal parameters */
   val nrStacks = 2
+  val stackBits = log2Ceil(nrStacks)
   val bankBytes = 8
   val rowBytes = nrStacks * beatBytes
   val nrRows = sizeBytes / rowBytes
   val nrBanks = rowBytes / bankBytes
   val rowBits = log2Ceil(nrRows)
   val stackSize = nrBanks / nrStacks
-  val stackBits = log2Ceil(stackSize)
   val sramSinglePort = true
 
   // Suppose * as one bank
