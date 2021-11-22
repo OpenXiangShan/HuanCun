@@ -97,11 +97,11 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.task.ready := !busy && task_w_safe
   when(io.task.fire()) {
     busy := true.B
-    when(!task.save) {
+    when(!task.save && !task.drop) {
       beatValsSave(task.bufIdx).foreach(_ := false.B)
       w_counter_save := (beats - 1).U
     }
-    when(!task.release) {
+    when(!task.release && !task.drop) {
       beatValsThrough(task.bufIdx).foreach(_ := false.B)
       w_counter_through := (beats - 1).U
     }
