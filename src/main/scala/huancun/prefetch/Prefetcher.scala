@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import huancun._
+import huancun.utils.Pipeline
 
 class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val tag = UInt(tagBits.W)
@@ -81,28 +82,33 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
     case bop: BOPParameters =>
       val pft = Module(new BestOffsetPrefetch)
       val pftQueue = Module(new PrefetchQueue)
+      val pftReq = Wire(DecoupledIO(io.req.bits.cloneType))
       pft.io.train <> io.train
       pft.io.resp <> io.resp
       pftQueue.io.enq <> pft.io.req
-      pftQueue.io.deq.ready := io.req.ready
-      io.req.valid := pftQueue.io.deq.valid
-      io.req.bits.opcode := TLMessages.Hint
-      io.req.bits.param := Mux(pftQueue.io.deq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
-      io.req.bits.size := log2Up(blockBytes).U
-      io.req.bits.source := pftQueue.io.deq.bits.source
-      io.req.bits.set := pftQueue.io.deq.bits.set
-      io.req.bits.tag := pftQueue.io.deq.bits.tag
-      io.req.bits.off := 0.U
-      io.req.bits.channel := "b001".U
-      io.req.bits.needHint.foreach(_ := false.B)
-      io.req.bits.isPrefetch.foreach(_ := true.B)
-      io.req.bits.alias.foreach(_ := DontCare)
-      io.req.bits.preferCache := true.B
-      io.req.bits.fromProbeHelper := false.B
-      io.req.bits.fromCmoHelper := false.B
-      io.req.bits.bufIdx := DontCare
-      io.req.bits.dirty := false.B
-      io.req.bits.needProbeAckData.foreach(_ := false.B)
+      pftQueue.io.deq.ready := pftReq.ready
+      pftReq.valid := pftQueue.io.deq.valid
+      pftReq.bits.opcode := TLMessages.Hint
+      pftReq.bits.param := Mux(pftQueue.io.deq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
+      pftReq.bits.size := log2Up(blockBytes).U
+      pftReq.bits.source := pftQueue.io.deq.bits.source
+      pftReq.bits.set := pftQueue.io.deq.bits.set
+      pftReq.bits.tag := pftQueue.io.deq.bits.tag
+      pftReq.bits.off := 0.U
+      pftReq.bits.channel := "b001".U
+      pftReq.bits.needHint.foreach(_ := false.B)
+      pftReq.bits.isPrefetch.foreach(_ := true.B)
+      pftReq.bits.alias.foreach(_ := DontCare)
+      pftReq.bits.preferCache := true.B
+      pftReq.bits.fromProbeHelper := false.B
+      pftReq.bits.fromCmoHelper := false.B
+      pftReq.bits.bufIdx := DontCare
+      pftReq.bits.dirty := false.B
+      pftReq.bits.needProbeAckData.foreach(_ := false.B)
+
+      val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
+      pipe.io.in <> pftReq
+      io.req <> pipe.io.out
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }
