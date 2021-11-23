@@ -19,6 +19,7 @@ class FastArbiter[T <: Data](val gen: T, val n: Int) extends Module {
   // the reqs that we didn't choose in last cycle
   val pendingMask = RegEnable(
     valids & (~chosenOH).asUInt(), // make IDEA happy ...
+    0.U(n.W),
     io.out.fire()
   )
   // select a req from pending reqs by RR
@@ -28,7 +29,7 @@ class FastArbiter[T <: Data](val gen: T, val n: Int) extends Module {
    */
   val rrGrantMask = RegEnable(VecInit((0 until n) map { i =>
     if(i == 0) false.B else chosenOH(i - 1, 0).orR()
-  }).asUInt(), io.out.fire())
+  }).asUInt(), 0.U(n.W), io.out.fire())
   val rrSelOH = VecInit(maskToOH((rrGrantMask & pendingMask).asBools())).asUInt()
   val firstOneOH = VecInit(maskToOH(valids.asBools())).asUInt()
   val rrValid = (rrSelOH & valids).orR()
