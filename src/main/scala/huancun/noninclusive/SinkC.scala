@@ -85,14 +85,13 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     })
   }
 
+  val task = io.task.bits
   val task_r = RegEnable(io.task.bits, io.task.fire())
   val busy = RegInit(false.B)
-  val task_v = io.task.fire() || busy
-  val task = Mux(busy, task_r, io.task.bits)
   val w_counter_save = RegInit(0.U(beatBits.W))
   val w_counter_through = RegInit(0.U(beatBits.W))
   val task_w_safe = !(io.sourceD_r_hazard.valid &&
-    io.sourceD_r_hazard.bits.safe(io.task.bits.set, io.task.bits.way))
+    io.sourceD_r_hazard.bits.safe(task.set, task.way))
 
   io.task.ready := !busy && task_w_safe
   when(io.task.fire()) {
@@ -107,13 +106,13 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     }
   }
 
-  io.bs_waddr.valid := task_v && task.save
-  io.bs_waddr.bits.way := task.way
-  io.bs_waddr.bits.set := task.set
+  io.bs_waddr.valid := busy && task_r.save
+  io.bs_waddr.bits.way := task_r.way
+  io.bs_waddr.bits.set := task_r.set
   io.bs_waddr.bits.beat := w_counter_save
   io.bs_waddr.bits.write := true.B
-  io.bs_waddr.bits.noop := !beatValsSave(task.bufIdx)(w_counter_save)
-  io.bs_wdata.data := buffer(task.bufIdx)(w_counter_save)
+  io.bs_waddr.bits.noop := !beatValsSave(task_r.bufIdx)(w_counter_save)
+  io.bs_wdata.data := buffer(task_r.bufIdx)(w_counter_save)
 
   io.release.valid := busy && task_r.release && beatValsThrough(task_r.bufIdx)(w_counter_through)
   io.release.bits.address := Cat(task_r.tag, task_r.set, task_r.off)
