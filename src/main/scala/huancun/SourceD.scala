@@ -80,14 +80,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s1_beat = startBeat(s1_req.off) | s1_counter
   val s1_valid_r = (busy || io.task.valid) && s1_needData && !s1_block_r
   val s1_last = s1_counter === s1_total_beats
-  val s1_bypass_hit_reg = RegInit(false.B)
-  val s1_bypass_hit_wire = io.bypass_read.r_valid && io.bypass_read.buffer_hit
-  val s1_bypass_hit = Mux(busy,
-    s1_bypass_hit_reg && s1_bypass_hit_wire,
-    s1_bypass_hit_wire
-  )
+  val s1_bypass_hit = io.bypass_read.valid && io.bypass_read.ready
   val s1_bypass_data = io.bypass_read.buffer_data
-  val data_from_refill_buffer = s1_req.useBypass
 
   val s1_queue = Module(new Queue(new DSData, 2, flow = false, pipe = false))
   s1_queue.io.enq.valid := s1_bypass_hit
@@ -101,15 +95,14 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.bs_raddr.bits.write := false.B
   io.bs_raddr.bits.noop := false.B
 
-  io.bypass_read.r_valid := s1_valid_r && s1_req.useBypass
-  io.bypass_read.r_id := s1_req.sinkId
-  io.bypass_read.r_beat := s1_beat
+  io.bypass_read.valid := s1_valid_r && s1_req.useBypass
+  io.bypass_read.id := s1_req.bufIdx
+  io.bypass_read.beat := s1_beat
 
   when(io.task.fire()) {
     busy := true.B
-    s1_bypass_hit_reg := s1_bypass_hit_wire
   }
-  when(Mux(data_from_refill_buffer, s1_bypass_hit, io.bs_raddr.fire())){
+  when(Mux(s1_req.useBypass, s1_bypass_hit, io.bs_raddr.fire())){
     s1_block_r := true.B
   }
   when(s1_valid && s2_ready) {
@@ -118,13 +111,12 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     when(s1_last) {
       s1_counter := 0.U
       busy := false.B
-      s1_bypass_hit_reg := false.B
     }
   }
   io.task.ready := !busy
   s1_valid := (busy || io.task.valid) && (
     !s1_valid_r ||
-      Mux(data_from_refill_buffer,
+      Mux(s1_req.useBypass,
         s1_bypass_hit,                    // wait data from refill buffer
         io.bs_raddr.ready                 // wait data from bankedstore
       )
@@ -139,10 +131,6 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s2_counter = RegEnable(s1_counter, s2_latch)
   val s2_full = RegInit(false.B)
   val s2_releaseAck = s2_req.opcode === ReleaseAck
-  val s2_bypass_hit = RegEnable(
-    Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire),
-    false.B, s2_latch
-  )
   val s2_d = Wire(io.d.cloneType)
   val s2_need_pb = RegEnable(s1_need_pb, s2_latch)
   val s2_need_d = RegEnable(!s1_need_pb || s1_counter === 0.U, s2_latch) // AccessAck for Put should only be fired once
@@ -162,8 +150,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   when (pb_ready) { s2_valid_pb := false.B }
   when (s2_latch) { s2_valid_pb := s1_need_pb }
 
-  s1_queue.io.deq.ready := s2_full && s2_bypass_hit && s2_d.ready
-  s2_d.valid := s2_full && ((s2_bypass_hit && s1_queue.io.deq.valid) || !s2_needData)
+  s1_queue.io.deq.ready := s2_full && s2_req.useBypass && s2_needData && s2_d.ready
+  s2_d.valid := s2_full && ((s1_queue.io.deq.valid && s2_req.useBypass && s2_needData) || !s2_needData)
   s2_d.bits.opcode := s2_req.opcode
   s2_d.bits.param := Mux(s2_releaseAck, 0.U, s2_req.param)
   s2_d.bits.sink := s2_req.sinkId
@@ -229,7 +217,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s3_d.bits.echo.lift(DirtyKey).foreach(_ := s3_req.dirty)
 
   s3_queue.io.enq.valid := RegNextN(
-    io.bs_raddr.fire() && !Mux(busy, s1_bypass_hit_reg, s1_bypass_hit_wire),
+    io.bs_raddr.fire(),
     n = sramLatency,
     Some(false.B)
   )
