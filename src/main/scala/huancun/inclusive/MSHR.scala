@@ -370,6 +370,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
 
   oa.tag := req.tag
   oa.set := req.set
+  oa.off := req.off
   oa.opcode := Mux(!s_transferput, req.opcode, Mux(meta.hit, TLMessages.AcquirePerm, TLMessages.AcquireBlock))
   oa.param := Mux(!s_transferput, req.param, Mux(req_needT, Mux(meta.hit, BtoT, NtoT), NtoB))
   oa.source := io.id

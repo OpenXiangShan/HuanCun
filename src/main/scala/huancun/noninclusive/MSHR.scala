@@ -886,6 +886,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
   oa.tag := req.tag
   oa.set := req.set
+  oa.off := req.off
   // full overwrite, we can always acquire perm, no need to acquire block
   val acquire_perm_NtoT = req.opcode === AcquirePerm && req.param === NtoT
   oa.opcode := Mux(!s_transferput || bypassGet, req.opcode,

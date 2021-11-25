@@ -99,7 +99,7 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_put.bits.param := s1_task.param
   a_put.bits.size := s1_task.size
   a_put.bits.source := s1_task.source
-  a_put.bits.address := Cat(s1_task.tag, s1_task.set, 0.U(offsetBits.W))
+  a_put.bits.address := Cat(s1_task.tag, s1_task.set, s1_task.off)
   a_put.bits.mask := s1_pb_latch.mask
   a_put.bits.data := s1_pb_latch.data
   a_put.bits.corrupt := false.B
