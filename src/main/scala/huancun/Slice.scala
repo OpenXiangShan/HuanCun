@@ -59,11 +59,12 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val sourceD = Module(new SourceD)
   val sinkE = Module(new SinkE)
 
-  sinkA.io.a <> io.in.a
-  io.in.b <> sourceB.io.b
-  sinkC.io.c <> io.in.c
-  io.in.d <> sourceD.io.d
-  sinkE.io.e <> io.in.e
+  val inBuf = cacheParams.innerBuf
+  sinkA.io.a <> inBuf.a(io.in.a)
+  io.in.b <> inBuf.b(sourceB.io.b)
+  sinkC.io.c <> inBuf.c(io.in.c)
+  io.in.d <> inBuf.d(sourceD.io.d)
+  sinkE.io.e <> inBuf.e(io.in.e)
 
   // Outer channles
   val sourceA = Module(new SourceA(edgeOut))
@@ -77,11 +78,14 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   refillBuffer.io.r <> sourceD.io.bypass_read
   refillBuffer.io.w <> sinkD.io.bypass_write
 
-  io.out.a <> sourceA.io.a
-  sinkB.io.b <> io.out.b
-  TLArbiter.lowest(edgeOut, io.out.c, sinkC.io.release, sourceC.io.c)
-  sinkD.io.d <> io.out.d
-  io.out.e <> sourceE.io.e
+  val outBuf = cacheParams.outerBuf
+  io.out.a <> outBuf.a(sourceA.io.a)
+  sinkB.io.b <> outBuf.b(io.out.b)
+  val out_c = Wire(io.out.c.cloneType)
+  TLArbiter.lowest(edgeOut, out_c, sinkC.io.release, sourceC.io.c)
+  io.out.c <> outBuf.c(out_c)
+  sinkD.io.d <> outBuf.d(io.out.d)
+  io.out.e <> outBuf.e(sourceE.io.e)
 
   // MSHRs
   val ms = Seq.fill(mshrsAll) {

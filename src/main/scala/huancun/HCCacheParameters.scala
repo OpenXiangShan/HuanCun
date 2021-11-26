@@ -22,7 +22,8 @@ package huancun
 import chipsalliance.rocketchip.config.Field
 import chisel3._
 import chisel3.util.log2Ceil
-import freechips.rocketchip.tilelink.{TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
+import freechips.rocketchip.diplomacy.BufferParams
+import freechips.rocketchip.tilelink.{TLBufferParams, TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, BundleKeyBase, ControlKey}
 import huancun.prefetch.PrefetchParameters
 
@@ -123,7 +124,15 @@ case class HCCacheParameters
   respField: Seq[BundleFieldBase] = Nil,
   ctrl: Option[CacheCtrl] = None,
   sramClkDivBy2: Boolean = false,
-  simulation: Boolean = false
+  simulation: Boolean = false,
+  innerBuf: TLBufferParams = TLBufferParams(),
+  outerBuf: TLBufferParams = TLBufferParams(
+    a = BufferParams.default,
+    b = BufferParams.default,
+    c = BufferParams.default,
+    d = BufferParams.default,
+    e = BufferParams.default
+  )
 ) {
   require(ways > 0)
   require(sets > 0)
