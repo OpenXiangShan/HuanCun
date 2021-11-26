@@ -791,7 +791,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   when(io_releaseThrough && io.dirResult.valid && req.fromC) {
     assert(req_valid)
     // TtoN or BtoN should release through
-    will_release_through := !other_clients_hit || (isShrink(req.param) && req.param =/= TtoB)
+    will_release_through := !other_clients_hit && isShrink(req.param)
     // report or TtoB will be dropped
     will_drop_release := !will_release_through
     // if enter this part, we must NOT save release
