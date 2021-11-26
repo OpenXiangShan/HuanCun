@@ -22,7 +22,7 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.util.BundleMap
+import freechips.rocketchip.util.{BundleMap, UIntToOH1}
 
 abstract class InnerTask(implicit p: Parameters) extends HuanCunBundle {
   val sourceId = UInt(sourceIdBits.W)
@@ -112,6 +112,7 @@ class SinkDResp(implicit p: Parameters) extends HuanCunBundle {
   val last = Bool() // last beat
   val denied = Bool()
   val dirty = Bool()
+  val bufIdx = UInt(bufIdxBits.W)
 }
 class SinkEResp(implicit p: Parameters) extends HuanCunBundle {
   // GrantAck

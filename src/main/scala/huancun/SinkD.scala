@@ -29,7 +29,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val d = Flipped(DecoupledIO(new TLBundleD(edge.bundle)))
     val bs_waddr = DecoupledIO(new DSAddress)
     val bs_wdata = Output(new DSData)
-    val bypass_write = DecoupledIO(new SinkDBufferWrite)
+    val bypass_write = Flipped(new SinkDBufferWrite)
     val way = Input(UInt(wayBits.W))
     val set = Input(UInt(setBits.W))
     val inner_grant = Input(Bool())
@@ -61,6 +61,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.resp.bits.sink := io.d.bits.sink
   io.resp.bits.denied := io.d.bits.denied
   io.resp.bits.dirty := io.d.bits.echo.lift(DirtyKey).getOrElse(false.B)
+  io.resp.bits.bufIdx := io.bypass_write.id
 
   // Save data to Datastorage
   io.bs_waddr.valid := io.d.valid && bs_ready
@@ -71,7 +72,6 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.bs_waddr.bits.noop := !io.d.valid
   io.bs_wdata.data := io.d.bits.data
   io.bypass_write.valid := io.d.valid && bypass_ready
-  io.bypass_write.bits.w_id := io.d.bits.source
-  io.bypass_write.bits.w_beat := beat
-  io.bypass_write.bits.w_data := io.bs_wdata
+  io.bypass_write.beat := beat
+  io.bypass_write.data := io.bs_wdata
 }

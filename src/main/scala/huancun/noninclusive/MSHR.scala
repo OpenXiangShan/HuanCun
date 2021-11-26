@@ -1239,6 +1239,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(io.resps.sink_d.bits.opcode === ReleaseAck) {
       w_releaseack := true.B
     }
+    req.bufIdx := io.resps.sink_d.bits.bufIdx
   }
   when(io.resps.sink_e.valid) {
     w_grantack := true.B

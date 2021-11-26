@@ -74,8 +74,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   val refillBuffer = Module(new RefillBuffer)
 
-  refillBuffer.io.sourceDr <> sourceD.io.bypass_read
-  refillBuffer.io.sinkDw <> sinkD.io.bypass_write
+  refillBuffer.io.r <> sourceD.io.bypass_read
+  refillBuffer.io.w <> sinkD.io.bypass_write
 
   io.out.a <> sourceA.io.a
   sinkB.io.b <> io.out.b
