@@ -525,16 +525,15 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   val is_ctrl_dir_res = directory.io.result.bits.idOH(1, 0) === "b11".U
+  val dirReg = regFn(directory.io.result)
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
       val dirResultMatch = !is_ctrl_dir_res && directory.io.result.valid && directory.io.result.bits.idOH(i)
-      val dirResult = WireInit(directory.io.result)
-      // override valid
-      dirResult.valid := dirResultMatch
-      mshr.io.dirResult := regFn(dirResult)
+      mshr.io.dirResult.bits := dirReg.bits
+      mshr.io.dirResult.valid := RegNext(dirResultMatch, false.B)
   }
   probeHelperOpt.foreach(h => {
-    h.io.dirResult := directory.io.result
+    h.io.dirResult := dirReg
   })
 
   // Provide MSHR info for sinkC, sinkD
