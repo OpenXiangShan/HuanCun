@@ -1099,18 +1099,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
 
   io.tasks.dir_write.bits.set := req.set
-  io.tasks.dir_write.bits.way := self_meta.way
-  io.tasks.dir_write.bits.data := new_self_dir
+  io.tasks.dir_write.bits.way := meta_reg.self.way
+  io.tasks.dir_write.bits.data := RegNext(new_self_dir)
 
   io.tasks.tag_write.bits.set := req.set
-  io.tasks.tag_write.bits.way := self_meta.way
+  io.tasks.tag_write.bits.way := meta_reg.self.way
   io.tasks.tag_write.bits.tag := req.tag
 
   val req_line_addr = Cat(req.tag, req.set)
   io.tasks.client_dir_write.bits.apply(
     req_line_addr,
     meta_reg.clients.way,
-    new_clients_dir
+    RegNext(new_clients_dir)
   )
   io.tasks.client_tag_write.bits.apply(
     req_line_addr,
