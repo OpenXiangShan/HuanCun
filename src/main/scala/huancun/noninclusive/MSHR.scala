@@ -821,7 +821,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probeAckDataDrop := will_drop_probeack
   }
 
-  when(req.fromCmoHelper) {
+  when(req.fromCmoHelper && io.dirResult.valid) {
     probeAckDataThrough := req.param =/= 0.U && (clients_have_T && !self_meta.hit) // Clean & Flush
     probeAckDataDrop := req.param === 0.U // Invalidate
   }

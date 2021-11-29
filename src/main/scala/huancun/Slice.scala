@@ -152,6 +152,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     alloc_C_arb.io.in(0) <> sinkC.io.alloc
 //    alloc_C_arb.io.in(1) <> io.cmo.req
     alloc_C_arb.io.in(1) <> DontCare
+    alloc_C_arb.io.in(1).valid := false.B
     mshrAlloc.io.c_req <> alloc_C_arb.io.out
   } else {
     mshrAlloc.io.c_req <> sinkC.io.alloc
