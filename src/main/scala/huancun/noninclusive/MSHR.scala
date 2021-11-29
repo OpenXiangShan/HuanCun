@@ -407,7 +407,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val sink = Reg(UInt(edgeOut.bundle.sinkBits.W))
 
-  val bad_grant = Reg(Bool())
+  val bad_grant = RegInit(false.B)
   // TODO: consider bad grant
   when(bad_grant) {
     new_self_dir.dirty := false.B
