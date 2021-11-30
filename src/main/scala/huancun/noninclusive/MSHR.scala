@@ -125,7 +125,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val need_block_downwards = RegInit(false.B)
   val inv_self_dir = RegInit(false.B)
-  val client_probeack_param_vec = RegInit(VecInit(Seq.fill(clientBits)(0.U(3.W))))
+  val client_probeack_param_vec_reg = RegInit(VecInit(Seq.fill(clientBits)(0.U(3.W))))
+  val client_probeack_param_vec = WireInit(VecInit(Seq.fill(clientBits)(0.U(3.W))))
 
   // When replacing a block in data array, it is not always necessary to send Release,
   // but only when state perm > clientStates' perm or replacing a dirty block
@@ -1178,8 +1179,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val sink_c_resp_valid = io.resps.sink_c.valid && !w_probeacklast
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
   val probeack_last = (probes_done | probeack_bit) === probe_clients // This is the last client sending probeack
-  when(req_valid && sink_c_resp_valid && probeack_last && io.resps.sink_c.bits.last){
-    client_probeack_param_vec(OHToUInt(getClientBitOH(io.resps.sink_c.bits.source))) := io.resps.sink_c.bits.param
+  client_probeack_param_vec := client_probeack_param_vec_reg
+  when(req_valid && sink_c_resp_valid && probeack_last && io.resps.sink_c.bits.last) {
+    val client = OHToUInt(getClientBitOH(io.resps.sink_c.bits.source))
+    client_probeack_param_vec_reg(client) := io.resps.sink_c.bits.param
+    client_probeack_param_vec(client) := io.resps.sink_c.bits.param
     when(io.resps.sink_c.bits.hasData){
       // TODO: this is slow, optimize this
       s_writeprobe := false.B
