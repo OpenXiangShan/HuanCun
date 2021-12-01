@@ -151,6 +151,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val prefetch_need_data = prefetch_miss && !self_meta.hit
 
   val a_need_data = req.fromA && (req.opcode === Get || req.opcode === AcquireBlock || req.opcode === Hint)
+  val b_need_data = req.fromB && req.needProbeAckData.getOrElse(false.B)
 
   // 1 cycle ahead its' corresponding register defs
   // these signals are used to decide mshr actions when dirResult.valid on c_schedule
@@ -905,7 +906,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     io.dirResult.valid
   )
   ob.clients := probe_clients
-  ob.needData.foreach(_ := a_need_data && !self_meta.hit)
+  ob.needData.foreach(_ := (a_need_data || b_need_data) && !self_meta.hit)
 
   oc.opcode := Mux(
     req.fromB,
