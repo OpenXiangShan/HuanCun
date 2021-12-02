@@ -10,6 +10,8 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   val beats = blockBytes / beatBytes
   val buffer = Reg(Vec(bufBlocks, Vec(beats, UInt((beatBytes * 8).W))))
+  val bufferSet = Reg(Vec(bufBlocks, UInt(setBits.W)))
+  val bufferSetVals = RegInit(VecInit(Seq.fill(bufBlocks)(false.B)))
   val beatValsSave = RegInit(VecInit(Seq.fill(bufBlocks) {
     VecInit(Seq.fill(beats) { false.B })
   }))
@@ -72,17 +74,38 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.resp.bits.set := set
   io.resp.bits.bufIdx := Mux(first, insertIdx, insertIdxReg)
 
+  val setMatchVec = RegInit(0.U(bufBlocks.W))
+
   // buffer write
   when(c.fire() && hasData) {
     when(first) {
       buffer(insertIdx)(count) := c.bits.data
       beatValsSave(insertIdx)(count) := true.B
       beatValsThrough(insertIdx)(count) := true.B
+      when(isProbeAckData) {
+        bufferSetVals(insertIdx) := true.B
+        bufferSet(insertIdx) := set
+      }
     }.otherwise({
       buffer(insertIdxReg)(count) := c.bits.data
       beatValsSave(insertIdxReg)(count) := true.B
       beatValsThrough(insertIdxReg)(count) := true.B
     })
+
+    when(first && isProbeAckData) {
+      setMatchVec := Cat(bufferSet.zip(bufferSetVals).map{
+        case (s, v) => (s === set) && v
+      }.reverse)
+    }.otherwise {
+      when(setMatchVec.orR()) {
+        assert(PopCount(setMatchVec) === 1.U, "SinkC: ProbeAckData cleaner detects multiple data")
+        val bufIdx = OHToUInt(setMatchVec)
+        beatValsSave(bufIdx).foreach(_ := false.B)
+        beatValsThrough(bufIdx).foreach(_ := false.B)
+        bufferSetVals(bufIdx) := false.B
+        setMatchVec := 0.U
+      }
+    }
   }
 
   val task = io.task.bits
@@ -138,5 +161,6 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     busy := false.B
     beatValsSave(task_r.bufIdx).foreach(_ := false.B)
     beatValsThrough(task_r.bufIdx).foreach(_ := false.B)
+    bufferSetVals(task_r.bufIdx) := false.B
   }
 }
