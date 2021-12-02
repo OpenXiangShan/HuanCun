@@ -1312,7 +1312,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val a_c_through = req.fromA && (
       nest_c_tag_match && !self_meta.hit && !nest_c_way_match ||
-      !nest_c_tag_match && nest_c_way_match && (cache_alias || !acquirePermMiss && (preferCache || self_meta.hit || transmit_from_other_client))
+      !nest_c_tag_match && nest_c_way_match && (cache_alias || (preferCache && !acquirePermMiss) || self_meta.hit || transmit_from_other_client)
     )
 
   // TODO: fix this
