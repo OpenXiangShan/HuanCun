@@ -100,7 +100,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
       beatValsThrough(insertIdxReg)(count) := true.B
     })
 
-    when(first && isProbeAckData) {
+    when(first && isResp) {
       setMatchVec := Cat(bufferSet.zip(bufferSetVals).map{
         case (s, v) => (s === set) && v
       }.reverse)
