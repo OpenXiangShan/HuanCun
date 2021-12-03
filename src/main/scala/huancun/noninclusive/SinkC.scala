@@ -66,7 +66,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.needProbeAckData.foreach(_ := false.B)
   assert(!io.alloc.fire() || c.fire() && first, "alloc fire, but c channel not fire!")
 
-  io.resp.valid := c.valid && !noSpace && isResp
+  io.resp.valid := c.valid && (!noSpace || !first) && isResp
   io.resp.bits.hasData := hasData
   io.resp.bits.param := c.bits.param
   io.resp.bits.source := c.bits.source
