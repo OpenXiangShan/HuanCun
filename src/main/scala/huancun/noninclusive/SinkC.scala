@@ -21,12 +21,19 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val beatVals = VecInit(Seq.fill(bufBlocks) {
     VecInit(Seq.fill(beats) { false.B })
   })
+  val beatValsTimer = RegInit(VecInit(Seq.fill(bufBlocks)(0.U(16.W))))
   beatVals.zipWithIndex.map {
     case (b, i) =>
       b.zip(beatValsSave(i).zip(beatValsThrough(i))).map {
         case (a, (s, t)) =>
           a := s || t
       }
+  }
+  beatValsTimer.map { b =>
+    when(b =/= 0.U) {
+      b := b + 1.U;
+      assert(b < 20000.U, "Buffer leak in SinkC")
+    }
   }
   val bufVals = VecInit(beatVals.map(_.asUInt().orR())).asUInt()
   val full = bufVals.andR()
@@ -82,6 +89,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
       buffer(insertIdx)(count) := c.bits.data
       beatValsSave(insertIdx)(count) := true.B
       beatValsThrough(insertIdx)(count) := true.B
+      beatValsTimer(insertIdx) := 1.U
       when(isProbeAckData) {
         bufferSetVals(insertIdx) := true.B
         bufferSet(insertIdx) := set
@@ -103,6 +111,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
         beatValsSave(bufIdx).foreach(_ := false.B)
         beatValsThrough(bufIdx).foreach(_ := false.B)
         bufferSetVals(bufIdx) := false.B
+        beatValsTimer(insertIdx) := 0.U
         setMatchVec := 0.U
       }
     }
@@ -162,5 +171,6 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     beatValsSave(task_r.bufIdx).foreach(_ := false.B)
     beatValsThrough(task_r.bufIdx).foreach(_ := false.B)
     bufferSetVals(task_r.bufIdx) := false.B
+    beatValsTimer(task_r.bufIdx) := 0.U
   }
 }
