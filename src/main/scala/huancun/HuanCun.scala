@@ -26,7 +26,7 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.prefetch._
-import huancun.utils.FastArbiter
+import huancun.utils.{FastArbiter, Pipeline}
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -281,7 +281,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             s.req.valid := p.io.req.valid && bank_eq(p.io.req.bits.set, i, bankBits)
             s.req.bits := p.io.req.bits
             prefetchReqsReady(i) := s.req.ready && bank_eq(p.io.req.bits.set, i, bankBits)
-            prefetchResps.get(i) <> s.resp
+            prefetchResps.get(i) <> Pipeline(s.resp)
         }
         io.perfEvents(i) := slice.perfinfo
         slice
