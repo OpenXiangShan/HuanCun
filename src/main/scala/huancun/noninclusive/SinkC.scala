@@ -111,7 +111,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
         beatValsSave(bufIdx).foreach(_ := false.B)
         beatValsThrough(bufIdx).foreach(_ := false.B)
         bufferSetVals(bufIdx) := false.B
-        beatValsTimer(insertIdx) := 0.U
+        beatValsTimer(bufIdx) := 0.U
         setMatchVec := 0.U
       }
     }
