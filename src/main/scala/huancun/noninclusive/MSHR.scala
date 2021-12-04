@@ -1101,7 +1101,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := meta_reg.self.way
-  io.tasks.dir_write.bits.data := RegNext(new_self_dir)
+  io.tasks.dir_write.bits.data := new_self_dir
 
   io.tasks.tag_write.bits.set := req.set
   io.tasks.tag_write.bits.way := meta_reg.self.way
@@ -1111,7 +1111,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.tasks.client_dir_write.bits.apply(
     req_line_addr,
     meta_reg.clients.way,
-    RegNext(new_clients_dir)
+    new_clients_dir
   )
   io.tasks.client_tag_write.bits.apply(
     req_line_addr,
@@ -1256,12 +1256,14 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   // Release MSHR
-  val no_schedule = s_probeack && s_execute && s_grantack && s_wbselfdir && s_wbselftag &&
-    s_wbclientsdir && s_wbclientstag && s_writerelease && s_writeprobe &&
+  val no_schedule = s_probeack && s_execute && s_grantack &&
+    RegNext(s_wbselfdir && s_wbselftag && s_wbclientsdir && s_wbclientstag, true.B) &&
+    s_writerelease && s_writeprobe &&
     meta_valid &&
     s_triggerprefetch.getOrElse(true.B) &&
     s_prefetchack.getOrElse(true.B) // TODO: s_writeput?
-  when(no_wait && no_schedule) {
+  val will_be_free = no_wait && no_schedule
+  when(will_be_free) {
     meta_valid := false.B
     req_valid := false.B
     releaseThrough := false.B
@@ -1270,7 +1272,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probeAckDataDrop := false.B
     probe_helper_finish := false.B
   }
-  io.status.bits.will_free := no_wait && no_schedule
+  io.status.bits.will_free := will_be_free
 
   // Alloc MSHR (alloc has higher priority than release)
   assert(RegNext(!req_valid || !io.alloc.valid, true.B)) // TODO: support fully-pipelined

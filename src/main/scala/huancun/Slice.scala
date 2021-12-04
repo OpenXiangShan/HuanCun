@@ -26,7 +26,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.leftOR
 import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
 import huancun.prefetch._
-import huancun.utils.FastArbiter
+import huancun.utils.{FastArbiter, Pipeline}
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
@@ -412,7 +412,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // don't allow b write back when c is valid to simplify 'NestedWriteBack'
-  block_b_c(directory.io.dirWReq, add_ctrl(ms.map(_.io.tasks.dir_write), ctrl.map(_.io.s_dir_w)))
+  block_b_c(
+    Pipeline.pipeTo(directory.io.dirWReq),
+    add_ctrl(ms.map(_.io.tasks.dir_write), ctrl.map(_.io.s_dir_w))
+  )
   arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
@@ -421,21 +424,21 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"))
   arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"))
   arbTasks(
-    directory.io.tagWReq,
+    Pipeline.pipeTo(directory.io.tagWReq),
     add_ctrl(ms.map(_.io.tasks.tag_write), ctrl.map(_.io.s_tag_w)),
     Some("tagWrite")
   )
   (directory, ms) match {
     case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
       block_b_c(
-        dir.io.clientDirWReq,
+        Pipeline.pipeTo(dir.io.clientDirWReq),
         add_ctrl(
           ms.map(_.io.tasks.client_dir_write),
           ctrl.map(_.io.c_dir_w)
         )
       )
       arbTasks(
-        dir.io.clientTagWreq,
+        Pipeline.pipeTo(dir.io.clientTagWreq),
         add_ctrl(
           ms.map(_.io.tasks.client_tag_write),
           ctrl.map(_.io.c_tag_w)

@@ -18,6 +18,19 @@ class Pipeline[T <: Data](gen: T, depth: Int = 1) extends Module {
   io.out <> stages.last.io.deq
 }
 
+object Pipeline {
+  def pipeTo[T <: Data](out: DecoupledIO[T], depth: Int = 1): DecoupledIO[T] = {
+    val pipe = Module(new Pipeline[T](out.bits.cloneType, depth))
+    out <> pipe.io.out
+    pipe.io.in
+  }
+  def apply[T <: Data](in: DecoupledIO[T], depth: Int = 1): DecoupledIO[T] = {
+    val pipe = Module(new Pipeline[T](in.bits.cloneType, depth))
+    pipe.io.in <> in
+    pipe.io.out
+  }
+}
+
 object RegNextN {
   def apply[T <: Data](in: T, n: Int, initOpt: Option[T] = None): T = {
     (0 until n).foldLeft(in){
