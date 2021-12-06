@@ -147,12 +147,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     a_req_buffer.io.in <> a_req
   }
   mshrAlloc.io.a_req <> a_req_buffer.io.out
-  if(cacheParams.level == 3) { // LLC
+  if(ctrl.nonEmpty) { // LLC
     val alloc_C_arb = Module(new Arbiter(new MSHRRequest, 2))
     alloc_C_arb.io.in(0) <> sinkC.io.alloc
-//    alloc_C_arb.io.in(1) <> io.cmo.req
-    alloc_C_arb.io.in(1) <> DontCare
-    alloc_C_arb.io.in(1).valid := false.B
+    alloc_C_arb.io.in(1) <> ctrl.get.io.cmo_req
     mshrAlloc.io.c_req <> alloc_C_arb.io.out
   } else {
     mshrAlloc.io.c_req <> sinkC.io.alloc

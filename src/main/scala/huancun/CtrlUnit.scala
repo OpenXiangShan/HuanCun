@@ -199,4 +199,7 @@ object CacheCMD {
   def CMD_W_DATA = 7.U(8.W)
   def CMD_W_S_DIR = 8.U(8.W)
   def CMD_W_C_DIR = 9.U(8.W)
+  def CMD_CMO_INV = (0 + 16).U(8.W)
+  def CMD_CMO_CLEAN = (1 + 16).U(8.W)
+  def CMD_CMO_FLUSH = (2 + 16).U(8.W)
 }

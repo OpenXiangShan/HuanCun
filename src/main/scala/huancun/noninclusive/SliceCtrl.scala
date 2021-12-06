@@ -21,6 +21,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     val dir_result = Flipped(ValidIO(new DirResult()))
     val bs_r_addr = DecoupledIO(new DSAddress())
     val bs_r_data = Input(new DSData())
+    val cmo_req = DecoupledIO(new MSHRRequest())
   })
 
   val req_reg = RegEnable(io.req.bits, io.req.fire())
@@ -45,6 +46,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   val s_data_write = RegInit(beatSize.U)
   val s_data_read = RegInit(beatSize.U)
   val s_dir_read = RegInit(false.B)
+  val s_cmo = RegInit(false.B)
 
   when(io.req.fire()){
     switch(io.req.bits.cmd){
@@ -77,6 +79,15 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
       }
       is(CacheCMD.CMD_W_DATA){
         s_data_write := 0.U
+      }
+      is(CacheCMD.CMD_CMO_INV){
+        s_cmo := true.B
+      }
+      is(CacheCMD.CMD_CMO_CLEAN){
+        s_cmo := true.B
+      }
+      is(CacheCMD.CMD_CMO_FLUSH){
+        s_cmo := true.B
       }
     }
   }
@@ -184,6 +195,29 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   when(io.c_tag_w.fire()){
     s_wb_client_tag := false.B
     done := true.B
+  }
+
+  io.cmo_req.bits.channel := 4.U
+  io.cmo_req.bits.opcode := DontCare
+  io.cmo_req.bits.param := io.req.bits.cmd(1, 0)
+  io.cmo_req.bits.size := DontCare
+  io.cmo_req.bits.source := DontCare
+  io.cmo_req.bits.set := io.req.bits.set
+  io.cmo_req.bits.tag := io.req.bits.tag
+  io.cmo_req.bits.off := 0.U
+  io.cmo_req.bits.bufIdx := DontCare
+  io.cmo_req.bits.needHint.foreach(_ := false.B)
+  io.cmo_req.bits.isPrefetch.foreach(_ := false.B)
+  io.cmo_req.bits.alias.foreach(_ := false.B)
+  io.cmo_req.bits.preferCache := false.B
+  io.cmo_req.bits.dirty := false.B
+  io.cmo_req.bits.fromProbeHelper := false.B
+  io.cmo_req.bits.fromCmoHelper := true.B
+  io.cmo_req.bits.needProbeAckData.foreach(_ := false.B)
+
+  io.cmo_req.valid := s_cmo
+  when(io.cmo_req.fire()){
+    s_cmo := false.B
   }
 
   io.req.ready := !busy
