@@ -78,7 +78,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s1_counter = RegInit(0.U(beatBits.W)) // how many beats have been sent
   val s1_total_beats = Mux(s1_needData, totalBeats(s1_req.size), 0.U(beatBits.W))
   val s1_beat = startBeat(s1_req.off) | s1_counter
-  val s1_valid_r = (busy || io.task.valid) && s1_needData && !s1_block_r
+  val s1_valid_r = (busy || (io.task.valid && io.task.bits.opcode =/= TLMessages.PutPartialData)) && s1_needData && !s1_block_r
   val s1_last = s1_counter === s1_total_beats
   val s1_bypass_hit = io.bypass_read.valid && io.bypass_read.ready
   val s1_bypass_data = io.bypass_read.buffer_data
@@ -114,7 +114,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     }
   }
   io.task.ready := !busy
-  s1_valid := (busy || io.task.valid) && (
+  s1_valid := (busy || (io.task.valid && io.task.bits.opcode =/= TLMessages.PutPartialData)) && (
     !s1_valid_r ||
       Mux(s1_req.useBypass,
         s1_bypass_hit,                    // wait data from refill buffer
