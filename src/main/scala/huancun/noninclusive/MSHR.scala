@@ -176,7 +176,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val probeAckDataThrough = RegInit(false.B)
   val probeAckDataDrop = RegInit(false.B)
-  val probeAckDataSave = !probeAckDataThrough && !probeAckDataDrop
+  val probeAckDataSave = RegInit(false.B)
 
   def probe_next_state(state: UInt, param: UInt): UInt = Mux(
     isT(state) && param === toT,
@@ -814,17 +814,23 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     )
   }
 
-  when(req.fromB && io.dirResult.valid) {
-    will_probeack_through := clients_have_T
-    will_drop_probeack := !clients_have_T
-    will_save_probeack := will_probeack_through && !io_probeAckDataThrough && self_meta.hit && req.param === toB
-    probeAckDataThrough := will_probeack_through
-    probeAckDataDrop := will_drop_probeack
-  }
+  when(io.dirResult.valid) {
+    when(req.fromB) {
+      will_probeack_through := clients_have_T
+      will_drop_probeack := !clients_have_T
+      will_save_probeack := will_probeack_through && !io_probeAckDataThrough && self_meta.hit && req.param === toB
+      probeAckDataThrough := will_probeack_through
+      probeAckDataDrop := will_drop_probeack
+      probeAckDataSave := will_save_probeack
+    }.otherwise {
+      probeAckDataSave := !probeAckDataThrough && !probeAckDataDrop
+    }
 
-  when(req.fromCmoHelper && io.dirResult.valid) {
-    probeAckDataThrough := req.param =/= 0.U && (clients_have_T && !self_meta.hit) // Clean & Flush
-    probeAckDataDrop := req.param === 0.U // Invalidate
+    when(req.fromCmoHelper) {
+      probeAckDataThrough := req.param =/= 0.U && (clients_have_T && !self_meta.hit) // Clean & Flush
+      probeAckDataDrop := req.param === 0.U // Invalidate
+      probeAckDataSave := !probeAckDataDrop && !probeAckDataThrough
+    }
   }
 
   val no_wait = w_probeacklast && w_grantlast && w_releaseack && w_grantack
@@ -1270,6 +1276,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     releaseDrop := false.B
     probeAckDataThrough := false.B
     probeAckDataDrop := false.B
+    probeAckDataSave := false.B
     probe_helper_finish := false.B
   }
   io.status.bits.will_free := will_be_free
