@@ -1054,7 +1054,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     Mux(
       self_meta.hit,
       Mux(req.param === NtoB && !req_promoteT, false.B, self_meta.dirty),
-      gotDirty
+      gotDirty || probe_dirty
     ),
     false.B
   )
