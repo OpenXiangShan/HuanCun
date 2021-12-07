@@ -140,7 +140,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   }
 
   val outData = Wire(Vec(nrBanks, UInt((8 * bankBytes).W)))
-
+  val error = Wire(Vec(nrBanks, Bool()))
   val bank_en = Wire(Vec(nrBanks, Bool()))
   val sel_req = Wire(Vec(nrBanks, new DSRequest))
   dontTouch(bank_en)
@@ -174,20 +174,21 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     bankedData(i).io.r.req.valid := ren
     bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
     val decode = dataCode.decode(bankedData(i).io.r.resp.data(0))
+    error(i) := decode.error
     outData(i) := decode.uncorrected
   }
-
-  io.ecc := DontCare
 
   val dataSelModules = Array.fill(stackSize){
     Module(new DataSel(nrStacks, 2, bankBytes * 8))
   }
   val data_grps = outData.grouped(stackSize).toList.transpose
+  val err_grps = error.grouped(stackSize).toList.transpose
   val d_sel = sourceD_rreq.bankEn.asBools().grouped(stackSize).toList.transpose
   val c_sel = sourceC_req.bankEn.asBools().grouped(stackSize).toList.transpose
   for(i <- 0 until stackSize){
     val dataSel = dataSelModules(i)
     dataSel.io.in := VecInit(data_grps(i))
+    dataSel.io.err_in := VecInit(err_grps(i))
     dataSel.io.sel(0) := Cat(d_sel(i).reverse)
     dataSel.io.sel(1) := Cat(c_sel(i).reverse)
     dataSel.io.en(0) := io.sourceD_raddr.fire()
@@ -195,7 +196,14 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   }
 
   io.sourceD_rdata.data := Cat(dataSelModules.map(_.io.out(0)).reverse)
+  io.sourceD_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(0))).orR()
   io.sourceC_rdata.data := Cat(dataSelModules.map(_.io.out(1)).reverse)
+  io.sourceC_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(1))).orR()
+
+  io.ecc.errCode := Mux(io.sourceD_rdata.corrupt || io.sourceC_rdata.corrupt,
+    io.ecc.ERR_DATA,
+    0.U
+  )
 
   val debug_stack_used = PopCount(bank_en.grouped(stackSize).toList.map(seq => Cat(seq).orR))
 
@@ -208,17 +216,21 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) extends HuanCunModule {
 
   val io = IO(new Bundle() {
+    val err_in = Input(Vec(inNum, Bool()))
     val in = Input(Vec(inNum, UInt(width.W)))
     val sel = Input(Vec(outNum, UInt(inNum.W))) // one-hot sel mask
     val en = Input(Vec(outNum, Bool()))
     val out = Output(Vec(outNum, UInt(width.W)))
+    val err_out = Output(Vec(outNum, Bool()))
   })
 
   for(i <- 0 until outNum){
     val sel_r = RegNextN(io.sel(i), sramLatency - 2)
     val odata = Mux1H(sel_r, io.in)
+    val oerrs = Mux1H(sel_r, io.err_in)
     val en = RegNextN(io.en(i), sramLatency - 2)
     io.out(i) := RegNext(RegEnable(odata, en))
+    io.err_out(i) := RegNext(RegEnable(oerrs.orR(), false.B, en), false.B)
   }
 
 }

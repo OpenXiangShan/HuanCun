@@ -182,6 +182,7 @@ class DSAddress(implicit p: Parameters) extends HuanCunBundle {
 
 class DSData(implicit p: Parameters) extends HuanCunBundle {
   val data = UInt((beatBytes * 8).W)
+  val corrupt = Bool()
 }
 
 class SourceDHazard(implicit p: Parameters) extends HuanCunBundle {

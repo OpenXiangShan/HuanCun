@@ -576,12 +576,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   if (ctrl.nonEmpty) {
     ctrl.get.io.req <> io.ctl_req
     io.ctl_resp <> ctrl.get.io.resp
-    io.ctl_ecc <> DontCare
-    val eccMask = Cat(ms.map(m => m.io.ecc.errCode =/= 0.U && m.io.status.valid))
-    val valid_eccMask = ~(leftOR(eccMask) << 1) & eccMask
-    val ms_errCode = VecInit(ms.map(_.io.ecc.errCode))(OHToUInt(valid_eccMask))
-    io.ctl_ecc.bits.errCode := Mux(dataStorage.io.ecc.errCode =/= 0.U, dataStorage.io.ecc.errCode, ms_errCode)
-    io.ctl_ecc.valid := Cat(eccMask).orR()
+    val tag_error = RegNext(MuxCase(
+      0.U,
+      ms.map(m => (m.io.status.valid && m.io.ecc.errCode =/= 0.U, m.io.ecc.errCode))
+    ), 0.U)
+    val data_error = RegNext(dataStorage.io.ecc.errCode, 0.U)
+    io.ctl_ecc.bits.errCode := Mux(tag_error.orR(), tag_error, data_error)
+    io.ctl_ecc.valid := tag_error.orR() || data_error.orR()
   } else {
     io.ctl_req <> DontCare
     io.ctl_resp <> DontCare

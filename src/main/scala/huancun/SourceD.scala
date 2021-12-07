@@ -157,9 +157,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s2_d.bits.sink := s2_req.sinkId
   s2_d.bits.size := s2_req.size
   s2_d.bits.source := s2_req.sourceId
-  s2_d.bits.denied := false.B
+  s2_d.bits.denied := s2_req.denied
   s2_d.bits.data := s1_queue.io.deq.bits.data
-  s2_d.bits.corrupt := false.B
+  s2_d.bits.corrupt := s2_d.bits.denied
   s2_d.bits.echo.lift(DirtyKey).foreach(_ := s2_req.dirty)
 
   val s2_can_go = Mux(s2_d.valid, s2_d.ready, s3_ready && (!s2_valid_pb || pb_ready))
@@ -211,9 +211,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s3_d.bits.sink := s3_req.sinkId
   s3_d.bits.size := s3_req.size
   s3_d.bits.source := s3_req.sourceId
-  s3_d.bits.denied := false.B
+  s3_d.bits.denied := s3_req.denied
   s3_d.bits.data := s3_rdata
-  s3_d.bits.corrupt := false.B
+  s3_d.bits.corrupt := s3_req.denied || s3_queue.io.deq.bits.corrupt
   s3_d.bits.echo.lift(DirtyKey).foreach(_ := s3_req.dirty)
 
   s3_queue.io.enq.valid := RegNextN(
@@ -252,6 +252,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.bs_waddr.bits.beat := s4_beat
   io.bs_waddr.bits.write := true.B
   io.bs_wdata.data := mergedData
+  io.bs_wdata.corrupt := false.B
 
   s4_ready := !s4_full || io.bs_waddr.ready || !s4_need_pb
 
