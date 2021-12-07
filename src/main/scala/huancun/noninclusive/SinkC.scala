@@ -124,20 +124,23 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val task_w_safe = !(io.sourceD_r_hazard.valid &&
     io.sourceD_r_hazard.bits.safe(task.set, task.way))
 
+  val w_save_done_r = RegInit(false.B)
+  val w_through_done_r = RegInit(false.B)
+
   io.task.ready := !busy && task_w_safe
   when(io.task.fire()) {
     busy := true.B
     when(!task.save && !task.drop) {
       beatValsSave(task.bufIdx).foreach(_ := false.B)
-      w_counter_save := (beats - 1).U
+      w_save_done_r := true.B
     }
     when(!task.release && !task.drop) {
       beatValsThrough(task.bufIdx).foreach(_ := false.B)
-      w_counter_through := (beats - 1).U
+      w_through_done_r := true.B
     }
   }
 
-  io.bs_waddr.valid := busy && task_r.save
+  io.bs_waddr.valid := busy && task_r.save && !w_save_done_r
   io.bs_waddr.bits.way := task_r.way
   io.bs_waddr.bits.set := task_r.set
   io.bs_waddr.bits.beat := w_counter_save
@@ -145,7 +148,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.bs_waddr.bits.noop := !beatValsSave(task_r.bufIdx)(w_counter_save)
   io.bs_wdata.data := buffer(task_r.bufIdx)(w_counter_save)
 
-  io.release.valid := busy && task_r.release && beatValsThrough(task_r.bufIdx)(w_counter_through)
+  io.release.valid := busy && task_r.release && beatValsThrough(task_r.bufIdx)(w_counter_through) && !w_through_done_r
   io.release.bits.address := Cat(task_r.tag, task_r.set, task_r.off)
   io.release.bits.data := buffer(task_r.bufIdx)(w_counter_through)
   io.release.bits.opcode := task_r.opcode
@@ -162,7 +165,14 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   when(w_fire_save) { w_counter_save := w_counter_save + 1.U }
   when(w_fire_through) { w_counter_through := w_counter_through + 1.U }
 
-  val w_done = (w_counter_save === (beats - 1).U) && (w_counter_through === (beats - 1).U) && w_fire
+  when((w_counter_save === (beats-1).U) && w_fire_save) { w_save_done_r := true.B }
+  when((w_counter_through === (beats-1).U) && w_fire_through) { w_through_done_r := true.B }
+
+  val w_done =
+      ((w_counter_save === (beats-1).U) && (w_counter_through === (beats-1).U) && w_fire_save && w_fire_through) ||
+      ((w_counter_save === (beats-1).U) && w_through_done_r && w_fire_save) ||
+      (w_save_done_r && (w_counter_through === (beats-1).U) && w_fire_through)
+
   when(w_done || busy && task_r.drop) {
     w_counter_save := 0.U
     w_counter_through := 0.U
@@ -171,5 +181,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     beatValsThrough(task_r.bufIdx).foreach(_ := false.B)
     bufferSetVals(task_r.bufIdx) := false.B
     beatValsTimer(task_r.bufIdx) := 0.U
+    w_save_done_r := false.B
+    w_through_done_r := false.B
   }
 }
