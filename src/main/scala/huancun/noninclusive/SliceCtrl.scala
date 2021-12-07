@@ -176,6 +176,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.bs_w_addr.bits.write := true.B
   io.bs_w_addr.bits.noop := false.B
   io.bs_w_data.data := data_beats(s_data_write)
+  io.bs_w_data.corrupt := false.B
   when(io.bs_w_addr.fire()){
     s_data_write := s_data_write + 1.U
   }

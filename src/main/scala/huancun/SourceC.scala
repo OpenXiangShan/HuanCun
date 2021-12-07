@@ -97,7 +97,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   queue.io.enq.bits.source := pipeOut.bits.task.source
   queue.io.enq.bits.address := Cat(pipeOut.bits.task.tag, pipeOut.bits.task.set, 0.U(offsetBits.W))
   queue.io.enq.bits.data := io.bs_rdata.data
-  queue.io.enq.bits.corrupt := false.B
+  queue.io.enq.bits.corrupt := io.bs_rdata.corrupt
   queue.io.enq.bits.user.lift(PreferCacheKey).foreach(_ := true.B)
   queue.io.enq.bits.echo.lift(DirtyKey).foreach(_ := pipeOut.bits.task.dirty)
 

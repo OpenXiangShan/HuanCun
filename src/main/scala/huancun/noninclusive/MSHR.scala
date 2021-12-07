@@ -776,17 +776,32 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     reset_all_flags()
     handleEcc()
 
-    when(req.fromC) {
-      when(req.fromCmoHelper) {
-        x_schedule()
-      }.otherwise {
-        c_schedule()
+    when(meta.self.error || meta.clients.error){
+      when(req.fromC){
+        s_execute := false.B
       }
-    }.elsewhen(req.fromB) {
-      b_schedule()
-    }.otherwise {
-      a_schedule()
-    }
+      when(req.fromB){
+        s_probeack := false.B
+      }
+      when(req.fromA) {
+        s_execute := false.B
+        when(req_acquire){
+          w_grantack := false.B
+        }
+      }
+    }.otherwise({
+      when(req.fromC) {
+        when(req.fromCmoHelper) {
+          x_schedule()
+        }.otherwise {
+          c_schedule()
+        }
+      }.elsewhen(req.fromB) {
+        b_schedule()
+      }.otherwise {
+        a_schedule()
+      }
+    })
   }
 
   when(io_releaseThrough && io.dirResult.valid && req.fromC) {
@@ -1048,7 +1063,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   od.size := req.size
   od.way := self_meta.way
   od.off := req.off
-  od.denied := bad_grant
+  od.denied := bad_grant || (meta.self.error || meta.clients.error)
   od.dirty := Mux(
     req_acquire,
     Mux(

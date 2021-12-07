@@ -147,6 +147,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.bs_waddr.bits.write := true.B
   io.bs_waddr.bits.noop := !beatValsSave(task_r.bufIdx)(w_counter_save)
   io.bs_wdata.data := buffer(task_r.bufIdx)(w_counter_save)
+  io.bs_wdata.corrupt := false.B
 
   io.release.valid := busy && task_r.release && beatValsThrough(task_r.bufIdx)(w_counter_through) && !w_through_done_r
   io.release.bits.address := Cat(task_r.tag, task_r.set, task_r.off)
