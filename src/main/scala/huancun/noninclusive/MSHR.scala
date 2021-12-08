@@ -117,11 +117,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
   )
 
-  // self cache does not have the acquired block, but some other client owns the block
-  val transmit_from_other_client = !self_meta.hit && VecInit(clients_meta.zipWithIndex.map {
-    case (meta, i) =>
-      (req.opcode === Get || i.U =/= iam) && meta.hit
-  }).asUInt.orR
 
   val need_block_downwards = RegInit(false.B)
   val inv_self_dir = RegInit(false.B)
@@ -156,6 +151,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val prefetch_miss_need_probe = prefetch_miss_need_probe_vec.asUInt.orR
   val prefetch_miss = req.opcode === Hint && (prefetch_miss_need_acquire || prefetch_miss_need_probe)
   val prefetch_need_data = prefetch_miss && !self_meta.hit
+
+  // self cache does not have the acquired block, but some other client owns the block
+  val transmit_from_other_client = !self_meta.hit && VecInit(clients_meta.zipWithIndex.map {
+    case (meta, i) =>
+      (req.opcode === Get || i.U =/= iam) && meta.hit
+  }).asUInt.orR && (!req.isPrefetch.getOrElse(false.B) || prefetch_need_data)
 
   val a_need_data = req.fromA && (req.opcode === Get || req_put || req.opcode === AcquireBlock || req.opcode === Hint)
 
