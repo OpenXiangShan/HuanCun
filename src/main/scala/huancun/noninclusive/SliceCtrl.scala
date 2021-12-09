@@ -24,9 +24,21 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     val cmo_req = DecoupledIO(new MSHRRequest())
   })
 
-  val req_reg = RegEnable(io.req.bits, io.req.fire())
+  val req_reg = Reg(new CtrlReq)
   val busy = RegInit(false.B)
   val done = RegInit(false.B)
+
+  val full_address = Cat(
+    io.req.bits.tag(fullTagBits - 1, 0),
+    io.req.bits.set(setBits - 1, 0),
+    0.U(offsetBits.W)
+  )
+  val (tag, set, _) = parseAddress(full_address)
+  when(io.req.fire()){
+    req_reg := io.req.bits
+    req_reg.set := set
+    req_reg.tag := tag
+  }
 
   val data_beats = Wire(Vec(beatSize, UInt((8 * beatBytes).W)))
   data_beats := req_reg.data.asTypeOf(data_beats)

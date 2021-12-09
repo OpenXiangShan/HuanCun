@@ -141,7 +141,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   if(prefetchOpt.nonEmpty){
     val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
     alloc_A_arb.io.in(0) <> a_req
-    alloc_A_arb.io.in(1) <> io.prefetch.get.req
+    alloc_A_arb.io.in(1) <> pftReqToMSHRReq(io.prefetch.get.req)
     a_req_buffer.io.in <> alloc_A_arb.io.out
   } else {
     a_req_buffer.io.in <> a_req
@@ -591,6 +591,33 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     io.ctl_resp.valid := false.B
     io.ctl_ecc.valid := false.B
   }
+
+  def pftReqToMSHRReq(pftReq: DecoupledIO[PrefetchReq]): DecoupledIO[MSHRRequest] = {
+    val mshrReq = Wire(DecoupledIO(new MSHRRequest()))
+    val address = Cat(pftReq.bits.tag, pftReq.bits.set, 0.U(offsetBits.W))
+    val (tag, set, off) = parseAddress(address)
+    mshrReq.valid := pftReq.valid
+    mshrReq.bits.opcode := TLMessages.Hint
+    mshrReq.bits.param := Mux(pftReq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
+    mshrReq.bits.size := log2Up(blockBytes).U
+    mshrReq.bits.source := pftReq.bits.source
+    mshrReq.bits.tag := tag
+    mshrReq.bits.set := set
+    mshrReq.bits.off := off
+    mshrReq.bits.channel := "b001".U
+    mshrReq.bits.needHint.foreach(_ := false.B)
+    mshrReq.bits.isPrefetch.foreach(_ := true.B)
+    mshrReq.bits.alias.foreach(_ := DontCare)
+    mshrReq.bits.preferCache := true.B
+    mshrReq.bits.fromProbeHelper := false.B
+    mshrReq.bits.fromCmoHelper := false.B
+    mshrReq.bits.bufIdx := DontCare
+    mshrReq.bits.dirty := false.B
+    mshrReq.bits.needProbeAckData.foreach(_ := false.B)
+    pftReq.ready := mshrReq.ready
+    mshrReq
+  }
+
   val perfinfo = IO(Output(Vec(numPCntHc, (UInt(6.W)))))
   perfinfo := DontCare
   if(!cacheParams.inclusive){

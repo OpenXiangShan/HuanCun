@@ -27,11 +27,11 @@ trait HasBOPParams extends HasHuanCunParameters {
   val bopParams = prefetchOpt.get.asInstanceOf[BOPParameters]
   // Best offset
   val defaultMinAddrBits = offsetBits + log2Up(bopParams.rrTableEntries) + bopParams.rrTagBits
-  val defaultConfig = addressBits >= defaultMinAddrBits
+  val defaultConfig = fullAddressBits >= defaultMinAddrBits
 
   val rrTableEntries = if (defaultConfig) bopParams.rrTableEntries else 2
   val rrIdxBits = log2Up(rrTableEntries)
-  val rrTagBits = if (defaultConfig) bopParams.rrTagBits else (addressBits - offsetBits - rrIdxBits)
+  val rrTagBits = if (defaultConfig) bopParams.rrTagBits else (fullAddressBits - offsetBits - rrIdxBits)
   val scoreBits = bopParams.scoreBits
   val roundMax = bopParams.roundMax
   val badScore = bopParams.badScore
@@ -63,7 +63,7 @@ class ScoreTableEntry(implicit p: Parameters) extends BOPBundle {
 
 class TestOffsetReq(implicit p: Parameters) extends BOPBundle {
   // find whether (X-d) is in recent request table
-  val addr = UInt(addressBits.W)
+  val addr = UInt(fullAddressBits.W)
   val testOffset = UInt(offsetWidth.W)
   val ptr = UInt(scoreTableIdxBits.W)
 }
@@ -81,7 +81,7 @@ class TestOffsetBundle(implicit p: Parameters) extends BOPBundle {
 
 class RecentRequestTable(implicit p: Parameters) extends BOPModule {
   val io = IO(new Bundle {
-    val w = Flipped(DecoupledIO(UInt(addressBits.W)))
+    val w = Flipped(DecoupledIO(UInt(fullAddressBits.W)))
     val r = Flipped(new TestOffsetBundle)
   })
 
@@ -92,7 +92,7 @@ class RecentRequestTable(implicit p: Parameters) extends BOPModule {
   //        +-------+------------------+---------------+----------------------+
   //    or: |  ...  |    12-bit tag    |  8-bit hash1  |  6-bit cache offset  |
   //        +-------+------------------+---------------+----------------------+
-  def lineAddr(addr: UInt) = addr(addressBits - 1, offsetBits)
+  def lineAddr(addr: UInt) = addr(fullAddressBits - 1, offsetBits)
   def hash1(addr:    UInt) = lineAddr(addr)(rrIdxBits - 1, 0)
   def hash2(addr:    UInt) = lineAddr(addr)(2 * rrIdxBits - 1, rrIdxBits)
   def idx(addr:      UInt) = hash1(addr) ^ hash2(addr)
@@ -130,7 +130,7 @@ class RecentRequestTable(implicit p: Parameters) extends BOPModule {
 
 class OffsetScoreTable(implicit p: Parameters) extends BOPModule {
   val io = IO(new Bundle {
-    val req = Flipped(DecoupledIO(UInt(addressBits.W)))
+    val req = Flipped(DecoupledIO(UInt(fullAddressBits.W)))
     val prefetchOffset = Output(UInt(offsetWidth.W))
     val test = new TestOffsetBundle
   })
@@ -235,8 +235,8 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
     req_valid := false.B
   }
   when(scoreTable.io.req.fire()) {
-    req.tag := parseAddress(newAddr)._1
-    req.set := parseAddress(newAddr)._2
+    req.tag := parseFullAddress(newAddr)._1
+    req.set := parseFullAddress(newAddr)._2
     req.needT := io.train.bits.needT
     req.source := io.train.bits.source
     req_valid := !crossPage // stop prefetch when prefetch req crosses pages

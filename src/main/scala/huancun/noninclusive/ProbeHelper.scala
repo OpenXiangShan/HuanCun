@@ -24,10 +24,10 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   val req_client = OHToUInt(getClientBitOH(dir.sourceId))
   val req = Wire(new MSHRRequest)
 
-  val full_addr = Cat(dir.clients.tag, dir.set(clientSetBits - 1, 0))
-  val tgt_tag = full_addr.head(tagBits)
-  val tgt_set = full_addr.tail(tagBits).head(setBits)
-  val tgt_off = full_addr.tail(tagBits).tail(setBits)
+  // addr without bankIdx
+  val addr = Cat(dir.clients.tag, dir.set(clientSetBits - 1, 0))
+  val tgt_tag = addr.head(tagBits)
+  val tgt_set = addr.tail(tagBits).head(setBits)
 
   req.fromProbeHelper := true.B
   req.opcode := TLMessages.Probe
@@ -37,7 +37,7 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   req.source := dir.sourceId
   req.tag := tgt_tag
   req.set := tgt_set
-  req.off := tgt_off
+  req.off := 0.U
   req.bufIdx := DontCare
   req.needHint.foreach(_ := false.B)
   req.isPrefetch.foreach(_ := false.B)

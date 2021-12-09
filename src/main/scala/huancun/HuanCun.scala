@@ -80,13 +80,18 @@ trait HasHuanCunParameters {
 
   lazy val edgeIn = p(EdgeInKey)
   lazy val edgeOut = p(EdgeOutKey)
+  lazy val bankBits = p(BankBitsKey)
 
   lazy val clientBits = edgeIn.client.clients.count(_.supports.probe)
   lazy val sourceIdBits = edgeIn.bundle.sourceBits
   lazy val msgSizeBits = edgeIn.bundle.sizeBits
 
-  lazy val addressBits = edgeOut.bundle.addressBits
-  lazy val tagBits = addressBits - setBits - offsetBits
+  // width params with bank idx (used in prefetcher / ctrl unit)
+  lazy val fullAddressBits = edgeOut.bundle.addressBits
+  lazy val fullTagBits = fullAddressBits - setBits - offsetBits
+  // width params without bank idx (used in slice)
+  lazy val addressBits = fullAddressBits - bankBits
+  lazy val tagBits = fullTagBits - bankBits
 
   lazy val outerSinkBits = edgeOut.bundle.sinkBits
 
@@ -122,9 +127,16 @@ trait HasHuanCunParameters {
     }
   }
 
-  def parseAddress(x: UInt): (UInt, UInt, UInt) = {
+  def parseFullAddress(x: UInt): (UInt, UInt, UInt) = {
     val offset = x // TODO: check address mapping
     val set = offset >> offsetBits
+    val tag = set >> setBits
+    (tag(fullTagBits - 1, 0), set(setBits - 1, 0), offset(offsetBits - 1, 0))
+  }
+
+  def parseAddress(x: UInt): (UInt, UInt, UInt) = {
+    val offset = x
+    val set = offset >> (offsetBits + bankBits)
     val tag = set >> setBits
     (tag(tagBits - 1, 0), set(setBits - 1, 0), offset(offsetBits - 1, 0))
   }
@@ -239,6 +251,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val pftParams: Parameters = p.alterPartial {
       case EdgeInKey => node.in.head._2
       case EdgeOutKey => node.out.head._2
+      case BankBitsKey => bankBits
     }
     def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
       val arbiter = Module(new FastArbiter[T](chiselTypeOf(out.bits), in.size))
@@ -265,23 +278,54 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       if(bankBits == 0) true.B else set(bankBits - 1, 0) === bankId.U
     }
 
+    def restoreAddress(x: UInt, idx: Int) = {
+      if(bankBits == 0){
+        x
+      } else {
+        val high = x >> offsetBits
+        val low = x(offsetBits - 1, 0)
+        Cat(high, idx.U(bankBits.W), low)
+      }
+    }
+
     val slices = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
         val slice = Module(new Slice()(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut
+          case BankBitsKey => bankBits
         }))
         slice.io.in <> in
+        in.b.bits.address := restoreAddress(slice.io.in.b.bits.address, i)
         out <> slice.io.out
+        out.a.bits.address := restoreAddress(slice.io.out.a.bits.address, i)
+        out.c.bits.address := restoreAddress(slice.io.out.c.bits.address, i)
 
         slice.io.prefetch.zip(prefetcher).foreach {
           case (s, p) =>
-            prefetchTrains.get(i) <> s.train
             s.req.valid := p.io.req.valid && bank_eq(p.io.req.bits.set, i, bankBits)
             s.req.bits := p.io.req.bits
             prefetchReqsReady(i) := s.req.ready && bank_eq(p.io.req.bits.set, i, bankBits)
-            prefetchResps.get(i) <> Pipeline(s.resp)
+            val train = Pipeline(s.train)
+            val resp = Pipeline(s.resp)
+            prefetchTrains.get(i) <> train
+            prefetchResps.get(i) <> resp
+            // restore to full address
+            if(bankBits != 0){
+              val train_full_addr = Cat(
+                train.bits.tag, train.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
+              )
+              val (train_tag, train_set, _) = s.parseFullAddress(train_full_addr)
+              val resp_full_addr = Cat(
+                resp.bits.tag, resp.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
+              )
+              val (resp_tag, resp_set, _) = s.parseFullAddress(resp_full_addr)
+              prefetchResps.get(i).bits.tag := train_tag
+              prefetchResps.get(i).bits.set := train_set
+              prefetchResps.get(i).bits.tag := resp_tag
+              prefetchResps.get(i).bits.set := resp_set
+            }
         }
         io.perfEvents(i) := slice.perfinfo
         slice
