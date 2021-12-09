@@ -8,7 +8,7 @@ import huancun._
 import huancun.utils.Pipeline
 
 class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
-  val tag = UInt(tagBits.W)
+  val tag = UInt(fullTagBits.W)
   val set = UInt(setBits.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
@@ -16,14 +16,14 @@ class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
 
 class PrefetchResp(implicit p: Parameters) extends PrefetchBundle {
   // val id = UInt(sourceIdBits.W)
-  val tag = UInt(tagBits.W)
+  val tag = UInt(fullTagBits.W)
   val set = UInt(setBits.W)
   def addr = Cat(tag, set, 0.U(offsetBits.W))
 }
 
 class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
   // val addr = UInt(addressBits.W)
-  val tag = UInt(tagBits.W)
+  val tag = UInt(fullTagBits.W)
   val set = UInt(setBits.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
@@ -35,7 +35,7 @@ class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
 
 class PrefetchIO(implicit p: Parameters) extends PrefetchBundle {
   val train = Flipped(DecoupledIO(new PrefetchTrain))
-  val req = DecoupledIO(new MSHRRequest)
+  val req = DecoupledIO(new PrefetchReq)
   val resp = Flipped(DecoupledIO(new PrefetchResp))
 }
 
@@ -82,32 +82,11 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
     case bop: BOPParameters =>
       val pft = Module(new BestOffsetPrefetch)
       val pftQueue = Module(new PrefetchQueue)
-      val pftReq = Wire(DecoupledIO(io.req.bits.cloneType))
+      val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
       pft.io.train <> io.train
       pft.io.resp <> io.resp
       pftQueue.io.enq <> pft.io.req
-      pftQueue.io.deq.ready := pftReq.ready
-      pftReq.valid := pftQueue.io.deq.valid
-      pftReq.bits.opcode := TLMessages.Hint
-      pftReq.bits.param := Mux(pftQueue.io.deq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
-      pftReq.bits.size := log2Up(blockBytes).U
-      pftReq.bits.source := pftQueue.io.deq.bits.source
-      pftReq.bits.set := pftQueue.io.deq.bits.set
-      pftReq.bits.tag := pftQueue.io.deq.bits.tag
-      pftReq.bits.off := 0.U
-      pftReq.bits.channel := "b001".U
-      pftReq.bits.needHint.foreach(_ := false.B)
-      pftReq.bits.isPrefetch.foreach(_ := true.B)
-      pftReq.bits.alias.foreach(_ := DontCare)
-      pftReq.bits.preferCache := true.B
-      pftReq.bits.fromProbeHelper := false.B
-      pftReq.bits.fromCmoHelper := false.B
-      pftReq.bits.bufIdx := DontCare
-      pftReq.bits.dirty := false.B
-      pftReq.bits.needProbeAckData.foreach(_ := false.B)
-
-      val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
-      pipe.io.in <> pftReq
+      pipe.io.in <> pftQueue.io.deq
       io.req <> pipe.io.out
     case _ => assert(cond = false, "Unknown prefetcher")
   }
