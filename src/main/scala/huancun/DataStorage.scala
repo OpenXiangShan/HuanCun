@@ -67,8 +67,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         set = nrRows,
         way = 1,
         shouldReset = false,
-        holdRead = cacheParams.sramClkDivBy2,
-        singlePort = sramSinglePort
+        singlePort = sramSinglePort,
+        clk_div_by_2 = cacheParams.sramClkDivBy2
       )
     )
   }

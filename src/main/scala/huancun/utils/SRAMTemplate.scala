@@ -28,6 +28,15 @@ object HoldUnless {
   def apply[T <: Data](x: T, en: Bool): T = Mux(en, x, RegEnable(x, 0.U.asTypeOf(x), en))
 }
 
+object DelayTwoCycle {
+  def apply[T <: Data](x: T, en: Bool): T = {
+    val en1 = RegNext(en)
+    val data_reg = RegEnable(x, en1)
+    val en2 = RegNext(en1)
+    Mux(en2, data_reg, LFSR64().asTypeOf(data_reg))
+  }
+}
+
 object ReadAndHold {
   def apply[T <: Data](x: Mem[T], addr:         UInt, en: Bool): T = HoldUnless(x.read(addr), en)
   def apply[T <: Data](x: SyncReadMem[T], addr: UInt, en: Bool): T = HoldUnless(x.read(addr, en), RegNext(en))
@@ -88,8 +97,13 @@ class SRAMWriteBus[T <: Data](private val gen: T, val set: Int, val way: Int = 1
   }
 }
 
-class SRAMTemplate[T <: Data](gen: T, set: Int, way: Int = 1,
-                              shouldReset: Boolean = false, holdRead: Boolean = false, singlePort: Boolean = false, bypassWrite: Boolean = false) extends Module {
+class SRAMTemplate[T <: Data]
+(
+  gen: T, set: Int, way: Int = 1,
+  shouldReset: Boolean = false, holdRead: Boolean = false,
+  singlePort: Boolean = false, bypassWrite: Boolean = false,
+  clk_div_by_2: Boolean = false
+) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
@@ -139,8 +153,14 @@ class SRAMTemplate[T <: Data](gen: T, set: Int, way: Int = 1,
   }
 
   // hold read data for SRAMs
-  val rdata = (if (holdRead) HoldUnless(mem_rdata, RegNext(realRen))
-  else mem_rdata).map(_.asTypeOf(gen))
+  val rdata = (
+    if(clk_div_by_2){
+      DelayTwoCycle(mem_rdata, realRen)
+    } else if (holdRead) {
+      HoldUnless(mem_rdata, RegNext(realRen))
+    } else {
+      mem_rdata
+    }).map(_.asTypeOf(gen))
 
   io.r.resp.data := VecInit(rdata)
   io.r.req.ready := !resetState && (if (singlePort) !wen else true.B)
