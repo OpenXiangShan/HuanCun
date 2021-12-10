@@ -162,6 +162,13 @@ class SRAMTemplate[T <: Data]
       mem_rdata
     }).map(_.asTypeOf(gen))
 
+  if(clk_div_by_2){
+    CustomAnnotations.annotateClkDivBy2(this)
+  }
+  if(!isPow2(set)){
+    CustomAnnotations.annotateSpecialDepth(this)
+  }
+
   io.r.resp.data := VecInit(rdata)
   io.r.req.ready := !resetState && (if (singlePort) !wen else true.B)
   io.w.req.ready := true.B
