@@ -321,8 +321,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
                 resp.bits.tag, resp.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
               )
               val (resp_tag, resp_set, _) = s.parseFullAddress(resp_full_addr)
-              prefetchResps.get(i).bits.tag := train_tag
-              prefetchResps.get(i).bits.set := train_set
+              prefetchTrains.get(i).bits.tag := train_tag
+              prefetchTrains.get(i).bits.set := train_set
               prefetchResps.get(i).bits.tag := resp_tag
               prefetchResps.get(i).bits.set := resp_set
             }
