@@ -274,7 +274,7 @@ class Directory(implicit p: Parameters)
   resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
   resp.bits.clients.way := clientResp.bits.way
   resp.bits.clients.tag := clientResp.bits.tag
-  resp.bits.clients.error := clientResp.bits.error
+  resp.bits.clients.error := Cat(resp.bits.clients.states.map(_.hit)).orR() && clientResp.bits.error
   resp.bits.clients.states.zip(clientResp.bits.dir).foreach{
     case (s, dir) =>
       s.state := dir.state

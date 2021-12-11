@@ -1039,7 +1039,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oc.dirty := Mux(req.fromB, probe_dirty || self_meta.hit && self_meta.dirty, self_meta.dirty)
 
   od.sinkId := io.id
-  od.useBypass := !self_meta.hit && !probe_dirty && !nested_c_hit
+  od.useBypass := !self_meta.hit && !probe_dirty && !nested_c_hit && !(meta.self.error || meta.clients.error)
   od.sourceId := req.source
   od.set := req.set
   od.tag := req.tag

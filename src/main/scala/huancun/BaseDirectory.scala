@@ -158,7 +158,7 @@ class SubDirectory[T <: Data](
   io.resp.bits.way := Mux(reqReg.wayMode, reqReg.way, Mux(io.resp.bits.hit, hitWay, chosenWay))
   io.resp.bits.dir := meta
   io.resp.bits.tag := tag
-  io.resp.bits.error := tag_decode.error
+  io.resp.bits.error := io.resp.bits.hit && tag_decode.error
 
   metaArray.io.w(
     !resetFinish || dir_wen,
