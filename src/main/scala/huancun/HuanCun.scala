@@ -229,17 +229,24 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       val perfEvents = Vec(banks, Vec(numPCntHc,(Output(UInt(6.W)))))
     })
 
-    val sizeBytes = cacheParams.sets * cacheParams.ways * cacheParams.blockBytes
-    val sizeStr = sizeBytes match {
-      case _ if sizeBytes > 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
-      case _ if sizeBytes > 1024        => (sizeBytes / 1024) + "KB"
+    val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
+    def sizeBytesToStr(sizeBytes: Double): String = sizeBytes match {
+      case _ if sizeBytes >= 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
+      case _ if sizeBytes >= 1024        => (sizeBytes / 1024) + "KB"
       case _                            => "B"
     }
+    val sizeStr = sizeBytesToStr(sizeBytes)
     val bankBits = if(banks == 1) 0 else log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
     println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) $prefetch ======")
     println(s"bankBits: ${bankBits}")
+    println(s"sets:${cacheParams.sets} ways:${cacheParams.ways} blockBytes:${cacheParams.blockBytes}")
+    if(!cacheParams.inclusive){
+      val clientParam = cacheParams.clientCaches.head
+      println(s"[client] size:${sizeBytesToStr(clientParam.capacity.toDouble)}")
+      println(s"[client] sets:${clientParam.sets} ways:${clientParam.ways} blockBytes:${clientParam.blockBytes}")
+    }
     def print_bundle_fields(fs: Seq[BundleFieldBase], prefix: String) = {
       if(fs.nonEmpty){
         println(fs.map{f => s"$prefix/${f.key.name}: (${f.data.getWidth}-bit)"}.mkString("\n"))
