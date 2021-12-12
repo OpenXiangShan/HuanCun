@@ -57,13 +57,13 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   def dataCode: Code = Code.fromString(p(HCCacheParamsKey).dataECC)
 
-  val eccDataBits = dataCode.width(8*bankBytes)
-  println(s"extra ECC Databits:${eccDataBits - (8*bankBytes)}")
+  val eccBits = dataCode.width(8*bankBytes) - 8 * bankBytes
+  println(s"Data ECC bits:$eccBits")
 
   val bankedData = Seq.fill(nrBanks) {
     Module(
       new SRAMTemplate(
-        UInt(eccDataBits.W),
+        UInt((8 * bankBytes).W),
         set = nrRows,
         way = 1,
         shouldReset = false,
@@ -72,6 +72,20 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
       )
     )
   }
+  val dataEccArray = if(eccBits > 0) {
+    Seq.fill(nrBanks){
+      Module(
+        new SRAMTemplate(
+          UInt(eccBits.W),
+          set = nrRows,
+          way = 1,
+          shouldReset = false,
+          singlePort = sramSinglePort,
+          clk_div_by_2 = cacheParams.sramClkDivBy2
+        )
+      )
+    }
+  } else null
 
   val stackRdy = if(cacheParams.sramClkDivBy2){
     RegInit(VecInit(Seq.fill(nrStacks){ true.B }))
@@ -166,16 +180,31 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     bankedData(i).io.w.req.valid := wen
     bankedData(i).io.w.req.bits.apply(
       setIdx = selectedReq.index,
-      data = dataCode.encode(selectedReq.data(i)),
+      data = selectedReq.data(i),
       waymask = 1.U
     )
     // Read
     val ren = en && !selectedReq.wen
     bankedData(i).io.r.req.valid := ren
     bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
-    val decode = dataCode.decode(bankedData(i).io.r.resp.data(0))
-    error(i) := decode.error
-    outData(i) := decode.uncorrected
+    // Ecc
+    if(eccBits > 0){
+      dataEccArray(i).io.w.req.valid := wen
+      dataEccArray(i).io.w.req.bits.apply(
+        setIdx = selectedReq.index,
+        data = dataCode.encode(selectedReq.data(i)).head(eccBits),
+        waymask = 1.U
+      )
+      dataEccArray(i).io.r.req.valid := ren
+      dataEccArray(i).io.r.req.bits.apply(setIdx = selectedReq.index)
+      val decode = dataCode.decode(
+        dataEccArray(i).io.r.resp.data(0) ## bankedData(i).io.r.resp.data(0)
+      )
+      error(i) := decode.error
+    } else {
+      error(i) := false.B
+    }
+    outData(i) := bankedData(i).io.r.resp.data(0)
   }
 
   val dataSelModules = Array.fill(stackSize){

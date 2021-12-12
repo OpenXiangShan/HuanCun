@@ -113,13 +113,27 @@ class SubDirectory[T <: Data](
   def tagCode: Code = Code.fromString(p(HCCacheParamsKey).tagECC)
 
   val eccTagBits = tagCode.width(tagBits)
-  println(s"extra ECC Tagbits:${eccTagBits - tagBits}")
-  val tagArray = Module(new SRAMTemplate(UInt(eccTagBits.W), sets, ways, singlePort = true))
-  val tagRead = Wire(Vec(ways, UInt(eccTagBits.W)))
+  val eccBits = eccTagBits - tagBits
+  println(s"Tag ECC bits:$eccBits")
+  val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
+  val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
+  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true))
+  if(eccBits > 0){
+    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true))
+    eccArray.io.w(
+      io.tag_w.fire(),
+      tagCode.encode(io.tag_w.bits.tag).head(eccBits),
+      io.tag_w.bits.set,
+      UIntToOH(io.tag_w.bits.way)
+    )
+    eccRead := eccArray.io.r(io.read.fire(), io.read.bits.set).resp.data
+  } else {
+    eccRead.foreach(_ := 0.U)
+  }
 
   tagArray.io.w(
     io.tag_w.fire(),
-    tagCode.encode(io.tag_w.bits.tag),
+    io.tag_w.bits.tag,
     io.tag_w.bits.set,
     UIntToOH(io.tag_w.bits.way)
   )
@@ -152,8 +166,8 @@ class SubDirectory[T <: Data](
   val (inv, invalidWay) = invalid_way_sel(metas, replaceWay)
   val chosenWay = Mux(inv, invalidWay, replaceWay)
   val meta = metas(io.resp.bits.way)
-  val tag_decode = tagCode.decode(tagRead(io.resp.bits.way))
-  val tag = tag_decode.uncorrected
+  val tag_decode = tagCode.decode(eccRead(io.resp.bits.way) ## tagRead(io.resp.bits.way))
+  val tag = tagRead(io.resp.bits.way)
   io.resp.bits.hit := Cat(hitVec).orR()
   io.resp.bits.way := Mux(reqReg.wayMode, reqReg.way, Mux(io.resp.bits.hit, hitWay, chosenWay))
   io.resp.bits.dir := meta
