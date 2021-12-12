@@ -5,7 +5,7 @@
   * XiangShan is licensed under Mulan PSL v2.
   * You can use this software according to the terms and conditions of the Mulan PSL v2.
   * You may obtain a copy of Mulan PSL v2 at:
-  *          http://license.coscl.org.cn/MulanPSL2
+  * http://license.coscl.org.cn/MulanPSL2
   *
   * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
   * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
@@ -57,7 +57,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   def dataCode: Code = Code.fromString(p(HCCacheParamsKey).dataECC)
 
-  val eccBits = dataCode.width(8*bankBytes) - 8 * bankBytes
+  val eccBits = dataCode.width(8 * bankBytes) - 8 * bankBytes
   println(s"Data ECC bits:$eccBits")
 
   val bankedData = Seq.fill(nrBanks) {
@@ -72,11 +72,11 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
       )
     )
   }
-  val dataEccArray = if(eccBits > 0) {
-    Seq.fill(nrBanks){
+  val dataEccArray = if (eccBits > 0) {
+    Seq.fill(nrStacks) {
       Module(
         new SRAMTemplate(
-          UInt(eccBits.W),
+          UInt((eccBits * stackSize).W),
           set = nrRows,
           way = 1,
           shouldReset = false,
@@ -87,9 +87,13 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     }
   } else null
 
-  val stackRdy = if(cacheParams.sramClkDivBy2){
-    RegInit(VecInit(Seq.fill(nrStacks){ true.B }))
-  } else VecInit(Seq.fill(nrStacks){ true.B })
+  val stackRdy = if (cacheParams.sramClkDivBy2) {
+    RegInit(VecInit(Seq.fill(nrStacks) {
+      true.B
+    }))
+  } else VecInit(Seq.fill(nrStacks) {
+    true.B
+  })
 
   /* Convert to internal request signals */
   class DSRequest extends HuanCunBundle {
@@ -160,12 +164,11 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   dontTouch(bank_en)
   dontTouch(sel_req)
   // mark accessed banks as busy
-  if(cacheParams.sramClkDivBy2){
+  if (cacheParams.sramClkDivBy2) {
     bank_en.grouped(stackSize).toList
       .map(banks => Cat(banks).orR())
       .zip(stackRdy)
-      .foreach
-      {
+      .foreach {
         case (accessed, rdy) => rdy := !accessed
       }
   }
@@ -188,33 +191,43 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     bankedData(i).io.r.req.valid := ren
     bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
     // Ecc
-    if(eccBits > 0){
-      dataEccArray(i).io.w.req.valid := wen
-      dataEccArray(i).io.w.req.bits.apply(
-        setIdx = selectedReq.index,
-        data = dataCode.encode(selectedReq.data(i)).head(eccBits),
-        waymask = 1.U
-      )
-      dataEccArray(i).io.r.req.valid := ren
-      dataEccArray(i).io.r.req.bits.apply(setIdx = selectedReq.index)
-      val decode = dataCode.decode(
-        dataEccArray(i).io.r.resp.data(0) ## bankedData(i).io.r.resp.data(0)
-      )
-      error(i) := decode.error
-    } else {
-      error(i) := false.B
-    }
     outData(i) := bankedData(i).io.r.resp.data(0)
   }
+  if (eccBits > 0) {
+    for (((banks, err), eccArray) <-
+           bankedData.grouped(stackSize).toList
+             .zip(error.grouped(stackSize).toList)
+             .zip(dataEccArray)
+         ) {
+      eccArray.io.w.req.valid := banks.head.io.w.req.valid
+      eccArray.io.w.req.bits.apply(
+        setIdx = banks.head.io.w.req.bits.setIdx,
+        data = VecInit(banks.map(b =>
+          dataCode.encode(b.io.w.req.bits.data(0)).head(eccBits)
+        )).asUInt(),
+        waymask = 1.U
+      )
+      eccArray.io.r.req.valid := banks.head.io.r.req.valid
+      eccArray.io.r.req.bits.apply(setIdx = banks.head.io.r.req.bits.setIdx)
+      val eccInfo = eccArray.io.r.resp.data(0).asTypeOf(Vec(stackSize, UInt(eccBits.W)))
+      for(i <- 0 until stackSize){
+        err(i) := dataCode.decode(
+          banks(i).io.r.resp.data(0) ## eccInfo(i)
+        ).error
+      }
+    }
+  } else {
+    error.foreach(_ := false.B)
+  }
 
-  val dataSelModules = Array.fill(stackSize){
+  val dataSelModules = Array.fill(stackSize) {
     Module(new DataSel(nrStacks, 2, bankBytes * 8))
   }
   val data_grps = outData.grouped(stackSize).toList.transpose
   val err_grps = error.grouped(stackSize).toList.transpose
   val d_sel = sourceD_rreq.bankEn.asBools().grouped(stackSize).toList.transpose
   val c_sel = sourceC_req.bankEn.asBools().grouped(stackSize).toList.transpose
-  for(i <- 0 until stackSize){
+  for (i <- 0 until stackSize) {
     val dataSel = dataSelModules(i)
     dataSel.io.in := VecInit(data_grps(i))
     dataSel.io.err_in := VecInit(err_grps(i))
@@ -236,7 +249,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   val debug_stack_used = PopCount(bank_en.grouped(stackSize).toList.map(seq => Cat(seq).orR))
 
-  for(i <- 1 to nrStacks) {
+  for (i <- 1 to nrStacks) {
     XSPerfAccumulate(cacheParams, s"DS_${i}_stacks_used", debug_stack_used === i.U)
   }
 
@@ -253,7 +266,7 @@ class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) exten
     val err_out = Output(Vec(outNum, Bool()))
   })
 
-  for(i <- 0 until outNum){
+  for (i <- 0 until outNum) {
     val sel_r = RegNextN(io.sel(i), sramLatency - 2)
     val odata = Mux1H(sel_r, io.in)
     val oerrs = Mux1H(sel_r, io.err_in)
