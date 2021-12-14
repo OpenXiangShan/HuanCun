@@ -212,7 +212,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
       val eccInfo = eccArray.io.r.resp.data(0).asTypeOf(Vec(stackSize, UInt(eccBits.W)))
       for(i <- 0 until stackSize){
         err(i) := dataCode.decode(
-          banks(i).io.r.resp.data(0) ## eccInfo(i)
+          eccInfo(i) ## banks(i).io.r.resp.data(0)
         ).error
       }
     }
