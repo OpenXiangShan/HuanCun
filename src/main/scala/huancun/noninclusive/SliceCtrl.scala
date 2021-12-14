@@ -231,6 +231,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.cmo_req.valid := s_cmo
   when(io.cmo_req.fire()){
     s_cmo := false.B
+    done := true.B
   }
 
   io.req.ready := !busy
