@@ -57,8 +57,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   def dataCode: Code = Code.fromString(p(HCCacheParamsKey).dataECC)
 
-  val stackWidth = 8 * bankBytes * stackSize
-  val eccBits = dataCode.width(stackWidth) - stackWidth
+  val eccBits = dataCode.width(8 * bankBytes) - 8 * bankBytes
   println(s"Data ECC bits:$eccBits")
 
   val bankedData = Seq.fill(nrBanks) {
@@ -77,7 +76,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     Seq.fill(nrStacks) {
       Module(
         new SRAMTemplate(
-          UInt(eccBits.W),
+          UInt((eccBits * stackSize).W),
           set = nrRows,
           way = 1,
           shouldReset = false,
@@ -191,6 +190,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     val ren = en && !selectedReq.wen
     bankedData(i).io.r.req.valid := ren
     bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
+    // Ecc
     outData(i) := bankedData(i).io.r.resp.data(0)
   }
   if (eccBits > 0) {
@@ -202,19 +202,18 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
       eccArray.io.w.req.valid := banks.head.io.w.req.valid
       eccArray.io.w.req.bits.apply(
         setIdx = banks.head.io.w.req.bits.setIdx,
-        data = dataCode.encode(
-          VecInit(banks.map(_.io.w.req.bits.data(0))).asUInt()
-        ).head(eccBits),
+        data = VecInit(banks.map(b =>
+          dataCode.encode(b.io.w.req.bits.data(0)).head(eccBits)
+        )).asUInt(),
         waymask = 1.U
       )
       eccArray.io.r.req.valid := banks.head.io.r.req.valid
       eccArray.io.r.req.bits.apply(setIdx = banks.head.io.r.req.bits.setIdx)
-      val eccInfo = eccArray.io.r.resp.data(0)
-      val dec = dataCode.decode(
-        eccInfo ## VecInit(banks.map(_.io.r.resp.data(0))).asUInt()
-      )
+      val eccInfo = eccArray.io.r.resp.data(0).asTypeOf(Vec(stackSize, UInt(eccBits.W)))
       for(i <- 0 until stackSize){
-        err(i) := dec.error
+        err(i) := dataCode.decode(
+          banks(i).io.r.resp.data(0) ## eccInfo(i)
+        ).error
       }
     }
   } else {
