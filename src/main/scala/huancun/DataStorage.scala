@@ -62,28 +62,22 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   val bankedData = Seq.fill(nrBanks) {
     Module(
-      new SRAMTemplate(
-        UInt((8 * bankBytes).W),
+      new SRAMWrapper(
+        gen = UInt((8 * bankBytes).W),
         set = nrRows,
-        way = 1,
-        shouldReset = false,
-        singlePort = sramSinglePort,
+        n = cacheParams.sramDepthDiv,
         clk_div_by_2 = cacheParams.sramClkDivBy2
       )
     )
   }
   val dataEccArray = if (eccBits > 0) {
     Seq.fill(nrStacks) {
-      Module(
-        new SRAMTemplate(
-          UInt((eccBits * stackSize).W),
-          set = nrRows,
-          way = 1,
-          shouldReset = false,
-          singlePort = sramSinglePort,
-          clk_div_by_2 = cacheParams.sramClkDivBy2
-        )
-      )
+      Module(new SRAMWrapper(
+        gen = UInt((eccBits * stackSize).W),
+        set = nrRows,
+        n = cacheParams.sramDepthDiv,
+        clk_div_by_2 = cacheParams.sramClkDivBy2
+      ))
     }
   } else null
 

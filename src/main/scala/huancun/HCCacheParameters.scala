@@ -124,6 +124,7 @@ case class HCCacheParameters
   respField: Seq[BundleFieldBase] = Nil,
   ctrl: Option[CacheCtrl] = None,
   sramClkDivBy2: Boolean = false,
+  sramDepthDiv: Int = 1,
   simulation: Boolean = false,
   innerBuf: TLBufferParams = TLBufferParams(),
   outerBuf: TLBufferParams = TLBufferParams(
