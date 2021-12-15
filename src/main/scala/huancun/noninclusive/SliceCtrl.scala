@@ -211,14 +211,14 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   }
 
   io.cmo_req.bits.channel := 4.U
-  io.cmo_req.bits.opcode := DontCare
+  io.cmo_req.bits.opcode := 0.U  // DontCare
   io.cmo_req.bits.param := io.req.bits.cmd(1, 0)
-  io.cmo_req.bits.size := DontCare
-  io.cmo_req.bits.source := DontCare
+  io.cmo_req.bits.size := log2Up(blockBytes).U
+  io.cmo_req.bits.source := 0.U  // DontCare
   io.cmo_req.bits.set := io.req.bits.set
   io.cmo_req.bits.tag := io.req.bits.tag
-  io.cmo_req.bits.off := 0.U
-  io.cmo_req.bits.bufIdx := DontCare
+  io.cmo_req.bits.off := 0.U  // DontCare
+  io.cmo_req.bits.bufIdx := 0.U  // DontCare
   io.cmo_req.bits.needHint.foreach(_ := false.B)
   io.cmo_req.bits.isPrefetch.foreach(_ := false.B)
   io.cmo_req.bits.alias.foreach(_ := false.B)
