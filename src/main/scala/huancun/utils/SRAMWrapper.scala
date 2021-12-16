@@ -15,7 +15,7 @@ class SRAMWrapper[T <: Data]
   })
 
   val innerSet = set / n
-  val selBits = log2Up(n)
+  val selBits = log2Ceil(n)
   val innerSetBits = log2Up(set) - selBits
   val r_setIdx = io.r.req.bits.setIdx.head(innerSetBits)
   val r_sel = io.r.req.bits.setIdx(selBits - 1, 0)
