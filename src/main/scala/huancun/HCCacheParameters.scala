@@ -76,6 +76,17 @@ case class PreferCacheField() extends BundleField(PreferCacheKey) {
   }
 }
 
+// deliver hartid from core to cache
+case object DsidKey extends ControlKey[UInt](name = "dsid")
+
+case class DsidField(width: Int) extends BundleField(DsidKey) {
+  override def data: UInt = Output(UInt(width.W))
+
+  override def default(x: UInt): Unit = {
+    x := 0.U(width.W)
+  }
+}
+
 // indicate whether this block is dirty or not (only used in handle Release/ReleaseData)
 // now it only works for non-inclusive cache (ignored in inclusive cache)
 case object DirtyKey extends ControlKey[Bool](name = "blockisdirty")
