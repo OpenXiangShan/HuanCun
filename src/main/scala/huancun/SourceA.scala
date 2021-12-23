@@ -67,7 +67,7 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val s0_count = RegInit(0.U(beatBits.W))
   // TODO: make beat calculation configurable
   require(blockBytes / beatBytes == 2)
-  val s0_last = Mux(s0_task.opcode === PutFullData, s0_count === (beats-1).U, s0_count === (1-1).U)
+  val s0_last = Mux(s0_task.size === log2Ceil(blockBytes).U, s0_count === (beats-1).U, s0_count === (1-1).U)
   val s0_valid = io.pb_pop.fire()
 
   io.pb_pop.valid := busy && s1_ready
