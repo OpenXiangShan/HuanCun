@@ -98,6 +98,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.bypass_read.valid := s1_valid_r && s1_req.useBypass
   io.bypass_read.id := s1_req.bufIdx
   io.bypass_read.beat := s1_beat
+  io.bypass_read.last := s1_last
 
   when(io.task.fire()) {
     busy := true.B
