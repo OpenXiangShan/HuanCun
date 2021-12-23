@@ -421,7 +421,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   val debug_addr = Cat(req.tag, req.set, 0.U(offsetBits.W))
-  assert(RegNext(!meta_valid || !req.fromC || req.fromCmoHelper || self_meta.hit || clients_meta(iam).hit),
+  assert(RegNext(!meta_valid || !req.fromC || req.fromCmoHelper || clients_meta(iam).hit),
     s"${cacheParams.name} Release should always hit: mshrId:[%d] addr: [%x]",
     io.id, debug_addr
   ) // Release should always hit
@@ -757,6 +757,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         s_prefetchack.map(_ := false.B)
       }
     })
+    assert(req.opcode =/= Hint || req.preferCache, "Hint should always preferCache!")
   }
 
   def handleEcc() = {
