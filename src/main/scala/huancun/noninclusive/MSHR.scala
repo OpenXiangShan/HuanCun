@@ -836,9 +836,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       will_probeack_through := clients_have_T
       will_drop_probeack := !clients_have_T
       will_save_probeack := will_probeack_through && !io_probeAckDataThrough && self_meta.hit && req.param === toB
-      probeAckDataThrough := will_probeack_through
+      probeAckDataThrough := will_probeack_through && !(req.fromProbeHelper && self_meta.hit)
       probeAckDataDrop := will_drop_probeack
-      probeAckDataSave := will_save_probeack
+      probeAckDataSave := will_save_probeack || (req.fromProbeHelper && self_meta.hit)
     }.otherwise {
       probeAckDataSave := !probeAckDataThrough && !probeAckDataDrop
     }
@@ -1219,7 +1219,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         w_releaseack := false.B // inner ProbeAck -> outer Release
       }
     }.otherwise{
-      when(req.fromB && (probeAckDataThrough || !req.fromProbeHelper)){
+      when(req.fromB && ((probeAckDataThrough && io.resps.sink_c.bits.param =/= NtoN) || !req.fromProbeHelper)){
         // client didn't response data
         // but we still need to send probeack
         // let sourceC do this
