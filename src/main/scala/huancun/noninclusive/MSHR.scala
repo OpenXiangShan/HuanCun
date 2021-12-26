@@ -833,13 +833,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   when(io.dirResult.valid) {
     when(req.fromB) {
-      val probeHelper_hit = req.fromProbeHelper && self_meta.hit
       will_probeack_through := clients_have_T
       will_drop_probeack := !clients_have_T
       will_save_probeack := will_probeack_through && !io_probeAckDataThrough && self_meta.hit && req.param === toB
-      probeAckDataThrough := will_probeack_through && !probeHelper_hit
-      probeAckDataDrop := will_drop_probeack && !probeHelper_hit
-      probeAckDataSave := will_save_probeack || probeHelper_hit
+      when(req.fromProbeHelper) {
+        probeAckDataThrough := will_probeack_through && !self_meta.hit
+        probeAckDataDrop := will_drop_probeack
+        probeAckDataSave := will_probeack_through && !io_probeAckDataThrough && self_meta.hit
+      }.otherwise {
+        probeAckDataThrough := will_probeack_through
+        probeAckDataDrop := will_drop_probeack
+        probeAckDataSave := will_save_probeack
+      }
     }.otherwise {
       probeAckDataSave := !probeAckDataThrough && !probeAckDataDrop
     }
