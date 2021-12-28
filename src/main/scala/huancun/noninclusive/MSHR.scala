@@ -189,7 +189,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     Mux(param === TtoB, BRANCH, INVALID)
   }
 
-  def probe_shrink_perm(state: UInt, perm: UInt): Bool = state =/= INVALID && perm === toN || isT(state) && perm === toB
+  def probe_shrink_perm(state: UInt, perm: UInt): Bool = {
+    perm === toN || isT(state) && perm === toB
+  }
+  def probe_is_report(state: UInt, perm: UInt): Bool = {
+    // TODO: support TtoT
+    state === BRANCH && perm === toB
+  }
 
   def onXReq(): Unit = {
     new_self_meta.dirty := false.B
@@ -616,17 +622,26 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_probeack := false.B
     }
     when(self_meta.hit) {
-      // TODO: consider Report?
-      assert(probe_shrink_perm(self_meta.state, req.param), "Probe should always shrink perm")
-      s_wbselfdir := false.B
+      when(probe_shrink_perm(self_meta.state, req.param)){
+        s_wbselfdir := false.B
+      }.otherwise({
+        assert(probe_is_report(self_meta.state, req.param),
+          "Probe not supported: [self: %d] [req: %d]\n",
+          self_meta.state, req.param
+        )
+      })
     }
-    when(!(self_meta.hit && self_meta.state(0) && req.param === toB)) { // no need to probe client if self-meta is B/T and param is toB
-      when(Cat(clients_meta.map(_.hit)).orR()) {
-        for (meta <- clients_meta) {
-          when(meta.hit) {
-            assert(probe_shrink_perm(meta.state, req.param), "Probe should always shrink perm")
-          }
+    // no need to probe client if self-meta is B/T and param is toB
+    when(!(self_meta.hit && self_meta.state(0) && req.param === toB)) {
+      for (meta <- clients_meta) {
+        when(meta.hit) {
+          assert(
+            probe_shrink_perm(meta.state, req.param) || probe_is_report(meta.state, req.param),
+            "Invalid Probe Request: [client: %d] [req: %d]\n", meta.state, req.param
+          )
         }
+      }
+      when(Cat(clients_meta.map(_.hit)).orR()) {
         s_probe := false.B
         s_wbclientsdir := false.B
         w_probeackfirst := false.B
@@ -983,9 +998,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           )
       )
   })
-  val b_probe_clients = VecInit(clients_meta.map {
-    case m => Mux(ob.param === toN, m.hit, m.hit && ob.param === toB && isT(m.state))
-  })
+  val b_probe_clients = VecInit(clients_meta.map(_.hit))
   val x_probe_clients = VecInit(clients_meta.map {
     case m => Mux(req.param === 1.U, m.hit && isT(m.state), m.hit)
   })
@@ -1166,6 +1179,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
   when(io.tasks.source_b.fire()) {
     s_probe := true.B
+    assert(io.tasks.source_b.bits.clients =/= 0.U, "Invalid probe task\n")
   }
   when(io.tasks.source_c.fire()) {
     s_release := true.B
