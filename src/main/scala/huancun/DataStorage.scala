@@ -36,7 +36,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     val sourceD_wdata = Input(new DSData)
     val sinkC_waddr = Flipped(DecoupledIO(new DSAddress))
     val sinkC_wdata = Input(new DSData)
-    val ecc = Output(new EccInfo)
+    val ecc = Valid(new EccInfo)
   })
 
   /* Define some internal parameters */
@@ -236,9 +236,14 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   io.sourceC_rdata.data := Cat(dataSelModules.map(_.io.out(1)).reverse)
   io.sourceC_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(1))).orR()
 
-  io.ecc.errCode := Mux(io.sourceD_rdata.corrupt || io.sourceC_rdata.corrupt,
-    io.ecc.ERR_DATA,
-    0.U
+  val d_addr_reg = RegNextN(io.sourceD_raddr.bits, sramLatency)
+  val c_addr_reg = RegNextN(io.sourceC_raddr.bits, sramLatency)
+
+  io.ecc.valid := io.sourceD_rdata.corrupt || io.sourceC_rdata.corrupt
+  io.ecc.bits.errCode := EccInfo.ERR_DATA
+  io.ecc.bits.addr := Mux(io.sourceD_rdata.corrupt,
+    Cat(d_addr_reg.set, d_addr_reg.way, d_addr_reg.beat),
+    Cat(c_addr_reg.set, c_addr_reg.way, c_addr_reg.beat)
   )
 
   val debug_stack_used = PopCount(bank_en.grouped(stackSize).toList.map(seq => Cat(seq).orR))
