@@ -358,7 +358,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       arb.io.in <> VecInit(slices.map(_.io.ctl_resp))
       c.module.resp <> arb.io.out
       c.module.ecc <> ecc_arb.io.out
-      c.module.ecc_addr := io.ecc_error.bits
+      c.module.ecc.bits.addr := io.ecc_error.bits
     }
     if (ctrl_unit.isEmpty) {
       slices.foreach(_.io.ctl_req <> DontCare)
