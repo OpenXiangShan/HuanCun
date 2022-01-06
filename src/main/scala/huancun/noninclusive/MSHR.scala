@@ -775,23 +775,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     assert(req.opcode =/= Hint || req.preferCache, "Hint should always preferCache!")
   }
 
-  def handleEcc() = {
-    // assert(!io.dirResult.bits.self.hit || !io.dirResult.bits.self.error)
-    // io.dirResult.bits.clients.foreach(r => assert(!r.hit || !r.error))
-    when(io.dirResult.bits.self.hit && io.dirResult.bits.self.error) {
-      io.ecc.errCode := io.ecc.ERR_SELF_DIR
-    }
-    when(io.dirResult.bits.clients.error && Cat(io.dirResult.bits.clients.states.map(_.hit)).orR()) {
-      io.ecc.errCode := io.ecc.ERR_CLIENT_DIR
-    }
-  }
-
-  io.ecc.errCode := io.ecc.ERR_NO
+  val self_ecc_err = meta_reg.self.hit && meta_reg.self.error
+  val client_ecc_err = Cat(meta_reg.clients.states.map(_.hit)).orR() && meta_reg.clients.error
+  io.ecc.valid := meta_valid && (self_ecc_err || client_ecc_err)
+  io.ecc.bits.addr := Cat(req.tag, req.set, req.off)
+  io.ecc.bits.errCode := Mux(self_ecc_err, EccInfo.ERR_SELF_DIR, EccInfo.ERR_CLIENT_DIR)
 
   when(io.dirResult.valid) {
 
     reset_all_flags()
-    handleEcc()
 
     when(meta.self.error || meta.clients.error){
       when(req.fromC){

@@ -222,11 +222,13 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   val ctrl_unit = cacheParams.ctrl.map(_ => LazyModule(new CtrlUnit(node)))
   val ctlnode = ctrl_unit.map(_.ctlnode)
   val rst_nodes = ctrl_unit.map(_.core_reset_nodes)
+  val intnode = ctrl_unit.map(_.intnode)
 
   lazy val module = new LazyModuleImp(this) {
     val banks = node.in.size
     val io = IO(new Bundle {
-      val perfEvents = Vec(banks, Vec(numPCntHc,(Output(UInt(6.W)))))
+      val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
+      val ecc_error = Valid(UInt(64.W))
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -286,12 +288,15 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
 
     def restoreAddress(x: UInt, idx: Int) = {
+      restoreAddressUInt(x, idx.U)
+    }
+    def restoreAddressUInt(x: UInt, idx: UInt) = {
       if(bankBits == 0){
         x
       } else {
         val high = x >> offsetBits
         val low = x(offsetBits - 1, 0)
-        Cat(high, idx.U(bankBits.W), low)
+        Cat(high, idx(bankBits - 1, 0), low)
       }
     }
 
@@ -337,7 +342,11 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         io.perfEvents(i) := slice.perfinfo
         slice
     }
-    ctrl_unit.map { c =>
+    val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
+    ecc_arb.io.in <> VecInit(slices.map(_.io.ctl_ecc))
+    io.ecc_error.valid := ecc_arb.io.out.fire()
+    io.ecc_error.bits := restoreAddressUInt(ecc_arb.io.out.bits.addr, ecc_arb.io.chosen)
+    ctrl_unit.foreach { c =>
       val bank_match = slices.map(_ => Wire(Bool()))
       c.module.req.ready := Mux1H(bank_match, slices.map(_.io.ctl_req.ready))
       for((s, i) <- slices.zipWithIndex){
@@ -348,16 +357,14 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       val arb = Module(new Arbiter(new CtrlResp, slices.size))
       arb.io.in <> VecInit(slices.map(_.io.ctl_resp))
       c.module.resp <> arb.io.out
-
-      val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
-      ecc_arb.io.in <> VecInit(slices.map(_.io.ctl_ecc))
       c.module.ecc <> ecc_arb.io.out
+      c.module.ecc_addr := io.ecc_error.bits
     }
     if (ctrl_unit.isEmpty) {
       slices.foreach(_.io.ctl_req <> DontCare)
       slices.foreach(_.io.ctl_req.valid := false.B)
       slices.foreach(_.io.ctl_resp.ready := false.B)
-      slices.foreach(_.io.ctl_ecc.ready := false.B)
+      ecc_arb.io.out.ready := true.B
     }
     node.edges.in.headOption.foreach { n =>
       n.client.clients.zipWithIndex.foreach {
