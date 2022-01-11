@@ -844,7 +844,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       will_drop_probeack := !clients_have_T
       will_save_probeack := will_probeack_through && !io_probeAckDataThrough && self_meta.hit && req.param === toB
       when(req.fromProbeHelper) {
-        probeAckDataThrough := will_probeack_through && !self_meta.hit
+        probeAckDataThrough := will_probeack_through && (!self_meta.hit || io_probeAckDataThrough)
         probeAckDataDrop := will_drop_probeack
         probeAckDataSave := will_probeack_through && !io_probeAckDataThrough && self_meta.hit
       }.otherwise {
