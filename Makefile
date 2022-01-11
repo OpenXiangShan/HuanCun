@@ -9,8 +9,13 @@ test:
 	mill -i HuanCun.test.test
 
 
-test-top:
-	mill -i HuanCun.test.runMain huancun.TestTop -td build
+test-top-l2:
+	mill -i HuanCun.test.runMain huancun.TestTop_L2 -td build
+	mv build/TestTop_L2.v build/TestTop.v
+
+test-top-l2l3:
+	mill -i HuanCun.test.runMain huancun.TestTop_L2L3 -td build
+	mv build/TestTop_L2L3.v build/TestTop.v
 
 basic-test:
 	mill -i HuanCun.test.testOnly -o -s huancun.ConnectionTester

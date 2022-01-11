@@ -9,7 +9,7 @@ import freechips.rocketchip.tilelink._
 
 import scala.collection.mutable.ArrayBuffer
 
-class TestTop()(implicit p: Parameters) extends LazyModule {
+class TestTop_L2()(implicit p: Parameters) extends LazyModule {
 
   /* L1D   L1D
    *  \    /
@@ -65,7 +65,7 @@ class TestTop()(implicit p: Parameters) extends LazyModule {
   }
 }
 
-class TestTop_L3()(implicit p: Parameters) extends LazyModule {
+class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
 
   /* L1D   L1D
    *  |     |
@@ -102,9 +102,10 @@ class TestTop_L3()(implicit p: Parameters) extends LazyModule {
 
   val l2_nodes = (0 until 2) map( i => LazyModule(new HuanCun()(new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
-      name = s"L2$i",
+      name = s"L2_$i",
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2"))
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2")),
+      prefetch = Some(huancun.prefetch.BOPParameters())
     )
   }))).node)
 
@@ -143,17 +144,30 @@ class TestTop_L3()(implicit p: Parameters) extends LazyModule {
   }
 }
 
-object TestTop extends App {
+object TestTop_L2 extends App {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2"))
     )
   })
-  val top = LazyModule(new TestTop()(config))
+  val top = LazyModule(new TestTop_L2()(config))
 
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
+}
 
+object TestTop_L2L3 extends App {
+  val config = new Config((_, _, _) => {
+    case HCCacheParamsKey => HCCacheParameters(
+      inclusive = false,
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2"))
+    )
+  })
+  val top = LazyModule(new TestTop_L2L3()(config))
+
+  (new ChiselStage).execute(args, Seq(
+    ChiselGeneratorAnnotation(() => top.module)
+  ))
 }
