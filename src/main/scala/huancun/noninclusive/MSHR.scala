@@ -159,6 +159,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }).asUInt.orR && (!req.isPrefetch.getOrElse(false.B) || prefetch_need_data)
 
   val a_need_data = req.fromA && (req.opcode === Get || req_put || req.opcode === AcquireBlock || req.opcode === Hint)
+  val acquireperm_alias = req.fromA && req.opcode === AcquirePerm && cache_alias
 
   // 1 cycle ahead its' corresponding register defs
   // these signals are used to decide mshr actions when dirResult.valid on c_schedule
@@ -1249,7 +1250,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_probeacklast := w_probeacklast || probeack_last && resp.last
     w_probeack := w_probeack || probeack_last && (resp.last || req.off === 0.U)
     probe_dirty := probe_dirty || resp.hasData
-    when (a_need_data && probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit) {
+    when ((a_need_data || acquireperm_alias) && probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit) {
       promoteT_safe := false.B
       s_acquire := false.B
       w_grantfirst := false.B
