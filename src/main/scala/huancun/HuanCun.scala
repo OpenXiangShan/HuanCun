@@ -303,11 +303,14 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val slices = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
-        val slice = Module(new Slice()(p.alterPartial {
+        val rst = if(cacheParams.level == 3 && !cacheParams.simulation) {
+          RegNext(RegNext(reset.asBool))
+        } else reset.asBool
+        val slice = withReset(rst){ Module(new Slice()(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut
           case BankBitsKey => bankBits
-        }))
+        })) }
         slice.io.in <> in
         in.b.bits.address := restoreAddress(slice.io.in.b.bits.address, i)
         out <> slice.io.out

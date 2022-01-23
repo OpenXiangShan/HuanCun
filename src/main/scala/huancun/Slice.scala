@@ -584,8 +584,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   io.ctl_ecc.bits := Mux(tag_err, tag_err_info, data_err_info)
   io.ctl_ecc.valid := tag_err | data_err
   if (ctrl.nonEmpty) {
-    ctrl.get.io.req <> io.ctl_req
-    io.ctl_resp <> ctrl.get.io.resp
+    ctrl.get.io.req <> Queue(io.ctl_req)
+    io.ctl_resp <> Queue(ctrl.get.io.resp)
   } else {
     io.ctl_req <> DontCare
     io.ctl_resp <> DontCare
