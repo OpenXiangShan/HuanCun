@@ -512,6 +512,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_releaseack = RegInit(true.B)
   val w_grantack = RegInit(true.B)
 
+  val acquire_flag = RegInit(false.B)
+
   def reset_all_flags(): Unit = {
     // Default value
     s_acquire := true.B
@@ -548,7 +550,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     inv_self_dir := false.B
     nested_c_hit_reg := false.B
     gotDirty := false.B
+    acquire_flag := false.B
   }
+  when(!s_acquire) { acquire_flag := acquire_flag | true.B }
 
   def x_schedule(): Unit = { // TODO
     // Do probe to maintain coherence
@@ -1250,7 +1254,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_probeacklast := w_probeacklast || probeack_last && resp.last
     w_probeack := w_probeack || probeack_last && (resp.last || req.off === 0.U)
     probe_dirty := probe_dirty || resp.hasData
-    when ((a_need_data || acquireperm_alias) && probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit) {
+    when (
+      !acquire_flag && (a_need_data || acquireperm_alias) &&
+        probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit
+    ) {
       promoteT_safe := false.B
       s_acquire := false.B
       w_grantfirst := false.B
