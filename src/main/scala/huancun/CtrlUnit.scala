@@ -31,9 +31,13 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   val cacheParams = wrapper.p(HCCacheParamsKey)
 
-  val req = IO(DecoupledIO(new CtrlReq()))
-  val resp = IO(Flipped(DecoupledIO(new CtrlResp())))
-  val ecc = IO(Flipped(DecoupledIO(new EccInfo())))
+  val io_req = IO(DecoupledIO(new CtrlReq()))
+  val io_resp = IO(Flipped(DecoupledIO(new CtrlResp())))
+  val io_ecc = IO(Flipped(DecoupledIO(new EccInfo())))
+
+  val req = io_req
+  val resp = io_resp
+  val ecc = io_ecc
 
   val node = wrapper.node
   val ctlnode = wrapper.ctlnode

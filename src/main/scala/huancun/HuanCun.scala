@@ -346,22 +346,31 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         slice
     }
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
-    ecc_arb.io.in <> VecInit(slices.map(_.io.ctl_ecc))
+    val slices_ecc = slices.zipWithIndex.map {
+      case (s, i) => Pipeline(s.io.ctl_ecc, depth = 2, pipe = false, name = Some(s"ecc_buffer_$i"))
+    }
+    ecc_arb.io.in <> VecInit(slices_ecc)
     io.ecc_error.valid := ecc_arb.io.out.fire()
     io.ecc_error.bits := restoreAddressUInt(ecc_arb.io.out.bits.addr, ecc_arb.io.chosen)
     ctrl_unit.foreach { c =>
+      val ctl_reqs = slices.zipWithIndex.map {
+        case (s, i) => Pipeline.pipeTo(s.io.ctl_req, depth = 2, pipe = false, name = Some(s"req_buffer_$i"))
+      }
+      val ctl_resps = slices.zipWithIndex.map {
+        case (s, i) => Pipeline(s.io.ctl_resp, depth = 2, pipe = false, name = Some(s"resp_buffer_$i"))
+      }
       val bank_match = slices.map(_ => Wire(Bool()))
-      c.module.req.ready := Mux1H(bank_match, slices.map(_.io.ctl_req.ready))
-      for((s, i) <- slices.zipWithIndex){
-        bank_match(i) := bank_eq(c.module.req.bits.set, i, bankBits)
-        s.io.ctl_req.valid := c.module.req.valid && bank_match(i)
-        s.io.ctl_req.bits := c.module.req.bits
+      c.module.io_req.ready := Mux1H(bank_match, ctl_reqs.map(_.ready))
+      for((s, i) <- ctl_reqs.zipWithIndex){
+        bank_match(i) := bank_eq(c.module.io_req.bits.set, i, bankBits)
+        s.valid := c.module.io_req.valid && bank_match(i)
+        s.bits := c.module.io_req.bits
       }
       val arb = Module(new Arbiter(new CtrlResp, slices.size))
-      arb.io.in <> VecInit(slices.map(_.io.ctl_resp))
-      c.module.resp <> arb.io.out
-      c.module.ecc <> ecc_arb.io.out
-      c.module.ecc.bits.addr := io.ecc_error.bits
+      arb.io.in <> ctl_resps
+      c.module.io_resp <> arb.io.out
+      c.module.io_ecc <> ecc_arb.io.out
+      c.module.io_ecc.bits.addr := io.ecc_error.bits
     }
     if (ctrl_unit.isEmpty) {
       slices.foreach(_.io.ctl_req <> DontCare)

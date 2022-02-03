@@ -148,10 +148,14 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
   mshrAlloc.io.a_req <> a_req_buffer.io.out
   if(ctrl.nonEmpty) { // LLC
-    val alloc_C_arb = Module(new Arbiter(new MSHRRequest, 2))
-    alloc_C_arb.io.in(0) <> sinkC.io.alloc
-    alloc_C_arb.io.in(1) <> ctrl.get.io.cmo_req
-    mshrAlloc.io.c_req <> alloc_C_arb.io.out
+    val cmo_req = Pipeline(ctrl.get.io.cmo_req)
+    sinkC.io.alloc.ready := mshrAlloc.io.c_req.ready
+    cmo_req.ready := !sinkC.io.alloc.valid && mshrAlloc.io.c_req.ready
+    mshrAlloc.io.c_req.valid := sinkC.io.alloc.valid || cmo_req.valid
+    mshrAlloc.io.c_req.bits := Mux(sinkC.io.alloc.valid,
+      sinkC.io.alloc.bits,
+      cmo_req.bits
+    )
   } else {
     mshrAlloc.io.c_req <> sinkC.io.alloc
   }
@@ -581,11 +585,11 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val data_err = RegNext(dataStorage.io.ecc.valid, false.B)
   val data_err_info = RegNext(dataStorage.io.ecc.bits)
 
-  io.ctl_ecc.bits := Mux(tag_err, tag_err_info, data_err_info)
-  io.ctl_ecc.valid := tag_err | data_err
+  io.ctl_ecc.bits := RegNext(Mux(tag_err, tag_err_info, data_err_info))
+  io.ctl_ecc.valid := RegNext(tag_err | data_err, false.B)
   if (ctrl.nonEmpty) {
-    ctrl.get.io.req <> Queue(io.ctl_req)
-    io.ctl_resp <> Queue(ctrl.get.io.resp)
+    ctrl.get.io.req <> io.ctl_req
+    io.ctl_resp <> ctrl.get.io.resp
   } else {
     io.ctl_req <> DontCare
     io.ctl_resp <> DontCare
