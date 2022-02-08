@@ -1300,9 +1300,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   // Release MSHR
   val no_schedule = s_probeack && s_execute && s_grantack &&
-    RegNext(s_wbselfdir && s_wbselftag && s_wbclientsdir && s_wbclientstag, true.B) &&
+    RegNext(s_wbselfdir && s_wbselftag && s_wbclientsdir && s_wbclientstag && meta_valid, true.B) &&
     s_writerelease && s_writeprobe &&
-    meta_valid &&
     s_triggerprefetch.getOrElse(true.B) &&
     s_prefetchack.getOrElse(true.B) // TODO: s_writeput?
   val will_be_free = no_wait && no_schedule
