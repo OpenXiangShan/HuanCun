@@ -187,7 +187,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
 
   def shrink_next_state(param: UInt): UInt = {
-    Mux(param === TtoB, BRANCH, INVALID)
+    assert(param =/= TtoT, "ProbeAck toT is not allowed in current design")
+    Mux(param === TtoB || param === BtoB, BRANCH, INVALID)
   }
 
   def probe_shrink_perm(state: UInt, perm: UInt): Bool = {
@@ -335,6 +336,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
     new_self_meta.clientStates.zipWithIndex.foreach {
       case (state, i) =>
+        val perm_after_probe = shrink_next_state(client_probeack_param_vec(i))
         when(iam === i.U) {
           state := Mux(req_acquire,
             Mux(req_needT || req_promoteT, TIP, BRANCH),
@@ -350,11 +352,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             Mux(
               req.param =/= NtoB || req_promoteT || req_put,
               INVALID,
-              Mux(clients_meta(i).hit, BRANCH, INVALID)
+              Mux(clients_meta(i).hit, perm_after_probe, INVALID)
             ),
             Mux(
               req.opcode === Get,
-              Mux(clients_meta(i).hit, BRANCH, INVALID), // Get
+              Mux(clients_meta(i).hit, perm_after_probe, INVALID), // Get
               Mux(clients_meta(i).hit, clients_meta(i).state, INVALID) // Hint
             )
           )
@@ -362,6 +364,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
+        val perm_after_probe = shrink_next_state(client_probeack_param_vec(i))
         when(iam === i.U) {
           m.state := Mux(
             req_acquire,
@@ -376,15 +379,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
               req.param =/= NtoB || req_promoteT || req_put,
               Mux(clients_meta(i).hit, INVALID, clients_meta(i).state),
               // NtoB
-              Mux(clients_meta(i).hit, BRANCH, clients_meta(i).state)
+              Mux(clients_meta(i).hit, perm_after_probe, clients_meta(i).state)
             ),
-            Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, BRANCH, INVALID), clients_meta(i).state)
+            Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID), clients_meta(i).state)
           )
           m.alias.foreach(_ := clients_meta(i).alias.get)
         }
 
         when (req.opcode === Get) {
-          m.state := Mux(clients_meta(i).hit, BRANCH, clients_meta(i).state)
+          m.state := Mux(clients_meta(i).hit, perm_after_probe, clients_meta(i).state)
           m.alias.foreach(_ := clients_meta(i).alias.get)
         }
     }
