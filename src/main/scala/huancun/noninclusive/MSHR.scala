@@ -81,6 +81,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val gotT = RegInit(false.B)
   val gotDirty = RegInit(false.B)
   val a_do_release = RegInit(false.B)
+  val a_do_probe = RegInit(false.B)
   val meta_no_clients = Cat(self_meta.clientStates.map(_ === INVALID)).andR()
   val req_promoteT = req_acquire && Mux(
     self_meta.hit,
@@ -353,12 +354,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             Mux(
               req.param =/= NtoB || req_promoteT || req_put,
               INVALID,
-              Mux(clients_meta(i).hit, perm_after_probe, INVALID)
+              Mux(clients_meta(i).hit && a_do_probe, perm_after_probe, INVALID)
             ),
             Mux(
               req.opcode === Get,
-              Mux(clients_meta(i).hit, perm_after_probe, INVALID), // Get
-              Mux(clients_meta(i).hit, clients_meta(i).state, INVALID) // Hint
+              Mux(clients_meta(i).hit && a_do_probe, perm_after_probe, INVALID), // Get
+              Mux(clients_meta(i).hit && a_do_probe, clients_meta(i).state, INVALID) // Hint
             )
           )
         }
@@ -378,9 +379,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             req_acquire || req_put,
             Mux(
               req.param =/= NtoB || req_promoteT || req_put,
-              Mux(clients_meta(i).hit, INVALID, clients_meta(i).state),
+              Mux(clients_meta(i).hit && a_do_probe, INVALID, clients_meta(i).state),
               // NtoB
-              Mux(clients_meta(i).hit, perm_after_probe, clients_meta(i).state)
+              Mux(clients_meta(i).hit && a_do_probe, perm_after_probe, clients_meta(i).state)
             ),
             Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID), clients_meta(i).state)
           )
@@ -388,7 +389,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         }
 
         when (req.opcode === Get) {
-          m.state := Mux(clients_meta(i).hit, perm_after_probe, clients_meta(i).state)
+          m.state := Mux(clients_meta(i).hit && a_do_probe, perm_after_probe, clients_meta(i).state)
           m.alias.foreach(_ := clients_meta(i).alias.get)
         }
     }
@@ -556,6 +557,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     gotDirty := false.B
     acquire_flag := false.B
     a_do_release := false.B
+    a_do_probe := false.B
   }
   when(!s_acquire) { acquire_flag := acquire_flag | true.B }
 
@@ -666,6 +668,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val bypassPut = req_put && !self_meta.hit && !Cat(clients_meta.map(_.hit)).orR()
 
   def set_probe(): Unit = {
+    a_do_probe := true.B
     s_probe := false.B
     w_probeackfirst := false.B
     w_probeacklast := false.B
