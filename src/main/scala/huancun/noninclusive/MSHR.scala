@@ -80,6 +80,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val promoteT_safe = RegInit(true.B)
   val gotT = RegInit(false.B)
   val gotDirty = RegInit(false.B)
+  val a_do_release = RegInit(false.B)
   val meta_no_clients = Cat(self_meta.clientStates.map(_ === INVALID)).andR()
   val req_promoteT = req_acquire && Mux(
     self_meta.hit,
@@ -554,6 +555,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     nested_c_hit_reg := false.B
     gotDirty := false.B
     acquire_flag := false.B
+    a_do_release := false.B
   }
   when(!s_acquire) { acquire_flag := acquire_flag | true.B }
 
@@ -691,6 +693,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     ){
       s_release := false.B
       w_releaseack := false.B
+      a_do_release := true.B
     }
 
     // need Acquire downwards
@@ -1366,7 +1369,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val a_c_through = req.fromA && (
       nest_c_tag_match && !self_meta.hit && !nest_c_way_match ||
       !nest_c_tag_match && nest_c_way_match && (cache_alias || (preferCache && !acquirePermMiss) || self_meta.hit || transmit_from_other_client) ||
-      nest_c_tag_match && nest_c_way_match && !self_meta.hit && cache_alias
+      nest_c_tag_match && nest_c_way_match && !self_meta.hit && a_do_release
     )
 
   // TODO: fix this
