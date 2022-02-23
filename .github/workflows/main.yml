@@ -6,9 +6,9 @@ name: CI
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
-    branches: [ main, ci-test ]
+    branches: [ main, ci-test, non-inclusive ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, non-inclusive ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -54,5 +54,5 @@ jobs:
             mkdir build && cd build
             cmake .. -DDUT_DIR=../../build
             make
-            ./tlc_test
+            ./tlc_test -s $RANDOM
 
