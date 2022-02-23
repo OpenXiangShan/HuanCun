@@ -40,11 +40,19 @@ jobs:
       - name: Setup Mill
         uses: jodersky/setup-mill@v0.2.3
 
-      - name: Check scalafmt
-        run: make checkformat
+      # - name: Check scalafmt
+      #   run: make checkformat
         
       - name: Compile
         run: make compile
 
       - name: Unit test
-        run: make test
+        run: |
+            git clone https://github.com/OpenXiangShan/tl-test
+            make test-top-l2
+            cd ./tl-test
+            mkdir build && cd build
+            cmake .. -DDUT_DIR=../../build
+            make
+            ./tlc_test
+
