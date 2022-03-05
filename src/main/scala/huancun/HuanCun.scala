@@ -223,6 +223,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   val ctrl_unit = cacheParams.ctrl.map(_ => LazyModule(new CtrlUnit(node)))
   val ctlnode = ctrl_unit.map(_.ctlnode)
   val rst_nodes = ctrl_unit.map(_.core_reset_nodes)
+  val intnode = ctrl_unit.map(_.intnode)
 
   lazy val module = new LazyModuleImp(this) {
     val banks = node.in.size
@@ -231,6 +232,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       // cls: add cpio here
       val cp = Flipped(new CPToHuanCunIO())
       //val autocat = IO(Flipped(new AutoCatIOInternal))
+      val ecc_error = Valid(UInt(64.W))
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -290,23 +292,29 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
 
     def restoreAddress(x: UInt, idx: Int) = {
+      restoreAddressUInt(x, idx.U)
+    }
+    def restoreAddressUInt(x: UInt, idx: UInt) = {
       if(bankBits == 0){
         x
       } else {
         val high = x >> offsetBits
         val low = x(offsetBits - 1, 0)
-        Cat(high, idx.U(bankBits.W), low)
+        Cat(high, idx(bankBits - 1, 0), low)
       }
     }
 
     val slices = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
-        val slice = Module(new Slice()(p.alterPartial {
+        val rst = if(cacheParams.level == 3 && !cacheParams.simulation) {
+          RegNext(RegNext(reset.asBool))
+        } else reset.asBool
+        val slice = withReset(rst){ Module(new Slice()(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut
           case BankBitsKey => bankBits
-        }))
+        })) }
         slice.io.in <> in
         in.b.bits.address := restoreAddress(slice.io.in.b.bits.address, i)
         out <> slice.io.out
@@ -343,27 +351,38 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         slice.io.cp <> io.cp
         slice
     }
-    ctrl_unit.map { c =>
+    val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
+    val slices_ecc = slices.zipWithIndex.map {
+      case (s, i) => Pipeline(s.io.ctl_ecc, depth = 2, pipe = false, name = Some(s"ecc_buffer_$i"))
+    }
+    ecc_arb.io.in <> VecInit(slices_ecc)
+    io.ecc_error.valid := ecc_arb.io.out.fire()
+    io.ecc_error.bits := restoreAddressUInt(ecc_arb.io.out.bits.addr, ecc_arb.io.chosen)
+    ctrl_unit.foreach { c =>
+      val ctl_reqs = slices.zipWithIndex.map {
+        case (s, i) => Pipeline.pipeTo(s.io.ctl_req, depth = 2, pipe = false, name = Some(s"req_buffer_$i"))
+      }
+      val ctl_resps = slices.zipWithIndex.map {
+        case (s, i) => Pipeline(s.io.ctl_resp, depth = 2, pipe = false, name = Some(s"resp_buffer_$i"))
+      }
       val bank_match = slices.map(_ => Wire(Bool()))
-      c.module.req.ready := Mux1H(bank_match, slices.map(_.io.ctl_req.ready))
-      for((s, i) <- slices.zipWithIndex){
-        bank_match(i) := bank_eq(c.module.req.bits.set, i, bankBits)
-        s.io.ctl_req.valid := c.module.req.valid && bank_match(i)
-        s.io.ctl_req.bits := c.module.req.bits
+      c.module.io_req.ready := Mux1H(bank_match, ctl_reqs.map(_.ready))
+      for((s, i) <- ctl_reqs.zipWithIndex){
+        bank_match(i) := bank_eq(c.module.io_req.bits.set, i, bankBits)
+        s.valid := c.module.io_req.valid && bank_match(i)
+        s.bits := c.module.io_req.bits
       }
       val arb = Module(new Arbiter(new CtrlResp, slices.size))
-      arb.io.in <> VecInit(slices.map(_.io.ctl_resp))
-      c.module.resp <> arb.io.out
-
-      val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
-      ecc_arb.io.in <> VecInit(slices.map(_.io.ctl_ecc))
-      c.module.ecc <> ecc_arb.io.out
+      arb.io.in <> ctl_resps
+      c.module.io_resp <> arb.io.out
+      c.module.io_ecc <> ecc_arb.io.out
+      c.module.io_ecc.bits.addr := io.ecc_error.bits
     }
     if (ctrl_unit.isEmpty) {
       slices.foreach(_.io.ctl_req <> DontCare)
       slices.foreach(_.io.ctl_req.valid := false.B)
       slices.foreach(_.io.ctl_resp.ready := false.B)
-      slices.foreach(_.io.ctl_ecc.ready := false.B)
+      ecc_arb.io.out.ready := true.B
     }
     node.edges.in.headOption.foreach { n =>
       n.client.clients.zipWithIndex.foreach {

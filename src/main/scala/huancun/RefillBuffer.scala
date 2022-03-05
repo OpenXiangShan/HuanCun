@@ -10,6 +10,7 @@ class SourceDBufferRead(implicit p: Parameters) extends HuanCunBundle {
   val id = Input(UInt(bufIdxBits.W))
   val ready = Output(Bool())
   val buffer_data = Output(new DSData)
+  val last = Input(Bool())
 }
 
 class SinkDBufferWrite(implicit p: Parameters) extends HuanCunBundle {
@@ -36,7 +37,7 @@ class RefillBuffer(implicit p: Parameters) extends HuanCunModule {
   }))
 
   val (r, w) = (io.r, io.w)
-  val rlast = r.beat.andR()
+  val rlast = r.last
   val wlast = w.beat.andR()
   val wfirst = w.beat === 0.U
 

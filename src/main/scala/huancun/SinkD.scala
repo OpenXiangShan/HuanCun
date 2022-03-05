@@ -38,12 +38,12 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val sourceD_r_hazard = Flipped(ValidIO(new SourceDHazard))
   })
 
-  assert(!io.d.valid || io.d.bits.size === log2Up(blockBytes).U, "SinkD must receive aligned message")
-
   val (first, last, _, beat) = edge.count(io.d)
   val cache = io.save_data_in_bs
   val needData = io.d.bits.opcode(0)
   val w_safe = !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(io.set, io.way))
+
+  assert(!io.d.valid || !needData || io.d.bits.size === log2Up(blockBytes).U, "SinkD must receive aligned message when needData")
 
   val bypass_ready = io.inner_grant && needData && io.bypass_write.ready
   val bs_ready = (needData && w_safe || !first) &&

@@ -596,5 +596,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   // C nest B | C nest A
   io.status.bits.nestC := meta_valid && (!w_rprobeackfirst || !w_pprobeackfirst || !w_grantfirst)
 
-  io.ecc.errCode := DontCare
+  io.ecc := DontCare
+  io.ecc.valid := false.B
 }

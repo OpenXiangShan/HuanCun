@@ -4,6 +4,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy.{AddressSet, BundleBridgeSource, LazyModule, LazyModuleImp, SimpleDevice}
+import freechips.rocketchip.interrupts.{IntSourceNode, IntSourcePortParameters, IntSourcePortSimple}
 import freechips.rocketchip.regmapper.{RegField, RegFieldDesc, RegFieldGroup, RegWriteFn}
 import freechips.rocketchip.tilelink.{TLAdapterNode, TLRegisterNode}
 import freechips.rocketchip.util.{SimpleRegIO, UIntToOH1}
@@ -18,6 +19,8 @@ class CtrlUnit(val node: TLAdapterNode)(implicit p: Parameters)
     concurrency = 1,
     beatBytes = cacheParams.ctrl.get.beatBytes
   )
+  val device = new SimpleDevice("L3CacheCtrl", Seq("xiangshan,cache_ctrl"))
+  val intnode = IntSourceNode(IntSourcePortSimple(resources = device.int))
   val num_cores = cacheParams.ctrl.get.numCores
   val core_reset_nodes = (0 until num_cores) map(_ => BundleBridgeSource(() => Bool()))
 
@@ -28,9 +31,13 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   val cacheParams = wrapper.p(HCCacheParamsKey)
 
-  val req = IO(DecoupledIO(new CtrlReq()))
-  val resp = IO(Flipped(DecoupledIO(new CtrlResp())))
-  val ecc = IO(Flipped(DecoupledIO(new EccInfo())))
+  val io_req = IO(DecoupledIO(new CtrlReq()))
+  val io_resp = IO(Flipped(DecoupledIO(new CtrlResp())))
+  val io_ecc = IO(Flipped(DecoupledIO(new EccInfo())))
+
+  val req = io_req
+  val resp = io_resp
+  val ecc = io_ecc
 
   val node = wrapper.node
   val ctlnode = wrapper.ctlnode
@@ -73,9 +80,9 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_cmd = RegInit(0.U(64.W))
 
   val ecc_code = RegInit(0.U(64.W)) // assume non-zero as ECC error
-  val ecc_tag = RegInit(0.U(64.W))
-  val ecc_set = RegInit(0.U(64.W))
-  val ecc_way = RegInit(0.U(64.W))
+  // for data error: ecc_addr = {set, way, beat}
+  // for tag error: ecc_addr = physical address
+  val ecc_addr = RegInit(0.U(64.W))
 
   val core_reset = RegInit(0.U(64.W)) +:Seq.fill(wrapper.num_cores-1){ RegInit(1.U(64.W)) }
 
@@ -102,7 +109,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     Seq(ctl_tag, ctl_set, ctl_way) ++
     ctl_data ++
     Seq(ctl_dir) ++
-    Seq(ecc_code, ecc_tag, ecc_set, ecc_way)
+    Seq(ecc_code, ecc_addr)
   ).map(reg => RegField(64, reg, RegWriteFn(reg)))
 
   ctlnode.regmap(
@@ -163,7 +170,9 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   when(ecc.fire()) {
     ecc_code := ecc.bits.errCode
+    ecc_addr := ecc.bits.addr
   }
+  wrapper.intnode.out.head._1.head := ecc_code =/= 0.U
 }
 
 class CtrlReq() extends Bundle {
@@ -182,6 +191,9 @@ class CtrlResp() extends Bundle {
 
 class EccInfo() extends Bundle {
   val errCode = UInt(8.W)
+  val addr = UInt(64.W)
+}
+object EccInfo {
   def ERR_NO = 0.U(8.W)
   def ERR_SELF_DIR = 1.U(8.W)
   def ERR_CLIENT_DIR = 2.U(8.W)
