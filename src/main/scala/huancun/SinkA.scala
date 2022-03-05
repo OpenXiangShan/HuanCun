@@ -92,6 +92,7 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
   allocInfo.fromProbeHelper := false.B
   allocInfo.fromCmoHelper := false.B
   allocInfo.needProbeAckData.foreach(_ := false.B)
+  allocInfo.dsid := a.bits.user.lift(DsidKey).getOrElse(0.U)
 
   io.d_pb_pop.ready := beatVals(io.d_pb_pop.bits.bufIdx)(io.d_pb_pop.bits.count)
   io.d_pb_beat := RegEnable(putBuffer(io.d_pb_pop.bits.bufIdx)(io.d_pb_pop.bits.count), io.d_pb_pop.fire())

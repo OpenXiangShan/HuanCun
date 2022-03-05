@@ -112,6 +112,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.dir_read.bits.wayMode := false.B // TODO: it seems incorrect
   io.dir_read.bits.replacerInfo := DontCare
   io.dir_read.bits.source := DontCare
+  io.dir_read.bits.dsid := DontCare // Not Sure where slicectrl come from
 
   when(io.dir_result.fire()){
     switch(req_reg.cmd){

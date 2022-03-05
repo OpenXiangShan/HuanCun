@@ -27,6 +27,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.prefetch._
 import huancun.utils.{FastArbiter, Pipeline}
+import huancun.lvna._
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -227,6 +228,9 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val banks = node.in.size
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc,(Output(UInt(6.W)))))
+      // cls: add cpio here
+      val cp = Flipped(new CPToHuanCunIO())
+      //val autocat = IO(Flipped(new AutoCatIOInternal))
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -335,6 +339,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             }
         }
         io.perfEvents(i) := slice.perfinfo
+        // cls: add cpio from here
+        slice.io.cp <> io.cp
         slice
     }
     ctrl_unit.map { c =>

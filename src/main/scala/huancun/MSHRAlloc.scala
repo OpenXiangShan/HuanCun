@@ -50,7 +50,6 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     val dirRead = DecoupledIO(new DirRead)
     val bc_mask = ValidIO(Vec(mshrsAll, Bool()))
     val c_mask = ValidIO(Vec(mshrsAll, Bool()))
-
   })
 
   // Allocate one MSHR per cycle
@@ -167,6 +166,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   dirRead.bits.replacerInfo.opcode := request.bits.opcode
   dirRead.bits.wayMode := false.B
   dirRead.bits.way := DontCare
+  dirRead.bits.dsid := request.bits.dsid   //cls
 
   val cntStart = RegInit(false.B)
   when(dirRead.ready) {

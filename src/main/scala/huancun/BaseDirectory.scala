@@ -40,6 +40,7 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val source = UInt(sourceIdBits.W)
   val wayMode = Bool()
   val way = UInt(log2Ceil(maxWays).W)
+  val dsid = UInt(1.W)
 }
 
 abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
@@ -216,6 +217,83 @@ abstract class SubDirectoryDoUpdate[T <: Data](
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
   replacement: String)(implicit p: Parameters)
     extends SubDirectory[T](
+      wports, sets, ways, tagBits,
+      dir_init_fn, dir_hit_fn, invalid_way_sel,
+      replacement
+    ) with HasUpdate {
+
+  val update = doUpdate(reqReg.replacerInfo)
+  when(reqValidReg && update){
+    replacer_wen := true.B
+  }
+}
+
+
+class SubDirectoryWithCAT[T <: Data](
+  wports:      Int,
+  sets:        Int,
+  ways:        Int,
+  tagBits:     Int,
+  dir_init_fn: () => T,
+  dir_hit_fn: T => Bool,
+  invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
+  replacement: String)(implicit p: Parameters)
+    extends SubDirectory[T](
+      wports, sets, ways, tagBits,
+      dir_init_fn, dir_hit_fn, invalid_way_sel,
+      replacement
+    ) {
+  override val io = IO(new Bundle() {
+    val read = Flipped(DecoupledIO(new Bundle() {
+      val tag = UInt(tagBits.W)
+      val set = UInt(setBits.W)
+      val replacerInfo = new ReplacerInfo()
+      val wayMode = Bool()
+      val way = UInt(wayBits.W)
+      val curr_waymask = UInt(ways.W)    //cls
+    }))
+    val resp = ValidIO(new Bundle() {
+      val hit = Bool()
+      val way = UInt(wayBits.W)
+      val tag = UInt(tagBits.W)
+      val dir = dir_init.cloneType
+      val error = Bool()
+    })
+    val tag_w = Flipped(DecoupledIO(new Bundle() {
+      val tag = UInt(tagBits.W)
+      val set = UInt(setBits.W)
+      val way = UInt(wayBits.W)
+    }))
+    val dir_w = Flipped(DecoupledIO(new Bundle() {
+      val set = UInt(setBits.W)
+      val way = UInt(wayBits.W)
+      val dir = dir_init.cloneType
+    }))
+  })
+
+  override val repl_state = if(replacement == "rrip"){
+    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
+    val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
+    val next_state = repl.get_next_state(repl_state, io.resp.bits.way, io.resp.bits.hit, io.read.bits.curr_waymask)   //curr_waymask是否还有效？
+    replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
+    repl_state
+  } else {
+    0.U
+  }
+  override val replaceWay = repl.get_replace_way(repl_state,io.read.bits.curr_waymask)
+
+}
+
+abstract class SubDirectoryWithCATDoUpdate[T <: Data](
+  wports:      Int,
+  sets:        Int,
+  ways:        Int,
+  tagBits:     Int,
+  dir_init_fn: () => T,
+  dir_hit_fn:  T => Bool,
+  invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
+  replacement: String)(implicit p: Parameters)
+    extends SubDirectoryWithCAT[T](
       wports, sets, ways, tagBits,
       dir_init_fn, dir_hit_fn, invalid_way_sel,
       replacement

@@ -27,6 +27,7 @@ import freechips.rocketchip.util.leftOR
 import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
 import huancun.prefetch._
 import huancun.utils.{FastArbiter, Pipeline}
+import huancun.lvna._
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
@@ -36,6 +37,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
+    //cls: add cpio
+    val cp = Flipped(new CPToHuanCunIO())
   })
   println(s"clientBits: $clientBits")
 
@@ -442,11 +445,14 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
           ctrl.map(_.io.c_tag_w)
         )
       )
+      dir.io.waymask := io.cp.waymask
     case (_: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
     // skip
     case _ =>
       assert(false)
   }
+  io.cp.dsid := directory.io.read.bits.dsid
+  io.cp.capacity := DontCare
 
   def arbTasks[T <: Bundle](
     out:    DecoupledIO[T],

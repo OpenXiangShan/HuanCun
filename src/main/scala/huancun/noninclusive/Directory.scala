@@ -114,6 +114,7 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Sel
   val tagWReq = Flipped(DecoupledIO(new SelfTagWrite))
   val clientDirWReq = Flipped(DecoupledIO(new ClientDirWrite))
   val clientTagWreq = Flipped(DecoupledIO(new ClientTagWrite))
+  val waymask = Input(UInt((cacheParams.ways).W))
 }
 
 class Directory(implicit p: Parameters)
@@ -213,7 +214,7 @@ class Directory(implicit p: Parameters)
       )
   }
   val selfDir = Module(
-    new SubDirectoryDoUpdate[SelfDirEntry](
+    new SubDirectoryWithCATDoUpdate[SelfDirEntry](  //new SubDirectoryDoUpdate[SelfDirEntry](
       wports = mshrsAll,
       sets = cacheParams.sets,
       ways = cacheParams.ways,
@@ -228,7 +229,7 @@ class Directory(implicit p: Parameters)
       self_invalid_way_sel,
       replacement = cacheParams.replacement
     ) with NonInclusiveCacheReplacerUpdate
-  )
+  )// cls: add cat to selfdir
 
   def addrConnect(lset: UInt, ltag: UInt, rset: UInt, rtag: UInt) = {
     assert(lset.getWidth + ltag.getWidth == rset.getWidth + rtag.getWidth)
@@ -249,6 +250,9 @@ class Directory(implicit p: Parameters)
       assert(req.bits.idOH(1, 0) === "b11".U)
     }
   }
+  // cls: add cpctrl waymask to selfdir
+  selfDir.io.read.bits.curr_waymask := io.waymask
+
   req.ready := Cat(rports.map(_.ready)).andR()
   val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
   val sourceIdReg = RegEnable(req.bits.source, req.fire())

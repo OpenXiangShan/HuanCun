@@ -38,6 +38,7 @@ abstract class BaseSinkC(implicit p: Parameters) extends HuanCunModule {
     val release = DecoupledIO(new TLBundleC(edgeOut.bundle))
   })
   io.alloc.bits.isPrefetch.foreach(_ := false.B)
+  io.alloc.bits.dsid := io.c.bits.user.lift(DsidKey).getOrElse(0.U)   // Not Sure whether c_req have label
 
   when (io.c.fire()) {
     assert(io.c.bits.opcode =/= 3.U) // opcode 3 is reserved for C channel

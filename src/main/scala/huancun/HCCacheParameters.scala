@@ -115,7 +115,7 @@ case class HCCacheParameters
   sets: Int = 128,
   blockBytes: Int = 64,
   pageBytes: Int = 4096,
-  replacement: String = "plru",
+  replacement: String = "rrip", //"plru",
   mshrs: Int = 14,
   dirReadPorts: Int = 1,
   dirReg: Boolean = true,
