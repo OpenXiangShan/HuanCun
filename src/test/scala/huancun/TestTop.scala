@@ -114,7 +114,8 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       name = "L3",
       level = 3,
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L3"))
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L3")),
+      simulation = true
     )
   })))
 
