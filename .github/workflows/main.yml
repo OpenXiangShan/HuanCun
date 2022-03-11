@@ -16,7 +16,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
-  checks:
+  tl-test_L2:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
@@ -56,3 +56,42 @@ jobs:
             make
             ./tlc_test -s $RANDOM
 
+  tl-test_L2L3:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Setup Scala
+        uses: olafurpg/setup-scala@v10
+
+      - name: Cache
+        id: cache
+        uses: coursier/cache-action@v5
+
+      - name: Verilator
+        run: sudo apt install verilator
+
+      - name: Setup Mill
+        uses: jodersky/setup-mill@v0.2.3
+
+      # - name: Check scalafmt
+      #   run: make checkformat
+
+      - name: Compile
+        run: make compile
+
+      - name: Unit test
+        run: |
+          git clone https://github.com/OpenXiangShan/tl-test
+          make test-top-l2l3
+          cd ./tl-test
+          mkdir build && cd build
+          cmake .. -DDUT_DIR=../../build
+          make
+          ./tlc_test -s $RANDOM
