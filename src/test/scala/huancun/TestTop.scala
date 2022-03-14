@@ -9,7 +9,7 @@ import freechips.rocketchip.tilelink._
 
 import scala.collection.mutable.ArrayBuffer
 
-class TestTop_L2()(implicit p: Parameters) extends LazyModule {
+class TestTop_L2(n: Int)(implicit p: Parameters) extends LazyModule {
 
   /* L1D   L1D
    *  \    /
@@ -39,7 +39,7 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
     masterNode
   }
 
-  val l1d_nodes = (0 until 2) map( i => createClientNode(s"l1d$i", 32))
+  val l1d_nodes = (0 until n) map( i => createClientNode(s"l1d$i", 32))
   val master_nodes = l1d_nodes
 
   val l2 = LazyModule(new HuanCun())
@@ -65,7 +65,7 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
   }
 }
 
-class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
+class TestTop_L2L3(n: Int)(implicit p: Parameters) extends LazyModule {
 
   /* L1D   L1D
    *  |     |
@@ -97,10 +97,10 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
     masterNode
   }
 
-  val l1d_nodes = (0 until 2) map( i => createClientNode(s"l1d$i", 32))
+  val l1d_nodes = (0 until n) map( i => createClientNode(s"l1d$i", 32))
   val master_nodes = l1d_nodes
 
-  val l2_nodes = (0 until 2) map( i => LazyModule(new HuanCun()(new Config((_, _, _) => {
+  val l2_nodes = (0 until n) map( i => LazyModule(new HuanCun()(new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       name = s"L2_$i",
       inclusive = false,
@@ -152,7 +152,7 @@ object TestTop_L2 extends App {
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2"))
     )
   })
-  val top = LazyModule(new TestTop_L2()(config))
+  val top = LazyModule(new TestTop_L2(2)(config))
 
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
@@ -166,7 +166,7 @@ object TestTop_L2L3 extends App {
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2"))
     )
   })
-  val top = LazyModule(new TestTop_L2L3()(config))
+  val top = LazyModule(new TestTop_L2L3(2)(config))
 
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
