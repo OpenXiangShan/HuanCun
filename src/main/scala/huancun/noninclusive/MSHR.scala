@@ -182,6 +182,21 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val probeAckDataDrop = RegInit(false.B)
   val probeAckDataSave = RegInit(false.B)
 
+  // Which clients should be probed?
+  // a req:
+  // 1. cache alias
+  // 2. transmit from other clients
+  val a_probe_clients = VecInit(clients_meta.zipWithIndex.map {
+    case (m, i) =>
+      Mux(i.U === iam && req_acquire,
+        cache_alias,
+        m.hit && (
+          req_needT && m.state =/= INVALID || isT(m.state) ||
+            !self_meta.hit   // transmit from other client since we are non-inclusive
+          )
+      )
+  })
+
   def probe_next_state(state: UInt, param: UInt): UInt = Mux(
     isT(state) && param === toT,
     state,
@@ -354,7 +369,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             Mux(
               req.param =/= NtoB || req_promoteT || req_put,
               INVALID,
-              Mux(clients_meta(i).hit && a_do_probe, perm_after_probe, INVALID)
+              Mux(clients_meta(i).hit && a_do_probe, Mux(a_probe_clients(i), perm_after_probe, clients_meta(i).state), INVALID)
             ),
             Mux(
               req.opcode === Get,
@@ -381,7 +396,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
               req.param =/= NtoB || req_promoteT || req_put,
               Mux(clients_meta(i).hit && a_do_probe, INVALID, clients_meta(i).state),
               // NtoB
-              Mux(clients_meta(i).hit && a_do_probe, perm_after_probe, clients_meta(i).state)
+              Mux(clients_meta(i).hit && a_do_probe, Mux(a_probe_clients(i), perm_after_probe, clients_meta(i).state), clients_meta(i).state)
             ),
             Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID), clients_meta(i).state)
           )
@@ -990,20 +1005,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       )
     )
   )
-  // Which clients should be probed?
-  // a req:
-  // 1. cache alias
-  // 2. transmit from other clients
-  val a_probe_clients = VecInit(clients_meta.zipWithIndex.map {
-    case (m, i) =>
-      Mux(i.U === iam && req_acquire,
-        cache_alias,
-        m.hit && (
-          req_needT && m.state =/= INVALID || isT(m.state) ||
-            !self_meta.hit   // transmit from other client since we are non-inclusive
-          )
-      )
-  })
   val b_probe_clients = VecInit(clients_meta.map(_.hit))
   val x_probe_clients = VecInit(clients_meta.map {
     case m => Mux(req.param === 1.U, m.hit && isT(m.state), m.hit)
