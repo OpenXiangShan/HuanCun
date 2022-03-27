@@ -94,7 +94,7 @@ class TLLogWriter(prefix: String) extends BlackBox(Map("prefix" -> StringParam(p
       |endmodule
       |""".stripMargin
 
-  setInline("TLLogWriter", verilog)
+  setInline("TLLogWriter.v", verilog)
 
 }
 
