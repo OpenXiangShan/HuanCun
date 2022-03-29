@@ -1360,7 +1360,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       !w_probeackfirst || !w_grantfirst || (client_dir_conflict && !probe_helper_finish)
     )
   // C nest A (C -> A)
-  io_is_nestedReleaseData := req.fromC && !other_clients_hit /*&& isToN(req.param) */ && req_valid
+  io_is_nestedReleaseData := req.fromC && req_valid
   // B nest A (B -> A)
   io_is_nestedProbeAckData := req.fromB && clients_hit && req_valid
   io_probeHelperFinish := req.fromB && req.fromProbeHelper && no_schedule && no_wait
