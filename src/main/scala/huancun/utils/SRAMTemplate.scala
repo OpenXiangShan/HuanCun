@@ -145,8 +145,11 @@ class SRAMTemplate[T <: Data]
   val bypass_wdata = if (bypassWrite) VecInit(RegNext(io.w.req.bits.data).map(_.asTypeOf(wordType)))
   else VecInit((0 until way).map(_ => LFSR64().asTypeOf(wordType)))
   val bypass_mask = need_bypass(io.w.req.valid, io.w.req.bits.setIdx, io.w.req.bits.waymask.getOrElse("b1".U), io.r.req.valid, io.r.req.bits.setIdx)
+  val fuzzer_rdata_src = VecInit(Seq(RegNext(raw_rdata.asUInt), 0.U(raw_rdata.asUInt.getWidth.W), VecInit(Seq.fill(raw_rdata.asUInt.getWidth)(1.U(1.W))).asUInt, raw_rdata.asUInt))
+  val fuzzer_rdata_sel = LFSR64()(1, 0)
+  val fuzzer_rdata = fuzzer_rdata_src(fuzzer_rdata_sel).asTypeOf(raw_rdata)
   val mem_rdata = {
-    if (singlePort) raw_rdata
+    if (singlePort) Mux(RegNext(io.w.req.valid), fuzzer_rdata, raw_rdata)
     else VecInit(bypass_mask.asBools.zip(raw_rdata).zip(bypass_wdata).map {
       case ((m, r), w) => Mux(m, w, r)
     })
