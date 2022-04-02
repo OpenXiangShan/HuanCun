@@ -102,8 +102,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
 
   val req_client_meta = clients_meta(iam)
+  val client_hit_reg = RegInit(false.B)
+  when(io.dirResult.valid){
+    client_hit_reg := req_client_meta.hit
+  }
   val client_hit_flag = if(cacheParams.name == "L2") {
-    RegEnable(req_client_meta.hit, io.dirResult.valid) || req_client_meta.hit
+    client_hit_reg || req_client_meta.hit
   } else {
     req_client_meta.hit
   }
@@ -1283,6 +1287,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       !acquire_flag && (a_need_data || acquireperm_alias) &&
         probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit
     ) {
+      when(acquireperm_alias && !req_client_meta.hit) {
+        printf("BUG_REPRODUCE: nested acquire perm alias\n")
+      }
       promoteT_safe := false.B
       s_acquire := false.B
       w_grantfirst := false.B
@@ -1339,6 +1346,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probeAckDataDrop := false.B
     probeAckDataSave := false.B
     probe_helper_finish := false.B
+    client_hit_reg := false.B
   }
   io.status.bits.will_free := will_be_free
 
