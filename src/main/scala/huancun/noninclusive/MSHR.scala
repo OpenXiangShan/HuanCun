@@ -102,7 +102,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
 
   val req_client_meta = clients_meta(iam)
-  val cache_alias = !req.isPrefetch.getOrElse(false.B) && req_client_meta.hit && req_acquire &&
+  val client_hit_flag = if(cacheParams.name == "L2") {
+    RegEnable(req_client_meta.hit, io.dirResult.valid) || req_client_meta.hit
+  } else {
+    req_client_meta.hit
+  }
+  val cache_alias = !req.isPrefetch.getOrElse(false.B) && client_hit_flag && req_acquire &&
     req_client_meta.alias.getOrElse(0.U) =/= req.alias.getOrElse(0.U)
   val highest_perm = ParallelMax(
     Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
