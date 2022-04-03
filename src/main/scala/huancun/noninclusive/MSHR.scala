@@ -1275,7 +1275,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_probeackfirst := w_probeackfirst || probeack_last
     w_probeacklast := w_probeacklast || probeack_last && resp.last
     w_probeack := w_probeack || probeack_last && (resp.last || req.off === 0.U)
-    probe_dirty := probe_dirty || resp.hasData
+    probe_dirty := probe_dirty || resp.hasData || nested_c_hit
     when (
       !acquire_flag && (a_need_data || acquireperm_alias) &&
         probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit
