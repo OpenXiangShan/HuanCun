@@ -100,23 +100,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     case meta => meta.hit && isT(meta.state)
   }).asUInt.orR
 
+  val will_be_free = Wire(Bool())
 
   val req_client_meta = clients_meta(iam)
-  val client_hit_reg = RegInit(false.B)
-  when(io.dirResult.valid){
-    client_hit_reg := req_client_meta.hit
-  }
-  val client_hit_flag = if(cacheParams.name == "L2") {
-    client_hit_reg || req_client_meta.hit
-  } else {
-    req_client_meta.hit
-  }
+  val client_hit_flag = Hold(req_client_meta.hit, l2Only = true)
   val cache_alias = !req.isPrefetch.getOrElse(false.B) && client_hit_flag && req_acquire &&
     req_client_meta.alias.getOrElse(0.U) =/= req.alias.getOrElse(0.U)
-  val highest_perm = ParallelMax(
+  val highest_perm = Hold(ParallelMax(
     Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
       clients_meta.map(m => Mux(m.hit, m.state, INVALID))
-  ) // the highest perm of this whole level, including self and clients
+  ), l2Only = false) // the highest perm of this whole level, including self and clients
   val highest_perm_except_me = ParallelMax(
     Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
       clients_meta.zipWithIndex.map {
@@ -159,15 +152,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         (req.param === PREFETCH_WRITE && isT(meta.state) && meta.hit && (!self_meta.hit || !isT(self_meta.state)) ||
           req.param === PREFETCH_READ && meta.hit && !self_meta.hit && !clients_meta(iam).hit)
   })
-  val prefetch_miss_need_probe = prefetch_miss_need_probe_vec.asUInt.orR
+  val prefetch_miss_need_probe = Hold(prefetch_miss_need_probe_vec.asUInt.orR, l2Only = true)
   val prefetch_miss = req.opcode === Hint && (prefetch_miss_need_acquire || prefetch_miss_need_probe)
   val prefetch_need_data = prefetch_miss && !self_meta.hit
 
   // self cache does not have the acquired block, but some other client owns the block
-  val transmit_from_other_client = !self_meta.hit && VecInit(clients_meta.zipWithIndex.map {
+  val transmit_from_other_client = !self_meta.hit && Hold(VecInit(clients_meta.zipWithIndex.map {
     case (meta, i) =>
       (req.opcode === Get || i.U =/= iam) && meta.hit
-  }).asUInt.orR && (!req.isPrefetch.getOrElse(false.B) || prefetch_need_data)
+  }).asUInt.orR, l2Only = false) && (!req.isPrefetch.getOrElse(false.B) || prefetch_need_data)
 
   val a_need_data = req.fromA && (req.opcode === Get || req_put || req.opcode === AcquireBlock || req.opcode === Hint)
   val acquireperm_alias = req.fromA && req.opcode === AcquirePerm && cache_alias
@@ -1336,7 +1329,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     s_writerelease && s_writeprobe &&
     s_triggerprefetch.getOrElse(true.B) &&
     s_prefetchack.getOrElse(true.B) // TODO: s_writeput?
-  val will_be_free = no_wait && no_schedule
+  will_be_free := no_wait && no_schedule
   when(will_be_free) {
     meta_valid := false.B
     req_valid := false.B
@@ -1346,8 +1339,22 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probeAckDataDrop := false.B
     probeAckDataSave := false.B
     probe_helper_finish := false.B
-    client_hit_reg := false.B
   }
+
+  def Hold[T <: Data](x: T, l2Only: Boolean): T = {
+    if(l2Only && cacheParams.name != "L2") {
+      x
+    } else {
+      val reg = RegInit(0.U.asTypeOf(x))
+      when(io.dirResult.valid){
+        reg := x
+      }.elsewhen(will_be_free){
+        reg := 0.U
+      }
+      (x.asUInt() | reg.asUInt()).asTypeOf(x)
+    }
+  }
+
   io.status.bits.will_free := will_be_free
 
   // Alloc MSHR (alloc has higher priority than release)
