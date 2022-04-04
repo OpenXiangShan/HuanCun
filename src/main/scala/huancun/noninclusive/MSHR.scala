@@ -968,16 +968,35 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.off := req.off
   // full overwrite, we can always acquire perm, no need to acquire block
   val acquire_perm_NtoT = req.opcode === AcquirePerm && req.param === NtoT
+
+  val acquire_opcode = if (cacheParams.name == "L2") {
+    Mux(req.opcode === AcquireBlock && req.param === BtoT, AcquirePerm, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
+  } else {
+    req.opcode
+  }
+
+  val acquire_param = if (cacheParams.name == "L2") {
+    Mux(req.opcode === Hint,
+      Mux(req_needT, Mux(self_meta.hit, BtoT, NtoT), NtoB),
+      req.param
+    )
+  } else {
+    Mux(req.opcode === AcquireBlock && req.param === BtoT, NtoT, req.param)
+  }
+
   oa.opcode := Mux(!s_transferput || bypassGet, req.opcode,
-    //Mux(self_meta.hit, AcquirePerm,
+    /*
     Mux(self_meta.hit, AcquireBlock,
       Mux(client_hit_acquire_prem || acquire_perm_NtoT,
         AcquirePerm,
         AcquireBlock
       )
     )
+    */
+    acquire_opcode
   )
   oa.param := Mux(!s_transferput, req.param,
+    /*
     Mux(req_needT,
       Mux(self_meta.hit,
         BtoT,
@@ -990,6 +1009,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       ),
       NtoB
     )
+    */
+    acquire_param
   )
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U // TODO: this is deprecated?
@@ -1089,8 +1110,14 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   def odOpGen(r: MSHRRequest) = {
     // for L3: AcquireBlock BtoT -> Grant
     // for L2: our L1D requrire us always grant data
-    //val grantOp = if(cacheParams.level == 2) GrantData else Mux(req.param === BtoT, Grant, GrantData)
-    val grantOp = GrantData
+    // val grantOp = if(cacheParams.level == 2) GrantData else Mux(req.param === BtoT, Grant, GrantData)
+    // val grantOp = Mux(r.param === BtoT, Grant, GrantData)
+    // val grantOp = GrantData
+    val grantOp = if (cacheParams.level == 2) {
+      Mux(req.param === BtoT, Grant, GrantData)
+    } else {
+      Mux(req.param === BtoT && req.opcode === AcquirePerm, Grant, GrantData)
+    }
     val opSeq = Seq(AccessAck, AccessAck, AccessAckData, AccessAckData, AccessAckData, HintAck, grantOp, Grant)
     val opToA = VecInit(opSeq)(r.opcode)
     Mux(r.fromA, opToA, ReleaseAck)
@@ -1405,7 +1432,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val a_c_through = req.fromA && (
       nest_c_tag_match && !self_meta.hit && !nest_c_way_match ||
-      !nest_c_tag_match && nest_c_way_match && (cache_alias || (preferCache && !acquirePermMiss) || self_meta.hit || transmit_from_other_client) ||
+      !nest_c_tag_match && nest_c_way_match && (cache_alias || (preferCache && !acquirePermMiss) || Hold(self_meta.hit, false) || transmit_from_other_client) ||
       nest_c_tag_match && nest_c_way_match && !self_meta.hit && a_do_release
     )
 
