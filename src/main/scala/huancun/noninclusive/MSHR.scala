@@ -106,10 +106,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val client_hit_flag = Hold(req_client_meta.hit, l2Only = true)
   val cache_alias = !req.isPrefetch.getOrElse(false.B) && client_hit_flag && req_acquire &&
     req_client_meta.alias.getOrElse(0.U) =/= req.alias.getOrElse(0.U)
-  val highest_perm = Hold(ParallelMax(
+  val highest_perm = ParallelMax(
     Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
       clients_meta.map(m => Mux(m.hit, m.state, INVALID))
-  ), l2Only = false) // the highest perm of this whole level, including self and clients
+  ) // the highest perm of this whole level, including self and clients
+  val highest_perm_reg = Hold(highest_perm, l2Only = false)
   val highest_perm_except_me = ParallelMax(
     Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
       clients_meta.zipWithIndex.map {
@@ -328,7 +329,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       Mux(!self_meta.hit,
         Mux(
           transmit_from_other_client || cache_alias, // For cache alias, !promoteT is granteed
-          highest_perm,
+          highest_perm_reg,
           Mux(gotT,
             Mux(req_acquire && promoteT_safe, TRUNK, TIP),
             // for prefetch, if client already hit, self meta won't update,
@@ -881,8 +882,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   when(io.dirResult.valid) {
     when(req.fromB) {
-      will_probeack_through := clients_have_T
-      will_drop_probeack := !clients_have_T
+      will_probeack_through := clients_have_T || (req.needProbeAckData.getOrElse(false.B) && highest_perm =/= INVALID && !self_meta.hit)
+      will_drop_probeack := !will_probeack_through
       will_save_probeack := will_probeack_through && !io_probeAckDataThrough && self_meta.hit && req.param === toB
       when(req.fromProbeHelper) {
         probeAckDataThrough := will_probeack_through && (!self_meta.hit || io_probeAckDataThrough)
@@ -968,7 +969,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // full overwrite, we can always acquire perm, no need to acquire block
   val acquire_perm_NtoT = req.opcode === AcquirePerm && req.param === NtoT
   oa.opcode := Mux(!s_transferput || bypassGet, req.opcode,
-    Mux(self_meta.hit, AcquirePerm,
+    //Mux(self_meta.hit, AcquirePerm,
+    Mux(self_meta.hit, AcquireBlock,
       Mux(client_hit_acquire_prem || acquire_perm_NtoT,
         AcquirePerm,
         AcquireBlock
@@ -1045,7 +1047,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req.fromB,
     Cat(
       Mux(req.fromProbeHelper, Release(2, 1), ProbeAck(2, 1)),
-      (probe_dirty || self_meta.hit && self_meta.dirty ||
+      (probe_dirty && !probeAckDataDrop || self_meta.hit && self_meta.dirty ||
         req.needProbeAckData.getOrElse(false.B)) && highest_perm =/= INVALID
     ),
     if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), self_meta.dirty.asUInt)
@@ -1078,7 +1080,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oc.dirty := Mux(req.fromB, probe_dirty || self_meta.hit && self_meta.dirty, self_meta.dirty)
 
   od.sinkId := io.id
-  od.useBypass := !self_meta.hit && (!probe_dirty || acquire_flag) && !nested_c_hit && !(meta_reg.self.error || meta_reg.clients.error)
+  od.useBypass := !self_meta.hit && (!probe_dirty || acquire_flag && oa.opcode =/= AcquirePerm) && !nested_c_hit && !(meta_reg.self.error || meta_reg.clients.error)
   od.sourceId := req.source
   od.set := req.set
   od.tag := req.tag
@@ -1087,7 +1089,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   def odOpGen(r: MSHRRequest) = {
     // for L3: AcquireBlock BtoT -> Grant
     // for L2: our L1D requrire us always grant data
-    val grantOp = if(cacheParams.level == 2) GrantData else Mux(req.param === BtoT, Grant, GrantData)
+    //val grantOp = if(cacheParams.level == 2) GrantData else Mux(req.param === BtoT, Grant, GrantData)
+    val grantOp = GrantData
     val opSeq = Seq(AccessAck, AccessAck, AccessAckData, AccessAckData, AccessAckData, HintAck, grantOp, Grant)
     val opToA = VecInit(opSeq)(r.opcode)
     Mux(r.fromA, opToA, ReleaseAck)
