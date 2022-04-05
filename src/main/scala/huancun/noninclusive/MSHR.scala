@@ -970,7 +970,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val acquire_perm_NtoT = req.opcode === AcquirePerm && req.param === NtoT
 
   val acquire_opcode = if (cacheParams.name == "L2") {
-    Mux(req.opcode === AcquireBlock && req.param === BtoT, AcquirePerm, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
+    Mux(req.opcode === AcquirePerm && req.param === BtoT, AcquirePerm, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
   } else {
     req.opcode
   }
@@ -1101,7 +1101,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oc.dirty := Mux(req.fromB, probe_dirty || self_meta.hit && self_meta.dirty, self_meta.dirty)
 
   od.sinkId := io.id
-  od.useBypass := !self_meta.hit && (!probe_dirty || acquire_flag && oa.opcode =/= AcquirePerm) && !nested_c_hit && !(meta_reg.self.error || meta_reg.clients.error)
+  od.useBypass := (!self_meta.hit || req.param === BtoT) && (!probe_dirty || acquire_flag && oa.opcode =/= AcquirePerm) && !nested_c_hit && !(meta_reg.self.error || meta_reg.clients.error)
   od.sourceId := req.source
   od.set := req.set
   od.tag := req.tag
@@ -1114,7 +1114,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // val grantOp = Mux(r.param === BtoT, Grant, GrantData)
     // val grantOp = GrantData
     val grantOp = if (cacheParams.level == 2) {
-      Mux(req.param === BtoT, Grant, GrantData)
+      Mux(req.param === BtoT && req.opcode === AcquirePerm, Grant, GrantData)
     } else {
       Mux(req.param === BtoT && req.opcode === AcquirePerm, Grant, GrantData)
     }
