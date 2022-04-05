@@ -32,7 +32,7 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
         channelBytes = TLChannelBeatBytes(cacheParams.blockBytes),
         minLatency = 1,
         echoFields = cacheParams.echoField,
-        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField()),
+        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField(), AliasField(2)),
         responseKeys = cacheParams.respKey
       )
     ))
@@ -90,7 +90,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
         channelBytes = TLChannelBeatBytes(cacheParams.blockBytes),
         minLatency = 1,
         echoFields = cacheParams.echoField,
-        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField()),
+        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField(), AliasField(2)),
         responseKeys = cacheParams.respKey
       )
     ))
