@@ -150,7 +150,7 @@ object TestTop_L2 extends App {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2")),
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2", aliasBitsOpt = Some(2))),
       echoField = Seq(DirtyField())
     )
   })
@@ -165,7 +165,7 @@ object TestTop_L2L3 extends App {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2")),
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2", aliasBitsOpt = Some(2))),
       echoField = Seq(DirtyField())
     )
   })
