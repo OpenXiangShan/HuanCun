@@ -1103,7 +1103,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   od.sinkId := io.id
   od.useBypass := (!self_meta.hit || self_meta.state === BRANCH && req_needT) &&
     (!probe_dirty || acquire_flag && oa.opcode =/= AcquirePerm) &&
-    !nested_c_hit && !(meta_reg.self.error || meta_reg.clients.error)
+    !(meta_reg.self.error || meta_reg.clients.error)
   od.sourceId := req.source
   od.set := req.set
   od.tag := req.tag
