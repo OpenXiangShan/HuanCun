@@ -27,6 +27,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.prefetch._
 import huancun.utils.{FastArbiter, Pipeline}
+import hctransforms.Dumper
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -225,6 +226,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   val intnode = ctrl_unit.map(_.intnode)
 
   lazy val module = new LazyModuleImp(this) {
+    Dumper.dump(this)
+
     val banks = node.in.size
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
