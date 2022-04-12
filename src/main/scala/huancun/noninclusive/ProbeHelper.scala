@@ -46,6 +46,7 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   req.dirty := false.B // ignored
   req.needProbeAckData.foreach(_ := false.B)
   req.fromCmoHelper := false.B
+  req.dsid := DontCare
 
   val client_dir = dir.clients.states(req_client)
   val dir_conflict = !dir.clients.tag_match && Cat(

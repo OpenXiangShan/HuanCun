@@ -90,6 +90,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   sinkD.io.d <> outBuf.d(io.out.d)
   io.out.e <> outBuf.e(sourceE.io.e)
 
+  when(io.in.a.fire()){
+    printf(s"${cacheParams.name}  In.A.dsid=%d\n",io.in.a.bits.user.lift(DsidKey).getOrElse(0.U))
+  }
+  when(io.in.c.fire()){
+    printf(s"${cacheParams.name}  In.C.dsid=%d\n",io.in.c.bits.user.lift(DsidKey).getOrElse(0.U))
+  }
+
   // MSHRs
   val ms = Seq.fill(mshrsAll) {
     if (cacheParams.inclusive)
@@ -449,14 +456,20 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
           ctrl.map(_.io.c_tag_w)
         )
       )
-      dir.io.waymask := io.cp.waymask
+      if(cacheParams.level==3){  // only shared l3 has cat control
+        dir.io.waymask := io.cp.waymask
+        io.cp.dsid := dir.io.read.bits.dsid
+        io.cp.capacity := DontCare
+      } else {
+        dir.io.waymask := DontCare
+        io.cp.dsid := DontCare
+        io.cp.capacity := DontCare
+      }
     case (_: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
     // skip
     case _ =>
       assert(false)
   }
-  io.cp.dsid := directory.io.read.bits.dsid
-  io.cp.capacity := DontCare
 
   def arbTasks[T <: Bundle](
     out:    DecoupledIO[T],
@@ -625,6 +638,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     mshrReq.bits.bufIdx := DontCare
     mshrReq.bits.dirty := false.B
     mshrReq.bits.needProbeAckData.foreach(_ := false.B)
+    mshrReq.bits.dsid := a_req.bits.dsid
     pftReq.ready := mshrReq.ready
     mshrReq
   }

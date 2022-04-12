@@ -39,6 +39,7 @@ class SelfDirResult(implicit p: Parameters) extends SelfDirEntry {
   val way = UInt(wayBits.W)
   val tag = UInt(tagBits.W)
   val error = Bool()
+  val dsid = UInt(1.W)
 }
 
 class ClientDirResult(implicit p: Parameters) extends HuanCunBundle with HasClientInfo {
@@ -213,8 +214,45 @@ class Directory(implicit p: Parameters)
       Mux(has_invalid_way, invalid_way, Mux(repl_way_is_trunk, repl, trunk_way))
       )
   }
-  val selfDir = Module(
-    new SubDirectoryWithCATDoUpdate[SelfDirEntry](  //new SubDirectoryDoUpdate[SelfDirEntry](
+  val selfDir = if(cacheParams.level==3){ // Shared LLC has cat control for selfdir
+      Module(
+        new SubDirectoryDoUpdate[SelfDirEntry](
+          wports = mshrsAll,
+          sets = cacheParams.sets,
+          ways = cacheParams.ways,
+          tagBits = tagBits,
+          dir_init_fn = () => {
+            val init = Wire(new SelfDirEntry())
+            init := DontCare
+            init.state := MetaData.INVALID
+            init
+          },
+          dir_hit_fn = selfHitFn,
+          self_invalid_way_sel,
+          replacement = "rrip"
+        ) with NonInclusiveCacheReplacerUpdate
+      )
+    } else {
+      Module(
+        new SubDirectoryDoUpdate[SelfDirEntry](
+          wports = mshrsAll,
+          sets = cacheParams.sets,
+          ways = cacheParams.ways,
+          tagBits = tagBits,
+          dir_init_fn = () => {
+            val init = Wire(new SelfDirEntry())
+            init := DontCare
+            init.state := MetaData.INVALID
+            init
+          },
+          dir_hit_fn = selfHitFn,
+          self_invalid_way_sel,
+          replacement = cacheParams.replacement
+        ) with NonInclusiveCacheReplacerUpdate
+      )
+    }
+  /*val selfDir = Module(
+    new SubDirectoryDoUpdate[SelfDirEntry](
       wports = mshrsAll,
       sets = cacheParams.sets,
       ways = cacheParams.ways,
@@ -229,7 +267,7 @@ class Directory(implicit p: Parameters)
       self_invalid_way_sel,
       replacement = cacheParams.replacement
     ) with NonInclusiveCacheReplacerUpdate
-  )// cls: add cat to selfdir
+  )*/
 
   def addrConnect(lset: UInt, ltag: UInt, rset: UInt, rtag: UInt) = {
     assert(lset.getWidth + ltag.getWidth == rset.getWidth + rtag.getWidth)
@@ -249,11 +287,16 @@ class Directory(implicit p: Parameters)
     when(req.fire() && req.bits.wayMode){
       assert(req.bits.idOH(1, 0) === "b11".U)
     }
+    p.bits.dsid := req.bits.dsid
   }
+  req.ready := Cat(rports.map(_.ready)).andR()
   // cls: add cpctrl waymask to selfdir
   selfDir.io.read.bits.curr_waymask := io.waymask
-
-  req.ready := Cat(rports.map(_.ready)).andR()
+  clientDir.io.read.bits.curr_waymask := DontCare
+  /*Luoshan: for test
+  when(io.read.fire()){
+    printf(s"${cacheParams.name}  dir_read: dsid=%d\n",io.read.bits.dsid)
+  }*/
   val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
   val sourceIdReg = RegEnable(req.bits.source, req.fire())
   val setReg = RegEnable(req.bits.set, req.fire())
@@ -276,6 +319,7 @@ class Directory(implicit p: Parameters)
   resp.bits.self.error := selfResp.bits.error
   resp.bits.self.clientStates := selfResp.bits.dir.clientStates
   resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
+  resp.bits.self.dsid := selfResp.bits.dsid
   resp.bits.clients.way := clientResp.bits.way
   resp.bits.clients.tag := clientResp.bits.tag
   resp.bits.clients.error := Cat(resp.bits.clients.states.map(_.hit)).orR() && clientResp.bits.error

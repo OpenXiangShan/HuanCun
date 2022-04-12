@@ -84,7 +84,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   // for tag error: ecc_addr = physical address
   val ecc_addr = RegInit(0.U(64.W))
 
-  val core_reset = RegInit(0.U(64.W)) +:Seq.fill(wrapper.num_cores-1){ RegInit(1.U(64.W)) }
+  val core_reset = RegInit(0.U(64.W)) +:Seq.fill(wrapper.num_cores-1){ RegInit(0.U(64.W)) }  //cls: reset core 1 by hardware
 
   val reset_regs = core_reset.zipWithIndex.map{ case (r, i) =>
     RegField(64, r, RegWriteFn((valid, data) => {

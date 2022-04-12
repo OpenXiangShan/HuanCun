@@ -68,6 +68,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.alias.foreach(_ := 0.U)
   io.alloc.bits.preferCache := true.B
   io.alloc.bits.dirty := c.bits.echo.lift(DirtyKey).getOrElse(true.B)
+  io.alloc.bits.dsid := io.c.bits.user.lift(DsidKey).getOrElse(0.U)
   io.alloc.bits.fromProbeHelper := false.B
   io.alloc.bits.fromCmoHelper := false.B
   io.alloc.bits.needProbeAckData.foreach(_ := false.B)
@@ -159,6 +160,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.release.bits.size := task_r.size
   io.release.bits.corrupt := false.B
   io.release.bits.user.lift(PreferCacheKey).foreach(_ := true.B)
+  io.release.bits.user.lift(DsidKey).foreach(_ := io.c.bits.user.lift(DsidKey).getOrElse(0.U))
   io.release.bits.echo.lift(DirtyKey).foreach(_ := task_r.dirty)
 
   val w_fire_save = io.bs_waddr.fire() && !io.bs_waddr.bits.noop

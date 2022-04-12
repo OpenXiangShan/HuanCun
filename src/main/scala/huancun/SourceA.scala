@@ -56,6 +56,7 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_acquire.bits.data := DontCare
   a_acquire.bits.corrupt := false.B
   a_acquire.bits.user.lift(PreferCacheKey).foreach(_ := false.B)
+  a_acquire.bits.user.lift(DsidKey).foreach(_ := io.task.bits.dsid)
   a_acquire.bits.echo.lift(DirtyKey).foreach(_ := true.B)
   a_acquire.valid := io.task.valid && !io.task.bits.putData
 
@@ -104,6 +105,7 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_put.bits.data := s1_pb_latch.data
   a_put.bits.corrupt := false.B
   a_put.bits.user.lift(PreferCacheKey).foreach(_ := false.B)
+  a_put.bits.user.lift(DsidKey).foreach(_ := io.task.bits.dsid)
   a_put.bits.echo.lift(DirtyKey).foreach(_ := true.B)
   a_put.valid := s1_full
 

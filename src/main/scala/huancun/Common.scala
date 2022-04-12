@@ -80,6 +80,7 @@ class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
   val size = UInt(msgSizeBits.W)
   val needData = Bool()
   val putData = Bool()
+  val dsid = UInt(1.W)
 }
 class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
   val opcode = UInt(3.W)
@@ -89,6 +90,7 @@ class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
   val source = UInt(mshrBits.W)
   val way = UInt(wayBits.W)
   val dirty = Bool()
+  val dsid = UInt(1.W)
 }
 class SourceEReq(implicit p: Parameters) extends HuanCunBundle {
   val sink = UInt(outerSinkBits.W)
@@ -143,7 +145,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val fromProbeHelper = Bool()
   val fromCmoHelper = Bool()
   val needProbeAckData = if (cacheParams.inclusive) None else Some(Bool())
-  val dsid = UInt(1.W)
+  val dsid = UInt(1.W) //???dsidBitsOpt.map(_ => UInt(1.W))
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
