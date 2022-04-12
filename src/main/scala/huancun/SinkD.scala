@@ -32,8 +32,8 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val bypass_write = Flipped(new SinkDBufferWrite)
     val way = Input(UInt(wayBits.W))
     val set = Input(UInt(setBits.W))
-    val inner_grant = Input(Bool())
-    val save_data_in_bs = Input(Bool())
+    val inner_grant = Input(Bool())     // Set when refilled data from RefillBuffer will be grant upwards
+    val save_data_in_bs = Input(Bool()) // Set when refilled data will be stored in DataStorage
     val resp = ValidIO(new SinkDResp)
     val sourceD_r_hazard = Flipped(ValidIO(new SourceDHazard))
   })
@@ -50,6 +50,9 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     cache && io.bs_waddr.ready &&
     (bypass_ready || !io.inner_grant)
 
+  /* Once data is refilled, it will be store in RefillBuffer, DataStorage or both.
+   * In case of simultaneous storing (cache && inner_grant), we should not set d.ready until bs_ready
+   */
   io.d.ready := !needData || bs_ready || !cache && bypass_ready || (!cache && !io.inner_grant)
 
   // Generate resp
@@ -63,7 +66,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.resp.bits.dirty := io.d.bits.echo.lift(DirtyKey).getOrElse(false.B)
   io.resp.bits.bufIdx := io.bypass_write.id
 
-  // Save data to Datastorage
+  // Save data to DataStorage
   io.bs_waddr.valid := io.d.valid && bs_ready
   io.bs_waddr.bits.way := io.way
   io.bs_waddr.bits.set := io.set
@@ -72,6 +75,9 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.bs_waddr.bits.noop := !io.d.valid
   io.bs_wdata.data := io.d.bits.data
   io.bs_wdata.corrupt := false.B
+
+  // Save data to RefillBuffer
+  // FIXME: what if cache && io.bs_waddr.ready, but w_safe not set?
   io.bypass_write.valid := io.d.valid && bypass_ready && (!cache || io.bs_waddr.ready)
   io.bypass_write.beat := beat
   io.bypass_write.data := io.bs_wdata
