@@ -53,6 +53,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val meta_reg = Reg(new DirResult)
   val meta = Wire(new DirResult)
   val meta_valid = RegInit(false.B)
+  TimeOutAssert(req_valid, "MSHR timeout\n")
 
   // Get directory result
   assert(

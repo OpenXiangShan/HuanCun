@@ -26,6 +26,7 @@ import freechips.rocketchip.tilelink.TLMessages._
 import freechips.rocketchip.tilelink.TLPermissions._
 import freechips.rocketchip.tilelink._
 import huancun._
+import huancun.utils._
 import huancun.MetaData._
 import huancun.prefetch._
 
@@ -43,6 +44,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   val meta_reg = Reg(new DirResult)
   val meta = Wire(new DirResult)
   val meta_valid = RegInit(false.B)
+  TimeOutAssert(req_valid, "MSHR timeout\n")
 
   // Get directory result
   assert(

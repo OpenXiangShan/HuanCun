@@ -3,6 +3,7 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import huancun.utils._
 
 class SourceDBufferRead(implicit p: Parameters) extends HuanCunBundle {
   val valid = Input(Bool())
@@ -66,6 +67,10 @@ class RefillBuffer(implicit p: Parameters) extends HuanCunModule {
     assert(!valids(w.id)(w.beat), "[%d] attempt to write a valid entry", w.id)
     valids(w.id)(w.beat) := true.B
     buffer(w.id)(w.beat) := w.data
+  }
+
+  for ((valid, i) <- valids.zipWithIndex) {
+    TimeOutAssert(valid.asUInt().orR(), s"Refill buffer $i timeout\n")
   }
 
 }
