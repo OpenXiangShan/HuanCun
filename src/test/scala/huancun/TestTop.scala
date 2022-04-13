@@ -9,7 +9,7 @@ import freechips.rocketchip.tilelink._
 
 import scala.collection.mutable.ArrayBuffer
 
-class TestTop_L2(n: Int)(implicit p: Parameters) extends LazyModule {
+class TestTop_L2(n: Int = 2)(implicit p: Parameters) extends LazyModule {
 
   /* L1D   L1D
    *  \    /
@@ -65,7 +65,7 @@ class TestTop_L2(n: Int)(implicit p: Parameters) extends LazyModule {
   }
 }
 
-class TestTop_L2L3(n: Int)(implicit p: Parameters) extends LazyModule {
+class TestTop_L2L3(n: Int = 2)(implicit p: Parameters) extends LazyModule {
 
   /* L1D   L1D
    *  |     |
