@@ -64,7 +64,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.resp.bits.bufIdx := io.bypass_write.id
 
   // Save data to Datastorage
-  io.bs_waddr.valid := cache && (!first || io.d.valid && bs_ready)
+  io.bs_waddr.valid := io.d.valid && bs_ready
   io.bs_waddr.bits.way := io.way
   io.bs_waddr.bits.set := io.set
   io.bs_waddr.bits.beat := Mux(io.d.valid, beat, RegEnable(beat + io.bs_waddr.ready.asUInt(), io.d.valid))
