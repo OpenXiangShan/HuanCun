@@ -382,7 +382,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             Mux(
               req.opcode === Get,
               Mux(clients_meta(i).hit && a_do_probe, perm_after_probe, INVALID), // Get
-              Mux(clients_meta(i).hit && a_do_probe, clients_meta(i).state, INVALID) // Hint
+              Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID), clients_meta(i).state)
             )
           )
         }
@@ -744,7 +744,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
       // for acquirePermMiss and (miss && !preferCache):
       // no data block will be saved, so self dir won't change
-      when(!acquirePermMiss && ((self_meta.hit && !req.opcode === Get) || preferCache)) {
+      when(!acquirePermMiss && ((self_meta.hit && !(req.opcode === Get)) || preferCache)) {
         s_wbselfdir := false.B
       }
     }
@@ -977,7 +977,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val acquire_param = if (cacheParams.name == "L2") {
     Mux(req.opcode === Hint,
-      Mux(req_needT, Mux(self_meta.hit, BtoT, NtoT), NtoB),
+      Mux(req_needT, Mux(highest_perm_reg === BRANCH, BtoT, NtoT), NtoB),
       req.param
     )
   } else {
