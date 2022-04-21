@@ -1324,8 +1324,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         s_grantack := false.B
       }
       need_block_downwards := true.B
-      // we assume clients will ack data for us at first,
-      // if they only ack perm, we should change our schedule
+    }
+
+    // we assume clients will ack data for us at first,
+    // if they only ack perm, we should change our schedule
+    when (
+      req.fromA && probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit
+    ) {
       when(!(preferCache || self_meta.hit)) {
         // if we don't save grant data, we should not write tag
         s_wbselftag := true.B
