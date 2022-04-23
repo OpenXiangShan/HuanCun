@@ -107,7 +107,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val cache_alias = !req.isPrefetch.getOrElse(false.B) && client_hit_flag && req_acquire &&
     req_client_meta.alias.getOrElse(0.U) =/= req.alias.getOrElse(0.U)
   val highest_perm = ParallelMax(
-    Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
+    Seq(Mux(self_meta.hit && !io_probeAckDataThrough, self_meta.state, INVALID)) ++
       clients_meta.map(m => Mux(m.hit, m.state, INVALID))
   ) // the highest perm of this whole level, including self and clients
   val highest_perm_reg = Hold(highest_perm, l2Only = false)
@@ -1429,7 +1429,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // C nest A (C -> A)
   io_is_nestedReleaseData := req.fromC && req_valid
   // B nest A (B -> A)
-  io_is_nestedProbeAckData := req.fromB && clients_hit && req_valid
+  io_is_nestedProbeAckData := req.fromB /*&& clients_hit*/ && req_valid
   io_probeHelperFinish := req.fromB && req.fromProbeHelper && no_schedule && no_wait
 
   // C nest A/B (A/B -> C)
