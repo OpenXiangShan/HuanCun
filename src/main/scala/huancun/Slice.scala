@@ -90,12 +90,12 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   sinkD.io.d <> outBuf.d(io.out.d)
   io.out.e <> outBuf.e(sourceE.io.e)
 
-  when(io.in.a.fire()){
+  /*when(io.in.a.fire()){
     printf(s"${cacheParams.name}  In.A.dsid=%d\n",io.in.a.bits.user.lift(DsidKey).getOrElse(0.U))
   }
   when(io.in.c.fire()){
     printf(s"${cacheParams.name}  In.C.dsid=%d\n",io.in.c.bits.user.lift(DsidKey).getOrElse(0.U))
-  }
+  }*/
 
   // MSHRs
   val ms = Seq.fill(mshrsAll) {
