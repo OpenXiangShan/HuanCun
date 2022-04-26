@@ -850,7 +850,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }.elsewhen(req.fromB) {
         b_schedule()
       }.otherwise {
-        a_schedule()
+        when (!(req.opcode === Hint && clients_hit)) {
+          a_schedule()
+        }
       }
     })
   }
