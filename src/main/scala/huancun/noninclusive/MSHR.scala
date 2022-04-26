@@ -303,20 +303,17 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   def onAReq(): Unit = {
     // reqs: Acquire / Intent / Put / Get / Atomics
     // new_self_meta.dirty := self_meta.hit && self_meta.dirty || probe_dirty || !req.opcode(2)
-    new_self_meta.dirty := Mux(
-      req_acquire,
-      Mux(req_needT,
-        false.B,
-        Mux(self_meta.hit,
-          Mux(req_promoteT, false.B, self_meta.dirty || probe_dirty),
-          gotDirty || probe_dirty
-        )
-      ),
+    new_self_meta.dirty :=
       Mux(req_put,
         true.B,  // Put
-        gotDirty || probe_dirty, // Hint & Get
+        Mux(req_needT,
+          false.B,
+          Mux(self_meta.hit,
+            Mux(req_promoteT, false.B, self_meta.dirty || probe_dirty),
+            gotDirty || probe_dirty
+          )
+        )
       )
-    )
     new_self_meta.state := Mux(
       req_needT,
       Mux(req_acquire,
