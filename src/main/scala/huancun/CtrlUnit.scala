@@ -22,7 +22,7 @@ class CtrlUnit(val node: TLAdapterNode)(implicit p: Parameters)
   val device = new SimpleDevice("L3CacheCtrl", Seq("xiangshan,cache_ctrl"))
   val intnode = IntSourceNode(IntSourcePortSimple(resources = device.int))
   val num_cores = cacheParams.ctrl.get.numCores
-  val core_reset_nodes = (0 until num_cores) map(_ => BundleBridgeSource(() => Bool()))
+  val core_reset_nodes = (0 until num_cores) map(_ => BundleBridgeSource(() => Reset()))
 
   lazy val module = new CtrlUnitImp(this)
 }
