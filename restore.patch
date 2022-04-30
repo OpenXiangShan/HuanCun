@@ -1,0 +1,13 @@
+diff --git a/src/main/scala/huancun/BaseDirectory.scala b/src/main/scala/huancun/BaseDirectory.scala
+index 4c45481..becb011 100644
+--- a/src/main/scala/huancun/BaseDirectory.scala
++++ b/src/main/scala/huancun/BaseDirectory.scala
+@@ -177,7 +177,7 @@ class SubDirectory[T <: Data](
+   metaArray.io.w(
+     !resetFinish || dir_wen,
+     Mux(resetFinish, io.dir_w.bits.dir, dir_init),
+-    Mux(resetFinish, io.dir_w.bits.set, resetIdx),
++    Mux(resetFinish, io.dir_w.bits.set, 0.U),
+     Mux(resetFinish, UIntToOH(io.dir_w.bits.way), Fill(ways, true.B))
+   )
+ 
