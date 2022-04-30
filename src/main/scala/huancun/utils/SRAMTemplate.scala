@@ -112,9 +112,9 @@ class SRAMTemplate[T <: Data]
   val wordType = UInt(gen.getWidth.W)
   val array = SyncReadMem(set, Vec(way, wordType))
   if(clk_div_by_2){
-    array.suggestName("bosc_sram_multi_cycle")
+    array.suggestName("sram_multi_cycle")
   } else {
-    array.suggestName("bosc_sram")
+    array.suggestName("sram")
   }
   val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
 
