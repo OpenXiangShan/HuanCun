@@ -172,7 +172,7 @@ class Directory(implicit p: Parameters)
   )
 
   def clientHitFn(dir: ClientDirEntry): Bool = dir.state =/= MetaData.INVALID
-  def client_invalid_way_fn(metaVec: Seq[Vec[ClientDirEntry]], repl: UInt): (Bool, UInt) = {
+  def client_invalid_way_fn(metaVec: Seq[Vec[ClientDirEntry]], repl: UInt, waymask: UInt): (Bool, UInt) = {
     val invalid_vec = metaVec.map(states => Cat(states.map(_.state === INVALID)).andR())
     val has_invalid_way = Cat(invalid_vec).orR()
     val way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(clientWayBits.W)))
@@ -198,16 +198,16 @@ class Directory(implicit p: Parameters)
   )
 
   def selfHitFn(dir: SelfDirEntry): Bool = dir.state =/= MetaData.INVALID
-  def self_invalid_way_sel(metaVec: Seq[SelfDirEntry], repl: UInt): (Bool, UInt) = {
+  def self_invalid_way_sel(metaVec: Seq[SelfDirEntry], repl: UInt, waymask: UInt): (Bool, UInt) = {
     // 1.try to find a invalid way
     val invalid_vec = metaVec.map(_.state === MetaData.INVALID)
-    val has_invalid_way = Cat(invalid_vec).orR()
-    val invalid_way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
+    val has_invalid_way = (Cat(invalid_vec) & Reverse(waymask)).orR()
+    val invalid_way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => (x._1 & waymask(x._2)) -> x._2.U(wayBits.W)))
     // 2.if there is no invalid way, then try to find a TRUNK to replace
     // (we are non-inclusive, if we are trunk, there must be a TIP in our client)
     val trunk_vec = metaVec.map(_.state === MetaData.TRUNK)
-    val has_trunk_way = Cat(trunk_vec).orR()
-    val trunk_way = ParallelPriorityMux(trunk_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
+    val has_trunk_way = (Cat(trunk_vec) & Reverse(waymask)).orR()
+    val trunk_way = ParallelPriorityMux(trunk_vec.zipWithIndex.map(x => (x._1 & waymask(x._2)) -> x._2.U(wayBits.W)))
     val repl_way_is_trunk = VecInit(metaVec)(repl).state === MetaData.TRUNK
     (
       has_invalid_way || has_trunk_way,
@@ -291,8 +291,12 @@ class Directory(implicit p: Parameters)
   }
   req.ready := Cat(rports.map(_.ready)).andR()
   // cls: add cpctrl waymask to selfdir
-  selfDir.io.read.bits.curr_waymask := io.waymask
-  clientDir.io.read.bits.curr_waymask := DontCare
+  if(cacheParams.level==3){
+    selfDir.io.curr_waymask := io.waymask
+  }else{
+    selfDir.io.curr_waymask := 0.U
+  }
+  clientDir.io.curr_waymask := DontCare
   /*Luoshan: for test
   when(io.read.fire()){
     printf(s"${cacheParams.name}  dir_read: dsid=%d\n",io.read.bits.dsid)

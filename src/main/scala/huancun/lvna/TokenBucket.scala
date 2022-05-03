@@ -18,7 +18,7 @@ class BucketBundle(implicit p: Parameters) extends Bundle with HasTokenBucketPar
   // allow controller to directly block a bucket
   // val block = Bool()
 
-  override def cloneType = (new BucketBundle).asInstanceOf[this.type]
+  // override def cloneType = (new BucketBundle).asInstanceOf[this.type]
 }
 
 

@@ -69,7 +69,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.fromProbeHelper := false.B
   io.alloc.bits.fromCmoHelper := false.B
 
-  if (cacheParams.enableDebug) {
+  /*if (cacheParams.enableDebug) {
     when(c.fire()) {
       when(isRelease) {
         printf("release: addr:[%x]\n", c.bits.address)
@@ -78,7 +78,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
         printf("release data: addr:[%x] data[%x]\n", c.bits.address, c.bits.data)
       }
     }
-  }
+  }*/
 
   val insertIdxReg = RegEnable(insertIdx, c.fire() && isReleaseData && first)
   when(c.fire() && isReleaseData) {

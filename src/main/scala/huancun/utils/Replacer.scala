@@ -325,11 +325,11 @@ class StaticRRIP(n_ways: Int) extends ReplacementPolicy {
     State.zipWithIndex.map { case (e, i) =>
       e := state(2*i+1,2*i)
     }
-    if(hit==true.B){
+    when(hit){
       nextState.zipWithIndex.map { case (e, i) =>
         e := Mux(i.U === touch_way, 0.U(2.W), State(i))
       }
-    } else {
+    } .otherwise {
       val increcement = 3.U(2.W) - State(touch_way)
       nextState.zipWithIndex.map { case (e, i) =>
         e := Mux(i.U === touch_way, 2.U(2.W),
@@ -337,7 +337,7 @@ class StaticRRIP(n_ways: Int) extends ReplacementPolicy {
                 )
       }
     }
-    Cat(nextState.map(x=>x))
+    Cat(nextState.map(x=>x).reverse)
   }
 
   override def get_replace_way(state: UInt, waymask: UInt): UInt = {
@@ -346,15 +346,16 @@ class StaticRRIP(n_ways: Int) extends ReplacementPolicy {
         e := state(2*i+1,2*i)
     }
     // scan each way's rrpv under waymask, find the least re-referenced way
-    val lrrWayVec = (0 until n_ways).map { i =>
-      if (waymask(i)==1.U){
-        var isLargest = true.B
+    val lrrWayVec = Wire(Vec(n_ways,Bool()))
+    lrrWayVec.zipWithIndex.map { case (e, i) =>
+      when (waymask(i)){
+        val isLarger = Wire(Vec(n_ways,Bool()))
         for (j <- 0 until n_ways) {
-          isLargest = Mux(!isLargest || !waymask(j), isLargest, RRPVVec(i)>=RRPVVec(j))
+          isLarger(j) := Mux(waymask(j), RRPVVec(j)>RRPVVec(i), false.B)
         }
-        isLargest
-      } else {
-        false.B
+        e := !(isLarger.contains(true.B))
+      } .otherwise {
+        e := false.B
       }
     }
     Mux(waymask.orR, PriorityEncoder(lrrWayVec), 0.U)

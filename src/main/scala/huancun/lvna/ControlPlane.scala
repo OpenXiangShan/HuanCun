@@ -31,7 +31,7 @@ object log2Safe {
 case object ProcDSidWidth extends Field[Int](3)
 case object NumCores extends Field[Int](2)
 case object NL2CacheCapacity extends Field[Int](1024)
-case object NL2CacheWays extends Field[Int](8)
+case object NL2CacheWays extends Field[Int](16)
 
 
 trait HasControlPlaneParameters {
@@ -286,6 +286,7 @@ with HasAutoCatParameters
       val mem_part_en = Input(Bool())
       val distinct_hart_dsid_en = Input(Bool())
       val progHartIds = Vec(nTiles, Output(UInt(log2Safe(nTiles).W)))
+      val sim_in_waymask0 = Input(UInt(p(NL2CacheWays).W))
       //val autocat_watching_change = Output(Bool())
     })
 
@@ -355,7 +356,7 @@ with HasAutoCatParameters
     val progHartIds = RegInit(VecInit(Seq.fill(nTiles){ 0.U(log2Safe(nTiles).W) }))
     io.progHartIds := progHartIds
     val l2dsid_reg = RegNext(io.huancun.dsid)  // 1 cycle delay
-    io.huancun.waymask := waymasks(l2dsid_reg)
+    io.huancun.waymask := io.sim_in_waymask0 //waymasks(l2dsid_reg)
 
     val currDsid = RegEnable(io.cp.updateData, 0.U, io.cp.dsidSelWen)
     io.cp.dsidSel := currDsid

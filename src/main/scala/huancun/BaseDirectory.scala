@@ -65,7 +65,7 @@ class SubDirectory[T <: Data](
   tagBits:     Int,
   dir_init_fn: () => T,
   dir_hit_fn: T => Bool,
-  invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
+  invalid_way_sel: (Seq[T], UInt, UInt) => (Bool, UInt),
   replacement: String)(implicit p: Parameters)
     extends MultiIOModule {
 
@@ -81,7 +81,6 @@ class SubDirectory[T <: Data](
       val wayMode = Bool()
       val way = UInt(wayBits.W)
       val dsid = UInt(1.W)
-      val curr_waymask = UInt(ways.W)
     }))
     val resp = ValidIO(new Bundle() {
       val hit = Bool()
@@ -101,6 +100,7 @@ class SubDirectory[T <: Data](
       val way = UInt(wayBits.W)
       val dir = dir_init.cloneType
     }))
+    val curr_waymask = Input(UInt(ways.W))
   })
 
   val resetFinish = RegInit(false.B)
@@ -158,6 +158,9 @@ class SubDirectory[T <: Data](
     val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
     val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
     val next_state = repl.get_next_state(repl_state, io.resp.bits.way, io.resp.bits.hit, waymasks(io.read.bits.dsid))
+    when(replacer_wen){
+      printf("repl_state=%x, next_state=%x\n",repl_state,next_state)
+    }
     replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
     repl_state
   } else {
@@ -176,7 +179,7 @@ class SubDirectory[T <: Data](
   val hitWay = OHToUInt(hitVec)
   val replaceWay = if(replacement == "rrip"){ repl.get_replace_way(repl_state,waymasks(io.read.bits.dsid))}
                    else {repl.get_replace_way(repl_state)}
-  val (inv, invalidWay) = invalid_way_sel(metas, replaceWay)
+  val (inv, invalidWay) = invalid_way_sel(metas, replaceWay, waymasks(io.read.bits.dsid))
   val chosenWay = Mux(inv, invalidWay, replaceWay)
   val meta = metas(io.resp.bits.way)
   val tag_decode = tagCode.decode(eccRead(io.resp.bits.way) ## tagRead(io.resp.bits.way))
@@ -209,7 +212,15 @@ class SubDirectory[T <: Data](
   when(!resetFinish) {
     resetIdx := resetIdx - 1.U
   }
-
+  when(io.curr_waymask =/= 0.U) {
+    waymasks(0) := io.curr_waymask
+    waymasks(1) := io.curr_waymask ^ (((1L << ways) - 1).U)
+  }
+  /*if(replacement == "rrip"){
+    when(io.resp.fire() && !io.resp.bits.hit){
+      printf("waymask=%x, L3 resp_way=%d, replaceWay=%d, invalidWay=%d, chosenWay=%d\n",waymasks(io.read.bits.dsid),io.resp.bits.way,replaceWay,invalidWay,chosenWay)
+    }
+  }*/
 }
 
 trait HasUpdate {
@@ -235,7 +246,7 @@ abstract class SubDirectoryDoUpdate[T <: Data](
   tagBits:     Int,
   dir_init_fn: () => T,
   dir_hit_fn:  T => Bool,
-  invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
+  invalid_way_sel: (Seq[T], UInt, UInt) => (Bool, UInt),
   replacement: String)(implicit p: Parameters)
     extends SubDirectory[T](
       wports, sets, ways, tagBits,

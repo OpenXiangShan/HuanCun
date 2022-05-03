@@ -119,7 +119,7 @@ case class HCCacheParameters
   mshrs: Int = 14,
   dirReadPorts: Int = 1,
   dirReg: Boolean = true,
-  enableDebug: Boolean = false,
+  enableDebug: Boolean = true,
   enablePerf: Boolean = false,
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   prefetch: Option[PrefetchParameters] = None,
