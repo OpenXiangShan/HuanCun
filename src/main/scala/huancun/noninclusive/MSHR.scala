@@ -282,7 +282,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         BRANCH    ->    BRANCH
       --------------------------
     */
-    new_self_meta.dirty := self_meta.hit && self_meta.dirty || probe_dirty
+    new_self_meta.dirty := req.fromProbeHelper && !probeAckDataThrough && (self_meta.hit && self_meta.dirty || probe_dirty)
     new_self_meta.state := Mux(self_meta.hit,
       Mux(req.fromProbeHelper && !probeAckDataThrough,
         Mux(isT(self_meta.state), TIP, BRANCH),
