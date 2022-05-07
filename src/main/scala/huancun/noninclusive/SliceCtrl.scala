@@ -210,13 +210,15 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     done := true.B
   }
 
+  val address = Cat(io.req.bits.tag(fullTagBits-1, 0), io.req.bits.set(setBits-1, 0), 0.U(offsetBits.W))
+  val (cmo_tag, cmo_set, _) = parseAddress(address)
   io.cmo_req.bits.channel := 4.U
   io.cmo_req.bits.opcode := 0.U  // DontCare
   io.cmo_req.bits.param := io.req.bits.cmd(1, 0)
   io.cmo_req.bits.size := log2Up(blockBytes).U
   io.cmo_req.bits.source := 0.U  // DontCare
-  io.cmo_req.bits.set := io.req.bits.set
-  io.cmo_req.bits.tag := io.req.bits.tag
+  io.cmo_req.bits.set := cmo_set
+  io.cmo_req.bits.tag := cmo_tag
   io.cmo_req.bits.off := 0.U  // DontCare
   io.cmo_req.bits.bufIdx := 0.U  // DontCare
   io.cmo_req.bits.needHint.foreach(_ := false.B)
