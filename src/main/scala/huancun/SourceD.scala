@@ -143,10 +143,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.pb_pop.bits.count := s2_counter
   io.pb_pop.bits.last  := s2_last
 
-  val pbQueue = Module(new Queue(new PutBufferBeatEntry, beatSize, flow = false, pipe = false))
-  pbQueue.io.enq.bits := io.pb_beat
-  pbQueue.io.enq.valid := RegNext(io.pb_pop.fire(), false.B)
-  pbQueue.io.deq.ready := s3_valid
+  val pbQueue = Module(new Queue(new PutBufferBeatEntry, beatSize * sramLatency, flow = false, pipe = false))
 
   when (pb_ready) { s2_valid_pb := false.B }
   when (s2_latch) { s2_valid_pb := s1_need_pb }
@@ -205,6 +202,10 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
 
   assert(!s3_valid || needData(s3_regs.req), "Only data task can go to stage3!")
 
+  pbQueue.io.enq.bits := io.pb_beat
+  pbQueue.io.enq.valid := RegNext(io.pb_pop.fire(), false.B)
+  pbQueue.io.deq.ready := s3_valid && s3_need_pb && s4_ready
+
   val s3_rdata = s3_queue.io.deq.bits.data
   s3_d.valid := s3_valid && (!s3_need_pb || s3_counter === 0.U)
   s3_d.bits.opcode := s3_req.opcode
@@ -224,9 +225,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   )
   s3_queue.io.enq.bits := io.bs_rdata
   assert(!s3_queue.io.enq.valid || s3_queue.io.enq.ready)
-  s3_queue.io.deq.ready := s3_d.ready && s3_valid
+  s3_queue.io.deq.ready := Mux(s3_need_pb, s4_ready, s3_d.ready) && s3_valid
 
-  pipe.io.out.ready := !s3_valid || s3_d.ready
+  pipe.io.out.ready := !s3_valid || Mux(s3_need_pb, s4_ready, s3_d.ready)
   s3_valid := pipe.io.out.valid
 
   // stage4
