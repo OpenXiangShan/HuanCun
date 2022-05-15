@@ -22,7 +22,10 @@ package huancun.utils
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental.BoringUtils
 import freechips.rocketchip.tilelink.LFSR64
+import huancun.mbist._
+import huancun.utils.SRAMTemplate.uniqueId
 
 object HoldUnless {
   def apply[T <: Data](x: T, en: Bool): T = Mux(en, x, RegEnable(x, 0.U.asTypeOf(x), en))
@@ -97,17 +100,33 @@ class SRAMWriteBus[T <: Data](private val gen: T, val set: Int, val way: Int = 1
   }
 }
 
+object SRAMTemplate {
+  private var uniqueId = 0
+}
+
 class SRAMTemplate[T <: Data]
 (
   gen: T, set: Int, way: Int = 1,
   shouldReset: Boolean = false, holdRead: Boolean = false,
   singlePort: Boolean = false, bypassWrite: Boolean = false,
-  clk_div_by_2: Boolean = false
+  clk_div_by_2: Boolean = false, mbist: Boolean = false
 ) extends Module {
+
+  uniqueId += 1
+
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
   })
+
+  if(mbist){
+    val sram_prefix = "sram_" + uniqueId + "_"
+    val params = SRAM2MBISTParams(set, gen.getWidth * way)
+    val bd = Wire(new SRAM2MBIST(params))
+    bd := DontCare
+    MBIST.addSRAM(bd, sram_prefix)
+    MBIST.noDedup(this)
+  }
 
   val wordType = UInt(gen.getWidth.W)
   val array = SyncReadMem(set, Vec(way, wordType))
