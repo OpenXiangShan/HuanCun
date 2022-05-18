@@ -72,7 +72,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
 
   // Stage 0 => Stage 1
   val task_handled = Mux(has_data, io.bs_raddr.ready, io.task.fire())
-  val s1_task = RegInit(io.task.bits)
+  val s1_task = RegInit(0.U.asTypeOf(io.task.bits.cloneType))
   val s1_beat = RegInit(0.U(beatBits.W))
   val s1_valid = RegInit(false.B)
   when(s1_valid){

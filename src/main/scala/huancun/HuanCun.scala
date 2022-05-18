@@ -163,6 +163,17 @@ trait DontCareInnerLogic { this: Module =>
   }
 }
 
+// Async reset requires carefully synchronization of the reset deassertion.
+class RST_SYNC_NO_DFT(SYNC_NUM: Int = 2) extends Module {
+  val o_reset = IO(Output(AsyncReset()))
+
+  val pipe_reset = RegInit(((1L << SYNC_NUM) - 1).U(SYNC_NUM.W))
+  pipe_reset := Cat(pipe_reset(SYNC_NUM - 2, 0), 0.U(1.W))
+
+  // deassertion of the reset needs to be synchronized.
+  o_reset := pipe_reset(SYNC_NUM - 1).asAsyncReset
+}
+
 abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with HasHuanCunParameters
 
 abstract class HuanCunModule(implicit val p: Parameters) extends MultiIOModule with HasHuanCunParameters
@@ -304,8 +315,9 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
         val rst = if(cacheParams.level == 3 && !cacheParams.simulation) {
-          RegNext(RegNext(reset.asBool))
-        } else reset.asBool
+          val resetGen = Module(new RST_SYNC_NO_DFT())
+          resetGen.o_reset
+        } else reset
         val slice = withReset(rst){ Module(new Slice()(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut
