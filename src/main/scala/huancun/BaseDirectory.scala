@@ -139,7 +139,7 @@ class SubDirectory[T <: Data](
   )
   tagRead := tagArray.io.r(io.read.fire(), io.read.bits.set).resp.data
 
-  val reqReg = RegEnable(io.read.bits, enable = io.read.fire())
+  val reqReg = RegEnable(io.read.bits, io.read.fire())
   val reqValidReg = RegNext(io.read.fire(), false.B)
 
   val repl = ReplacementPolicy.fromString(replacement, ways)
