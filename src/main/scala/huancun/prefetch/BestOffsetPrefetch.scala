@@ -5,6 +5,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import huancun.HasHuanCunParameters
+import huancun.mbist.MBISTPipeline
 
 case class BOPParameters(
   rrTableEntries: Int = 256,
@@ -105,6 +106,7 @@ class RecentRequestTable(implicit p: Parameters) extends BOPModule {
   val rrTable = Module(
     new SRAMTemplate(rrTableEntry(), set = rrTableEntries, way = 1, shouldReset = true, singlePort = true)
   )
+  val bestPrefetcherMbistPipeline = Module(new MBISTPipeline(level = 2))
 
   val wAddr = io.w.bits
   rrTable.io.w.req.valid := io.w.valid && !io.r.req.valid

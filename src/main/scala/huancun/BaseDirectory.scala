@@ -24,6 +24,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.random.LFSR
 import freechips.rocketchip.tilelink.TLMessages
+import huancun.mbist.MBISTPipeline
 import huancun.utils._
 
 trait BaseDirResult extends HuanCunBundle {
@@ -155,7 +156,7 @@ class SubDirectory[T <: Data](
     replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
     repl_state
   }
-
+  val baseDirectoryMbistPipeline = Module(new MBISTPipeline(level = 2))
   io.resp.valid := reqValidReg
   val metas = metaArray.io.r(io.read.fire(), io.read.bits.set).resp.data
   val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
