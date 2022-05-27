@@ -2,6 +2,7 @@ package huancun.utils
 
 import chisel3._
 import chisel3.util._
+import huancun.mbist.MBISTPipeline
 
 class SRAMWrapper[T <: Data]
 (
@@ -46,4 +47,5 @@ class SRAMWrapper[T <: Data]
 
   io.w.req.ready := Cat(banks.map(_.io.w.req.ready)).andR()
 
+  val sramWrapperMbistPipeline = Module(new MBISTPipeline(level = 1))
 }

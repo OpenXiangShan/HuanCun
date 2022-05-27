@@ -25,6 +25,7 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
+import huancun.mbist.MBISTPipeline
 import huancun.prefetch._
 import huancun.utils.{FastArbiter, Pipeline}
 
@@ -311,7 +312,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
     }
 
-    val slices = node.in.zip(node.out).zipWithIndex.map {
+    val slicesWithItsMBISTPipeline = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
         val rst = if(cacheParams.level == 3 && !cacheParams.simulation) {
@@ -355,8 +356,15 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             }
         }
         io.perfEvents(i) := slice.perfinfo
-        slice
+        val sliceMbistPipeline =
+          if(cacheParams.level == 3) Some(Module(new MBISTPipeline(level = Int.MaxValue,infoName = f"MBIST_L3S${i}_SRAM_info"))) else None
+        (slice,sliceMbistPipeline)
     }
+    val slices = slicesWithItsMBISTPipeline.map(_._1)
+    val sliceMbistPipelines = slicesWithItsMBISTPipeline.map(_._2)
+    val huancunMbistPipeline =
+      if(cacheParams.level != 3 ) Some(Seq(Module(new MBISTPipeline(level = Int.MaxValue,infoName = "MBIST_L2_SRAM_info")))) else None
+
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
     val slices_ecc = slices.zipWithIndex.map {
       case (s, i) => Pipeline(s.io.ctl_ecc, depth = 2, pipe = false, name = Some(s"ecc_buffer_$i"))
@@ -396,6 +404,20 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
           println(s"\t${i} <= ${c.name}")
       }
     }
-  }
 
+
+    val mbist = IO(
+      if(cacheParams.level == 3) {
+        MixedVec(sliceMbistPipelines.indices.map(idx => sliceMbistPipelines(idx).get.io.mbist.get.cloneType))
+      } else {
+        MixedVec(huancunMbistPipeline.get.indices.map(idx => huancunMbistPipeline.get(idx).io.mbist.get.cloneType))
+      }
+    )
+    if(cacheParams.level == 3){
+      mbist.zipWithIndex.foreach({case(port,idx) => port <> sliceMbistPipelines(idx).get.io.mbist.get})
+    }
+    else{
+      mbist.zipWithIndex.foreach({case(port,idx) => port <> huancunMbistPipeline.get(idx).io.mbist.get})
+    }
+  }
 }

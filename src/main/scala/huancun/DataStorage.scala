@@ -22,6 +22,7 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import huancun.mbist.MBISTPipeline
 import huancun.utils._
 
 class DataStorage(implicit p: Parameters) extends HuanCunModule {
@@ -80,7 +81,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
       ))
     }
   } else null
-
+  val dataStorageMbistPipeline = Module(new MBISTPipeline(level = 2))
   val stackRdy = if (cacheParams.sramClkDivBy2) {
     RegInit(VecInit(Seq.fill(nrStacks) {
       true.B
