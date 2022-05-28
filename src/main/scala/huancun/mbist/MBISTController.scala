@@ -30,17 +30,16 @@ class FSCANInputInterface extends Bundle {
   val init_val = Input(Bool())
 }
 
-class MBISTController
-(
+class MBISTController (
   mbistParams: Seq[MBISTBusParams],
   fscanPortNum: Int,
   prefix: Seq[String],
   sim: Boolean = false
-)
-  extends BlackBox with HasBlackBoxInline with genBlackBoxVerilogFile{
+) extends RawModule {
   require(mbistParams.nonEmpty)
   require(mbistParams.length == prefix.length, "mbist params number not match prefixes number")
-  override val desiredName = "mbist_controller_" + prefix.reduce(_+_) + "_dfx_top"
+  override val desiredName = s"mbist_controller_${prefix.reduce(_ + _)}_dfx_top"
+
   val io = IO(new Bundle{
     val mbist_ijtag = new JTAGInterface
     val mbist = MixedVec(prefix.indices.map(idx => Flipped(new MbitsStandardInterface(mbistParams(idx)))))
@@ -48,20 +47,20 @@ class MBISTController
     val static = Vec(prefix.length, Flipped(new MbitsStaticInterface))
     val hd2prf_in = new FUSEInterface
     val hsuspsr_in = new FUSEInterface
-    val fscan_in = Vec(fscanPortNum,new FSCANInputInterface)
+    val fscan_in = Vec(fscanPortNum, new FSCANInputInterface)
     val fscan_clkungate = Input(Bool())
     val clock = Input(Bool())
   })
-  genV(io, sim)
+  dontTouch(io)
+
+  io := DontCare
 }
 
-class MBISTControllerDFXWrapperTestTop
-(
+class MBISTControllerDFXWrapperTestTop (
   mbistParams: Seq[MBISTBusParams],
   fscanPortNum: Int,
   prefix: Seq[String]
-)
-  extends RawModule {
+) extends RawModule {
   require(mbistParams.nonEmpty)
   require(mbistParams.length == prefix.length, "mbist params number not match prefixes number")
   val numOfController = mbistParams.length
