@@ -41,11 +41,9 @@ class DFTResetGen extends Bundle {
 class ResetSyncDFT(SYNC_NUM: Int = 2) extends ResetGen {
   val i = IO(Input(new DFTResetGen))
 
-  // Explicitly use Wire to give it a name to appear in Verilog.
-  val dft_reset = Wire(Bool())
-  dft_reset := Mux(i.dft_mode, i.dft_reset, reset.asBool)
+  val dft_reset = Mux(i.dft_mode, i.dft_reset, reset.asBool).asAsyncReset
 
-  withClockAndReset(clock, dft_reset.asAsyncReset) {
+  withClockAndReset(clock, dft_reset) {
     val pipe_reset = RegInit(((1L << SYNC_NUM) - 1).U(SYNC_NUM.W))
     pipe_reset := Cat(pipe_reset(SYNC_NUM - 2, 0), 0.U(1.W))
 
