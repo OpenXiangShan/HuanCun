@@ -1,7 +1,7 @@
 package huancun.mbist
+
 import chisel3._
-import chisel3.util._
-import scala.collection.mutable
+import huancun.utils.DFTResetGen
 
 class UltiscanJTAGInterface extends Bundle {
   val fdfx_powergood = Input(Bool())
@@ -100,6 +100,14 @@ class Ultiscan (
 
   io := DontCare
   io.core_clock_postclk := io.core_clock_preclk
+
+  def toResetGen: DFTResetGen = {
+    val top_scan = Wire(new DFTResetGen)
+    top_scan.scan_mode := io.fscan.rstbypen
+    top_scan.dft_reset := !io.fscan.byprst_b
+    top_scan.dft_mode := io.fscan.rstbypen
+    top_scan
+  }
 }
 
 class UltiscanTestTop extends RawModule {

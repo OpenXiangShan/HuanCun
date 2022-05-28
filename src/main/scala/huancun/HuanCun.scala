@@ -24,10 +24,10 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
+import freechips.rocketchip.util.{BundleFieldBase, UIntToOH1}
 import huancun.mbist.MBISTPipeline
 import huancun.prefetch._
-import huancun.utils.{FastArbiter, Pipeline}
+import utils.{DFTResetGen, FastArbiter, Pipeline, ResetGen}
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -164,17 +164,6 @@ trait DontCareInnerLogic { this: Module =>
   }
 }
 
-// Async reset requires carefully synchronization of the reset deassertion.
-class RST_SYNC_NO_DFT(SYNC_NUM: Int = 2) extends Module {
-  val o_reset = IO(Output(AsyncReset()))
-
-  val pipe_reset = RegInit(((1L << SYNC_NUM) - 1).U(SYNC_NUM.W))
-  pipe_reset := Cat(pipe_reset(SYNC_NUM - 2, 0), 0.U(1.W))
-
-  // deassertion of the reset needs to be synchronized.
-  o_reset := pipe_reset(SYNC_NUM - 1).asAsyncReset
-}
-
 abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with HasHuanCunParameters
 
 abstract class HuanCunModule(implicit val p: Parameters) extends MultiIOModule with HasHuanCunParameters
@@ -241,6 +230,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
+      val dfx_scan = Input(new DFTResetGen)
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -315,10 +305,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val slicesWithItsMBISTPipeline = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
-        val rst = if(cacheParams.level == 3 && !cacheParams.simulation) {
-          val resetGen = Module(new RST_SYNC_NO_DFT())
-          resetGen.o_reset
-        } else reset
+        val rst = ResetGen(2, Some(io.dfx_scan))
         val slice = withReset(rst){ Module(new Slice()(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut
