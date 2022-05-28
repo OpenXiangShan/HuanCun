@@ -49,7 +49,7 @@ class MBISTController (
     val hsuspsr_in = new FUSEInterface
     val fscan_in = Vec(fscanPortNum, new FSCANInputInterface)
     val fscan_clkungate = Input(Bool())
-    val clock = Input(Bool())
+    val clock = Input(Clock())
   })
   dontTouch(io)
 
