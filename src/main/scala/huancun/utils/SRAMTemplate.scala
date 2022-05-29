@@ -299,19 +299,21 @@ object SRAMTemplate {
   }
 }
 
-class SRAMTemplate[T <: Data]
-(
-  gen: T, set: Int, way: Int = 1,
-  shouldReset: Boolean = false, holdRead: Boolean = false,
-  singlePort: Boolean = false, bypassWrite: Boolean = false,
-  clk_div_by_2: Boolean = false, hasMbist: Boolean = true,
-  maxMbistDataWidth: Int = 256
+class SRAMTemplate[T <: Data] (
+  gen: T, set: Int, way: Int = 1, singlePort: Boolean = false,
+  shouldReset: Boolean = false, extraReset: Boolean = false,
+  holdRead: Boolean = false, bypassWrite: Boolean = false,
+  // multi-cycle path
+  clk_div_by_2: Boolean = false,
+  // mbist support
+  hasMbist: Boolean = true, maxMbistDataWidth: Int = 256
 ) extends Module {
 
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
   })
+  val extra_reset = if (extraReset) Some(IO(Input(Bool()))) else None
 
   val isNto1 = gen.getWidth > maxMbistDataWidth
   /*************implement mbist interface node(multiple nodes for one way)********/
@@ -424,6 +426,11 @@ class SRAMTemplate[T <: Data]
     val _resetState = RegInit(true.B)
     val (_resetSet, resetFinish) = Counter(_resetState, set)
     when (resetFinish) { _resetState := false.B }
+    if (extra_reset.isDefined) {
+      when (extra_reset.get) {
+        _resetState := true.B
+      }
+    }
 
     resetState := _resetState
     resetSet := _resetSet
@@ -521,22 +528,55 @@ class SRAMTemplate[T <: Data]
 
 }
 
-class SRAMTemplateWithArbiter[T <: Data](nRead: Int, gen: T, set: Int, way: Int = 1,
-                                         shouldReset: Boolean = false) extends Module {
+class FoldedSRAMTemplate[T <: Data](gen: T, set: Int, width: Int = 4, way: Int = 1,
+                                    shouldReset: Boolean = false, extraReset: Boolean = false,
+                                    holdRead: Boolean = false, singlePort: Boolean = false, bypassWrite: Boolean = false) extends Module {
   val io = IO(new Bundle {
-    val r = Flipped(Vec(nRead, new SRAMReadBus(gen, set, way)))
+    val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
   })
+  val extra_reset = if (extraReset) Some(IO(Input(Bool()))) else None
+  //   |<----- setIdx ----->|
+  //   | ridx | width | way |
 
-  val ram = Module(new SRAMTemplate(gen, set, way, shouldReset, holdRead = false, singlePort = true))
-  ram.io.w <> io.w
+  require(width > 0 && isPow2(width))
+  require(way > 0 && isPow2(way))
+  require(set % width == 0)
 
-  val readArb = Module(new Arbiter(chiselTypeOf(io.r(0).req.bits), nRead))
-  readArb.io.in <> io.r.map(_.req)
-  ram.io.r.req <> readArb.io.out
+  val nRows = set / width
 
-  // latch read results
-  io.r.foreach { r =>
-    r.resp.data := HoldUnless(ram.io.r.resp.data, RegNext(r.req.fire()))
+  val array = Module(new SRAMTemplate(gen, set=nRows, way=width*way,
+    shouldReset=shouldReset, extraReset=extraReset, holdRead=holdRead, singlePort=singlePort))
+  if (array.extra_reset.isDefined) {
+    array.extra_reset.get := extra_reset.get
   }
+
+  io.r.req.ready := array.io.r.req.ready
+  io.w.req.ready := array.io.w.req.ready
+
+  val raddr = io.r.req.bits.setIdx >> log2Ceil(width)
+  val ridx = RegNext(if (width != 1) io.r.req.bits.setIdx(log2Ceil(width)-1, 0) else 0.U(1.W))
+  val ren  = io.r.req.valid
+
+  array.io.r.req.valid := ren
+  array.io.r.req.bits.setIdx := raddr
+
+  val rdata = array.io.r.resp.data
+  for (w <- 0 until way) {
+    val wayData = VecInit(rdata.indices.filter(_ % way == w).map(rdata(_)))
+    io.r.resp.data(w) := Mux1H(UIntToOH(ridx, width), wayData)
+  }
+
+  val wen = io.w.req.valid
+  val wdata = VecInit(Seq.fill(width)(io.w.req.bits.data).flatten)
+  val waddr = io.w.req.bits.setIdx >> log2Ceil(width)
+  val widthIdx = if (width != 1) io.w.req.bits.setIdx(log2Ceil(width)-1, 0) else 0.U
+  val wmask = (width, way) match {
+    case (1, 1) => 1.U(1.W)
+    case (x, 1) => UIntToOH(widthIdx)
+    case _      => VecInit(Seq.tabulate(width*way)(n => (n / way).U === widthIdx && io.w.req.bits.waymask.get(n % way))).asUInt
+  }
+  require(wmask.getWidth == way*width)
+
+  array.io.w.apply(wen, wdata, waddr, wmask)
 }
