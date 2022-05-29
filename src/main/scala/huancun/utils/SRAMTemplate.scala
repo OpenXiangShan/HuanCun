@@ -26,19 +26,12 @@ import freechips.rocketchip.tilelink.LFSR64
 import huancun.mbist._
 import huancun.utils.SRAMTemplate.uniqueId
 
+import scala.collection.mutable.ListBuffer
+
 object HoldUnless {
   def apply[T <: Data](x: T, en: Bool, init: Option[T] = None): T = {
     val hold_data = if (init.isDefined) RegEnable(x, init.get, en) else RegEnable(x, en)
     Mux(en, x, hold_data)
-  }
-}
-
-object DelayTwoCycle {
-  def apply[T <: Data](x: T, en: Bool): T = {
-    val en1 = RegNext(en)
-    val data_reg = RegEnable(x, en1)
-    val en2 = RegNext(en1)
-    Mux(en2, data_reg, LFSR64().asTypeOf(data_reg))
   }
 }
 
@@ -47,7 +40,25 @@ object ReadAndHold {
   def apply[T <: Data](x: SyncReadMem[T], addr: UInt, en: Bool): T = HoldUnless(x.read(addr, en), RegNext(en))
 }
 
-abstract class SRAM_Array(mbist:Boolean) extends RawModule {
+class SRAMMbistIO extends Bundle {
+  val trim_fuse = Input(UInt(11.W))
+  val sleep_fuse = Input(UInt(2.W))
+  val bypsel = Input(Bool())
+  val wdis_b = Input(Bool())
+  val rdis_b = Input(Bool())
+  val init_en = Input(Bool())
+  val init_val = Input(Bool())
+  val clkungate = Input(Bool())
+}
+
+abstract class SRAM_Array(hasMbist: Boolean, sramName: Option[String] = None) extends RawModule {
+  val mbist = if (hasMbist) Some(IO(new SRAMMbistIO)) else None
+  if (mbist.isDefined) {
+    dontTouch(mbist.get)
+  }
+
+  override def desiredName: String = sramName.getOrElse(super.desiredName)
+
   def init(clock: Clock, writeClock: Option[Clock]): Unit
   def read(addr: UInt): UInt
   def read(addr: UInt, enable: Bool): UInt = {
@@ -59,35 +70,10 @@ abstract class SRAM_Array(mbist:Boolean) extends RawModule {
   }
   def write(addr: UInt, data: UInt): Unit
   def write(addr: UInt, data: UInt, mask: UInt): Unit
-  val trim_fuse = IO(Input(UInt(11.W)))
-  val sleep_fuse = IO(Input(UInt(2.W)))
-  val bypsel = IO(Input(Bool()))
-  val wdis_b = IO(Input(Bool()))
-  val rdis_b = IO(Input(Bool()))
-  val init_en = IO(Input(Bool()))
-  val init_val = IO(Input(Bool()))
-  val clkungate = IO(Input(Bool()))
-  trim_fuse  := DontCare
-  sleep_fuse := DontCare
-  bypsel  := DontCare
-  wdis_b := DontCare
-  rdis_b  := DontCare
-  init_en := DontCare
-  init_val  := DontCare
-  clkungate := DontCare
-  if(mbist) {
-    dontTouch(trim_fuse)
-    dontTouch(sleep_fuse)
-    dontTouch(bypsel)
-    dontTouch(wdis_b)
-    dontTouch(rdis_b)
-    dontTouch(init_en)
-    dontTouch(init_val)
-    dontTouch(clkungate)
-  }
 }
 
-class SRAM_Array_1P(depth: Int, width: Int, maskSegments: Int, mbist:Boolean) extends SRAM_Array(mbist) {
+class SRAM_Array_1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
+  extends SRAM_Array(hasMbist, sramName) {
   val RW0 = IO(new Bundle() {
     val clk   = Input(Clock())
     val addr  = Input(UInt(log2Ceil(depth).W))
@@ -145,11 +131,11 @@ class SRAM_Array_1P(depth: Int, width: Int, maskSegments: Int, mbist:Boolean) ex
 }
 
 // MCP is used to distinguish SRAMs in Verilog. MCP SRAM is the same as normal SRAM.
-class SRAM_Array_1P_MCP(depth: Int, width: Int, maskSegments: Int, mbist: Boolean)
-  extends SRAM_Array_1P(depth, width, maskSegments, mbist)
+class SRAM_Array_1P_MCP(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
+  extends SRAM_Array_1P(depth, width, maskSegments, hasMbist, sramName)
 
-class SRAM_Array_2P(depth: Int, width: Int, maskSegments: Int, mbist: Boolean)
-  extends SRAM_Array(mbist)  {
+class SRAM_Array_2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
+  extends SRAM_Array(hasMbist, sramName)  {
   require(width % maskSegments == 0)
 
   val R0 = IO(new Bundle() {
@@ -218,16 +204,27 @@ class SRAM_Array_2P(depth: Int, width: Int, maskSegments: Int, mbist: Boolean)
 }
 
 object SRAM_Array {
+  private val instances = ListBuffer.empty[(Boolean, Int, Int, Int, Boolean)]
+
   def apply(clock: Clock, singlePort: Boolean, depth: Int, width: Int,
             maskSegments: Int = 1,
             MCP: Boolean = false,
             writeClock: Option[Clock] = None,
-            mbist: Boolean
+            hasMbist: Boolean
            ): SRAM_Array = {
+    val sram_key = (singlePort, depth, width, maskSegments, hasMbist)
+    if (!instances.contains(sram_key)) {
+      instances += sram_key
+    }
+    val sram_index = instances.indexOf(sram_key)
+    val mcpPrefix = if (MCP) "_multi_cycle" else ""
+    val numPort = if (singlePort) 1 else 2
+    val maskWidth = width / maskSegments
+    val sramName = Some(s"sram_array_${sram_index}_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix")
     val array = (singlePort, MCP) match {
-      case (true, true) => Module(new SRAM_Array_1P_MCP(depth, width, maskSegments, mbist))
-      case (true, false) => Module(new SRAM_Array_1P(depth, width, maskSegments, mbist))
-      case (false, _) => Module(new SRAM_Array_2P(depth, width, maskSegments, mbist))
+      case (true, true) => Module(new SRAM_Array_1P_MCP(depth, width, maskSegments, hasMbist, sramName))
+      case (true, false) => Module(new SRAM_Array_1P(depth, width, maskSegments, hasMbist, sramName))
+      case (false, _) => Module(new SRAM_Array_2P(depth, width, maskSegments, hasMbist, sramName))
     }
     array.init(clock, writeClock)
     array
@@ -307,8 +304,8 @@ class SRAMTemplate[T <: Data]
   gen: T, set: Int, way: Int = 1,
   shouldReset: Boolean = false, holdRead: Boolean = false,
   singlePort: Boolean = false, bypassWrite: Boolean = false,
-  clk_div_by_2: Boolean = false, mbist: Boolean = true,
-  maxMbistDataWidth:Int = 256
+  clk_div_by_2: Boolean = false, hasMbist: Boolean = true,
+  maxMbistDataWidth: Int = 256
 ) extends Module {
 
   val io = IO(new Bundle {
@@ -373,15 +370,15 @@ class SRAMTemplate[T <: Data]
 
 
   /**************************************add nodes to global************************************/
-  if(mbist) {
-    if(isNto1) {
+  if (hasMbist) {
+    if (isNto1) {
       mbistNodesNto1.zipWithIndex.foreach({
         case (node, idx) =>
           val sram_prefix = "sram_" + (uniqueId + idx) + "_"
           MBIST.addSRAM(node, sram_prefix, uniqueId + idx)
       })
     }
-    else{
+    else {
       mbistNodes1toN.zipWithIndex.foreach({
         case (node, idx) =>
           val sram_prefix = "sram_" + (uniqueId + idx) + "_"
@@ -402,7 +399,7 @@ class SRAMTemplate[T <: Data]
   val mbistFuncSel         = if(isNto1) mbistFuncSelNto1 else mbistFuncSel1toN
   /********************************************************************************************/
   val wordType = UInt(gen.getWidth.W)
-  val array = SRAM_Array(clock, singlePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, mbist = mbist)
+  val array = SRAM_Array(clock, singlePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist)
 
   val trim_fuse = if(isNto1) mbistNodesNto1.head.sram_trim_fuse else mbistNodes1toN.head.sram_trim_fuse
   val sleep_fuse = if(isNto1) mbistNodesNto1.head.sram_sleep_fuse else mbistNodes1toN.head.sram_sleep_fuse
@@ -412,14 +409,14 @@ class SRAMTemplate[T <: Data]
   val init_en = if(isNto1) mbistNodesNto1.head.init_en else mbistNodes1toN.head.init_en
   val init_val = if(isNto1) mbistNodesNto1.head.init_val else mbistNodes1toN.head.init_val
   val clkungate = if(isNto1) mbistNodesNto1.head.clkungate else mbistNodes1toN.head.clkungate
-  array.trim_fuse <> trim_fuse
-  array.sleep_fuse <> sleep_fuse
-  array.bypsel <> bypsel
-  array.wdis_b <> wdis_b
-  array.rdis_b <> rdis_b
-  array.init_en <> init_en
-  array.init_val <> init_val
-  array.clkungate <> clkungate
+  array.mbist.get.trim_fuse <> trim_fuse
+  array.mbist.get.sleep_fuse <> sleep_fuse
+  array.mbist.get.bypsel <> bypsel
+  array.mbist.get.wdis_b <> wdis_b
+  array.mbist.get.rdis_b <> rdis_b
+  array.mbist.get.init_en <> init_en
+  array.mbist.get.init_val <> init_val
+  array.mbist.get.clkungate <> clkungate
 
   val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
 
@@ -439,12 +436,12 @@ class SRAMTemplate[T <: Data]
   val wdata = VecInit(Mux(resetState, 0.U.asTypeOf(Vec(way, gen)), io.w.req.bits.data).map(_.asTypeOf(wordType)))
   val waymask = Mux(resetState, Fill(way, "b1".U), io.w.req.bits.waymask.getOrElse("b1".U))
 
-  val finalWriteSetIdx = if(mbist) Mux(mbistFuncSel, mbistAddr, setIdx) else setIdx
-  val finalReadSetIdx = if(mbist) Mux(mbistFuncSel, mbistAddrRead, io.r.req.bits.setIdx) else io.r.req.bits.setIdx
-  val finalWen = if(mbist) Mux(mbistFuncSel, mbistWriteEn, wen) else wen
-  val finalRen = if(mbist) Mux(mbistFuncSel, mbistReadEn, ren) else ren
-  val finalWmask = if(mbist) Mux(mbistFuncSel, mbistWMask, waymask) else waymask
-  val finalWriteData = if(mbist) Mux(mbistFuncSel, mbistWriteData, wdata) else wdata
+  val finalWriteSetIdx = if(hasMbist) Mux(mbistFuncSel, mbistAddr, setIdx) else setIdx
+  val finalReadSetIdx = if(hasMbist) Mux(mbistFuncSel, mbistAddrRead, io.r.req.bits.setIdx) else io.r.req.bits.setIdx
+  val finalWen = if(hasMbist) Mux(mbistFuncSel, mbistWriteEn, wen) else wen
+  val finalRen = if(hasMbist) Mux(mbistFuncSel, mbistReadEn, ren) else ren
+  val finalWmask = if(hasMbist) Mux(mbistFuncSel, mbistWMask, waymask) else waymask
+  val finalWriteData = if(hasMbist) Mux(mbistFuncSel, mbistWriteData, wdata) else wdata
 
   val toSRAMRen = if (singlePort) (finalRen && !finalWen) else finalRen
 
