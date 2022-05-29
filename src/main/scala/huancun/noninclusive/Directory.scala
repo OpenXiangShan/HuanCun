@@ -169,7 +169,6 @@ class Directory(implicit p: Parameters)
     this.reset
   )
 
-  def clientHitFn(dir: ClientDirEntry): Bool = dir.state =/= MetaData.INVALID
   def client_invalid_way_fn(metaVec: Seq[Vec[ClientDirEntry]], repl: UInt): (Bool, UInt) = {
     val invalid_vec = metaVec.map(states => Cat(states.map(_.state === INVALID)).andR())
     val has_invalid_way = Cat(invalid_vec).orR()
@@ -189,7 +188,7 @@ class Directory(implicit p: Parameters)
         init.foreach(_.alias.foreach(_ := DontCare))
         init
       },
-      dir_hit_fn = _ => true.B,
+      dir_hit_fn = dirs => Cat(dirs.map(_.state =/= MetaData.INVALID)).orR,
       invalid_way_sel = client_invalid_way_fn,
       replacement = "random"
     )
