@@ -51,7 +51,7 @@ class SRAMMbistIO extends Bundle {
   val clkungate = Input(Bool())
 }
 
-abstract class SRAM_Array(hasMbist: Boolean, sramName: Option[String] = None) extends RawModule {
+abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None) extends RawModule {
   val mbist = if (hasMbist) Some(IO(new SRAMMbistIO)) else None
   if (mbist.isDefined) {
     dontTouch(mbist.get)
@@ -72,8 +72,8 @@ abstract class SRAM_Array(hasMbist: Boolean, sramName: Option[String] = None) ex
   def write(addr: UInt, data: UInt, mask: UInt): Unit
 }
 
-class SRAM_Array_1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
-  extends SRAM_Array(hasMbist, sramName) {
+class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
+  extends SRAMArray(hasMbist, sramName) {
   val RW0 = IO(new Bundle() {
     val clk   = Input(Clock())
     val addr  = Input(UInt(log2Ceil(depth).W))
@@ -130,12 +130,8 @@ class SRAM_Array_1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean
   }
 }
 
-// MCP is used to distinguish SRAMs in Verilog. MCP SRAM is the same as normal SRAM.
-class SRAM_Array_1P_MCP(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
-  extends SRAM_Array_1P(depth, width, maskSegments, hasMbist, sramName)
-
-class SRAM_Array_2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
-  extends SRAM_Array(hasMbist, sramName)  {
+class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
+  extends SRAMArray(hasMbist, sramName)  {
   require(width % maskSegments == 0)
 
   val R0 = IO(new Bundle() {
@@ -203,7 +199,7 @@ class SRAM_Array_2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean
   }
 }
 
-object SRAM_Array {
+object SRAMArray {
   private val instances = ListBuffer.empty[(Boolean, Int, Int, Int, Boolean)]
 
   def apply(clock: Clock, singlePort: Boolean, depth: Int, width: Int,
@@ -211,7 +207,7 @@ object SRAM_Array {
             MCP: Boolean = false,
             writeClock: Option[Clock] = None,
             hasMbist: Boolean
-           ): SRAM_Array = {
+           ): SRAMArray = {
     val sram_key = (singlePort, depth, width, maskSegments, hasMbist)
     if (!instances.contains(sram_key)) {
       instances += sram_key
@@ -221,10 +217,10 @@ object SRAM_Array {
     val numPort = if (singlePort) 1 else 2
     val maskWidth = width / maskSegments
     val sramName = Some(s"sram_array_${sram_index}_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix")
-    val array = (singlePort, MCP) match {
-      case (true, true) => Module(new SRAM_Array_1P_MCP(depth, width, maskSegments, hasMbist, sramName))
-      case (true, false) => Module(new SRAM_Array_1P(depth, width, maskSegments, hasMbist, sramName))
-      case (false, _) => Module(new SRAM_Array_2P(depth, width, maskSegments, hasMbist, sramName))
+    val array = if (singlePort) {
+      Module(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName))
+    } else {
+      Module(new SRAMArray2P(depth, width, maskSegments, hasMbist, sramName))
     }
     array.init(clock, writeClock)
     array
@@ -401,7 +397,7 @@ class SRAMTemplate[T <: Data] (
   val mbistFuncSel         = if(isNto1) mbistFuncSelNto1 else mbistFuncSel1toN
   /********************************************************************************************/
   val wordType = UInt(gen.getWidth.W)
-  val array = SRAM_Array(clock, singlePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist)
+  val array = SRAMArray(clock, singlePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist)
 
   val trim_fuse = if(isNto1) mbistNodesNto1.head.sram_trim_fuse else mbistNodes1toN.head.sram_trim_fuse
   val sleep_fuse = if(isNto1) mbistNodesNto1.head.sram_sleep_fuse else mbistNodes1toN.head.sram_sleep_fuse
