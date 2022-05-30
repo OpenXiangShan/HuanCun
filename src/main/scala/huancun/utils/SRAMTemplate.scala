@@ -293,6 +293,10 @@ object SRAMTemplate {
     val res = if(validNum.isEmpty) (1,way) else validNum.last
     (res._1, way / res._1)
   }
+
+  def restartIndexing():Unit={
+    uniqueId = 0
+  }
 }
 
 class SRAMTemplate[T <: Data] (

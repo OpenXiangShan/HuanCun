@@ -5,6 +5,7 @@ import chisel3.util._
 import huancun.mbist.MBIST._
 import huancun.mbist.MBISTPipeline.{generateXLS, uniqueId}
 import org.apache.poi.hssf.usermodel._
+import huancun.utils.SRAMTemplate
 
 import java.io.{File, FileOutputStream, IOException}
 
@@ -127,6 +128,8 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}") e
 
   if(MBIST.isMaxLevel(level)) {
     generateXLS(node,infoName)
+    //Within every mbist domain, sram arrays are indexed from 0
+    SRAMTemplate.restartIndexing()
   }
   val io = IO(new Bundle() {
     val mbist = if(MBIST.isMaxLevel(level)) Some(new MBISTBus(bd.params)) else None
