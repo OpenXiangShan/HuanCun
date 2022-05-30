@@ -24,7 +24,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink.LFSR64
 import huancun.mbist._
-import huancun.utils.SRAMTemplate.uniqueId
+import huancun.utils.SRAMTemplate.{mbistArrayId, uniqueId}
 
 import scala.collection.mutable.ListBuffer
 
@@ -284,6 +284,7 @@ class SRAMWriteBus[T <: Data](private val gen: T, val set: Int, val way: Int = 1
 
 object SRAMTemplate {
   private var uniqueId = 0
+  private var mbistArrayId = 0
 
   def getWayNumForEachNodeAndNodeNum(dw: Int, way: Int, mw: Int): (Int, Int) = {
     val dataNum1toNNode = mw / dw
@@ -295,7 +296,7 @@ object SRAMTemplate {
   }
 
   def restartIndexing():Unit={
-    uniqueId = 0
+    mbistArrayId = 0
   }
 }
 
@@ -377,20 +378,21 @@ class SRAMTemplate[T <: Data] (
       mbistNodesNto1.zipWithIndex.foreach({
         case (node, idx) =>
           val sram_prefix = "sram_" + (uniqueId + idx) + "_"
-          MBIST.addSRAM(node, sram_prefix, uniqueId + idx)
+          MBIST.addSRAM(node, sram_prefix, mbistArrayId + idx)
       })
     }
     else {
       mbistNodes1toN.zipWithIndex.foreach({
         case (node, idx) =>
           val sram_prefix = "sram_" + (uniqueId + idx) + "_"
-          MBIST.addSRAM(node, sram_prefix, uniqueId + idx)
+          MBIST.addSRAM(node, sram_prefix, mbistArrayId + idx)
       })
     }
   }
   MBIST.noDedup(this)
   val addId = if(isNto1) mbistNodeNumNto1 else mbistNodeNum1toN
   uniqueId += addId
+  mbistArrayId += addId
   /*******************************select signals between two set*******************************/
   val mbistAddr           = if(isNto1) mbistAddrNto1 else mbistAddr1toN
   val mbistAddrRead       = if(isNto1) mbistAddrReadNto1 else mbistAddrRead1toN
