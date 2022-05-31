@@ -112,6 +112,7 @@ object MBISTPipeline {
 
 class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}") extends Module {
 
+  override val desiredName = infoName
   val prefix = "MBISTPipeline_" + uniqueId + "_"
   uniqueId += 1
   val node = MBIST.addController(prefix, level)
