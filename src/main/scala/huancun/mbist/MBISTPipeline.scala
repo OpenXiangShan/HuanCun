@@ -4,10 +4,9 @@ import chisel3._
 import chisel3.util._
 import huancun.mbist.MBIST._
 import huancun.mbist.MBISTPipeline.{generateXLS, uniqueId}
-import org.apache.poi.hssf.usermodel._
 import huancun.utils.SRAMTemplate
 
-import java.io.{File, FileOutputStream, IOException, PrintWriter}
+import java.io.{File,IOException, PrintWriter}
 
 class MbitsExtraInterface extends Bundle{
   val IP_RESET_B = Input(Bool())
@@ -116,35 +115,6 @@ object MBISTPipeline {
         fileHandle.print("\n")
     })
     fileHandle.close()
-
-//    val hssf = new HSSFWorkbook()
-//    val sheet = hssf.createSheet()
-//    val firstRow = sheet.createRow(0)
-//    val heads = if(isSRAM) {
-//      Seq[String]("SRAM Name","SRAM array","data width","be width","single port","pipeline depth")
-//    } else {
-//      Seq[String]("RF Name","RF array","data width","be width","single port","pipeline depth")
-//    }
-//    for(i <- heads.indices){
-//      val cell = firstRow.createCell(i)
-//      cell.setCellValue(new HSSFRichTextString(heads(i)))
-//    }
-//    node.ramParamsBelongToThis.zip(node.array_id).zip(node.array_depth).zipWithIndex.foreach({
-//      case (((p,id),depth),idx) =>
-//        val row = sheet.createRow(idx + 1)
-//        val cells = heads.indices.map(row.createCell)
-//        cells(0).setCellValue(p.hierarchyName)
-//        cells(1).setCellValue(id.toString)
-//        cells(2).setCellValue(p.dataWidth.toString)
-//        cells(3).setCellValue(p.maskWidth.toString)
-//        cells(4).setCellValue(if(p.singlePort) "true" else "false" )
-//        cells(5).setCellValue(depth.toString)
-//    })
-//    heads.indices.foreach(idx => sheet.setColumnWidth(idx,(heads(idx).length * 7 + 12) / 7 * 256))
-//    val out = new FileOutputStream(f"build/$infoName.xls")
-//    hssf.write(out)
-//    out.close()
-//    hssf.close()
   }
   def placePipelines(level:Int,infoName:String = uniqueId.toString):(Option[MBISTPipeline],Option[MBISTPipeline]) = {
     val doSramChildrenExist = checkSramChildrenExistence(level)
