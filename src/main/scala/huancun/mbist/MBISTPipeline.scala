@@ -111,7 +111,7 @@ object MBISTPipeline {
         fileHandle.print(p.dataWidth.toString + ",")
         fileHandle.print(p.maskWidth.toString + ",")
         fileHandle.print((if(p.singlePort) "true" else "false")  + ",")
-        fileHandle.print(depth.toString)
+        fileHandle.print((depth * 2 + 1).toString)
         fileHandle.print("\n")
     })
     fileHandle.close()
