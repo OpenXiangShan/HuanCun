@@ -5,7 +5,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import huancun.HasHuanCunParameters
-import huancun.mbist.MBISTPipeline
+import huancun.mbist.MBISTPipeline.placePipelines
 
 case class BOPParameters(
   rrTableEntries: Int = 256,
@@ -80,7 +80,7 @@ class TestOffsetBundle(implicit p: Parameters) extends BOPBundle {
   val resp = Flipped(DecoupledIO(new TestOffsetResp))
 }
 
-class RecentRequestTable(implicit p: Parameters) extends BOPModule {
+class RecentRequestTable(parentName:String = "Unknown")(implicit p: Parameters) extends BOPModule {
   val io = IO(new Bundle {
     val w = Flipped(DecoupledIO(UInt(fullAddressBits.W)))
     val r = Flipped(new TestOffsetBundle)
@@ -104,9 +104,9 @@ class RecentRequestTable(implicit p: Parameters) extends BOPModule {
   }
 
   val rrTable = Module(
-    new SRAMTemplate(rrTableEntry(), set = rrTableEntries, way = 1, shouldReset = true, singlePort = true)
+    new SRAMTemplate(rrTableEntry(), set = rrTableEntries, way = 1, shouldReset = true, singlePort = true, parentName = parentName + "rrTable_")
   )
-  val bestPrefetcherMbistPipeline = Module(new MBISTPipeline(level = 2))
+  val(bestOffsetPrefetchMbistPipelineSram,bestOffsetPrefetchMbistPipelineRf) = placePipelines(level = 2,infoName = "BestOffsetPrefetch")
 
   val wAddr = io.w.bits
   rrTable.io.w.req.valid := io.w.valid && !io.r.req.valid
@@ -210,14 +210,14 @@ class OffsetScoreTable(implicit p: Parameters) extends BOPModule {
 
 }
 
-class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
+class BestOffsetPrefetch(parentName:String = "Unknown")(implicit p: Parameters) extends BOPModule {
   val io = IO(new Bundle() {
     val train = Flipped(DecoupledIO(new PrefetchTrain))
     val req = DecoupledIO(new PrefetchReq)
     val resp = Flipped(DecoupledIO(new PrefetchResp))
   })
 
-  val rrTable = Module(new RecentRequestTable)
+  val rrTable = Module(new RecentRequestTable(parentName + "rrTable_"))
   val scoreTable = Module(new OffsetScoreTable)
 
   val prefetchOffset = scoreTable.io.prefetchOffset

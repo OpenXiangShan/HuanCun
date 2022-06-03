@@ -2,12 +2,14 @@ package huancun.utils
 
 import chisel3._
 import chisel3.util._
-import huancun.mbist.MBISTPipeline
+import huancun.mbist.MBISTPipeline.placePipelines
 
 class SRAMWrapper[T <: Data]
 (
   gen: T, set: Int, n: Int = 1,
-  clk_div_by_2: Boolean = false
+  clk_div_by_2: Boolean = false,
+  hasRepair:Boolean = false,
+  parentName:String = "Unknown"
 ) extends Module {
 
   val io = IO(new Bundle() {
@@ -27,8 +29,9 @@ class SRAMWrapper[T <: Data]
     val ren = if(n == 1) true.B else i.U === r_sel
     val wen = if(n == 1) true.B else i.U === w_sel
     val sram = Module(new SRAMTemplate[T](
-      gen, innerSet, 1, singlePort = true, clk_div_by_2 = clk_div_by_2
+      gen, innerSet, 1, singlePort = true, clk_div_by_2 = clk_div_by_2,hasRepair = hasRepair, parentName = parentName + s"bank${i}_"
     ))
+
     sram.io.r.req.valid := io.r.req.valid && ren
     sram.io.r.req.bits.apply(r_setIdx)
     sram.io.w.req.valid := io.w.req.valid && wen
@@ -47,5 +50,5 @@ class SRAMWrapper[T <: Data]
 
   io.w.req.ready := Cat(banks.map(_.io.w.req.ready)).andR()
 
-  val sramWrapperMbistPipeline = Module(new MBISTPipeline(level = 1))
+  val(sramWrapperMbistPipelineSram,sramWrapperMbistPipelineRf) = placePipelines(level = 1,infoName = "SramWrapper")
 }

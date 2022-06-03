@@ -7,8 +7,14 @@ import huancun.mbist.MBISTPipeline.{generateXLS, uniqueId}
 import org.apache.poi.hssf.usermodel._
 import huancun.utils.SRAMTemplate
 
-import java.io.{File, FileOutputStream, IOException}
+import java.io.{File, FileOutputStream, IOException, PrintWriter}
 
+class MbitsExtraInterface extends Bundle{
+  val IP_RESET_B = Input(Bool())
+  val WRAPPER_RD_CLK_EN = Input(Bool())
+  val WRAPPER_WR_CLK_EN = Input(Bool())
+  val OUTPUT_RESET = Input(Bool())
+}
 class MbitsFscanInterface extends Bundle{
   val bypsel = Input(Bool())
   val wdis_b = Input(Bool())
@@ -44,6 +50,7 @@ class MBISTInterface(val params:MBISTBusParams,name:String) extends RawModule{
   val mbist = IO(new MbitsStandardInterface(params))
   val fscan_ram = IO(new MbitsFscanInterface)
   val static = IO(new MbitsStaticInterface)
+  val extra = IO(new MbitsExtraInterface)
 
   toPipeline.mbist_array := mbist.array
   toPipeline.mbist_all := mbist.all
@@ -70,12 +77,17 @@ class MBISTInterface(val params:MBISTBusParams,name:String) extends RawModule{
   toPipeline.init_en := fscan_ram.init_en
   toPipeline.init_val := fscan_ram.init_val
   toPipeline.clkungate := fscan_ram.clkungate
+
+  toPipeline.IP_RESET_B := extra.IP_RESET_B
+  toPipeline.WRAPPER_RD_CLK_EN := extra.WRAPPER_RD_CLK_EN
+  toPipeline.WRAPPER_WR_CLK_EN := extra.WRAPPER_WR_CLK_EN
+  toPipeline.OUTPUT_RESET := extra.OUTPUT_RESET
 }
 
 object MBISTPipeline {
   private var uniqueId = 0
-  def generateXLS(node:PipelineNode,infoName:String): Unit ={
-    val file = new File(f"build/$infoName.xls")
+  protected[mbist] def generateXLS(node:PipelineBaseNode,infoName:String,isSRAM:Boolean): Unit ={
+    val file = new File(f"build/$infoName.csv")
     if(!file.exists()){
       try{
         file.createNewFile()
@@ -84,38 +96,73 @@ object MBISTPipeline {
           println("error")
       }
     }
-    val hssf = new HSSFWorkbook()
-    val sheet = hssf.createSheet()
-    val firstRow = sheet.createRow(0)
-    val heads = Seq[String]("SRAM array","data width","be width","single port","pipeline depth")
-    for(i <- heads.indices){
-      val cell = firstRow.createCell(i)
-      cell.setCellValue(new HSSFRichTextString(heads(i)))
+
+    val fileHandle = new PrintWriter(f"build/$infoName.csv")
+    val heads = if(isSRAM) {
+      "\"SRAM Name\",\"SRAM Type\",\"SRAM array\",\"data width\",\"be width\",\"single port\",\"pipeline depth\""
+    } else {
+      "\"RF Name\",\"RF Type\",\"SRAM array\",\"data width\",\"be width\",\"single port\",\"pipeline depth\""
     }
-    node.sramParamsBelongToThis.zip(node.array_id).zip(node.array_depth).zipWithIndex.foreach({
-      case (((p,id),depth),idx) =>
-        val row = sheet.createRow(idx + 1)
-        val cells = heads.indices.map(row.createCell)
-        cells(0).setCellValue(id.toString)
-        cells(1).setCellValue(p.dataWidth.toString)
-        cells(2).setCellValue(p.maskWidth.toString)
-        cells(3).setCellValue(if(p.singlePort) "true" else "false" )
-        cells(4).setCellValue(depth.toString)
+    fileHandle.println(heads)
+    node.ramParamsBelongToThis.zip(node.array_id).zip(node.array_depth).foreach({
+      case ((p,id),depth) =>
+        fileHandle.print(p.hierarchyName + ",")
+        fileHandle.print(p.vname + ",")
+        fileHandle.print(id.toString + ",")
+        fileHandle.print(p.dataWidth.toString + ",")
+        fileHandle.print(p.maskWidth.toString + ",")
+        fileHandle.print((if(p.singlePort) "true" else "false")  + ",")
+        fileHandle.print(depth.toString)
+        fileHandle.print("\n")
     })
-    heads.indices.foreach(idx => sheet.setColumnWidth(idx,(heads(idx).length * 7 + 12) / 7 * 256))
-    val out = new FileOutputStream(f"build/$infoName.xls")
-    hssf.write(out)
-    out.close()
-    hssf.close()
+    fileHandle.close()
+
+//    val hssf = new HSSFWorkbook()
+//    val sheet = hssf.createSheet()
+//    val firstRow = sheet.createRow(0)
+//    val heads = if(isSRAM) {
+//      Seq[String]("SRAM Name","SRAM array","data width","be width","single port","pipeline depth")
+//    } else {
+//      Seq[String]("RF Name","RF array","data width","be width","single port","pipeline depth")
+//    }
+//    for(i <- heads.indices){
+//      val cell = firstRow.createCell(i)
+//      cell.setCellValue(new HSSFRichTextString(heads(i)))
+//    }
+//    node.ramParamsBelongToThis.zip(node.array_id).zip(node.array_depth).zipWithIndex.foreach({
+//      case (((p,id),depth),idx) =>
+//        val row = sheet.createRow(idx + 1)
+//        val cells = heads.indices.map(row.createCell)
+//        cells(0).setCellValue(p.hierarchyName)
+//        cells(1).setCellValue(id.toString)
+//        cells(2).setCellValue(p.dataWidth.toString)
+//        cells(3).setCellValue(p.maskWidth.toString)
+//        cells(4).setCellValue(if(p.singlePort) "true" else "false" )
+//        cells(5).setCellValue(depth.toString)
+//    })
+//    heads.indices.foreach(idx => sheet.setColumnWidth(idx,(heads(idx).length * 7 + 12) / 7 * 256))
+//    val out = new FileOutputStream(f"build/$infoName.xls")
+//    hssf.write(out)
+//    out.close()
+//    hssf.close()
+  }
+  def placePipelines(level:Int,infoName:String = uniqueId.toString):(Option[MBISTPipeline],Option[MBISTPipeline]) = {
+    val doSramChildrenExist = checkSramChildrenExistence(level)
+    val doRfChildrenExist = checkRfChildrenExistence(level)
+    val sramInfo = "MBIST_SRAM_" + infoName
+    val rfInfo = "MBIST_RF_" + infoName
+    val sramPipeline = if(doSramChildrenExist) Some(Module(new MBISTPipeline(level,sramInfo,true))) else None
+    val rfPipeline = if(doRfChildrenExist) Some(Module(new MBISTPipeline(level,rfInfo,false))) else None
+    (sramPipeline,rfPipeline)
   }
 }
 
-class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}") extends Module {
+class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",isSRAM:Boolean = true) extends Module {
 
   override val desiredName = infoName
   val prefix = "MBISTPipeline_" + uniqueId + "_"
   uniqueId += 1
-  val node = MBIST.addController(prefix, level)
+  val node = MBIST.addController(prefix, level,isSRAM)
   val bd = node.bd
 
   //  println("=====")
@@ -128,9 +175,9 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}") e
   //  println("*****")
 
   if(MBIST.isMaxLevel(level)) {
-    generateXLS(node,infoName)
+    generateXLS(node,infoName,isSRAM)
     //Within every mbist domain, sram arrays are indexed from 0
-    SRAMTemplate.restartIndexing()
+    SRAMTemplate.restartIndexing(isSRAM)
   }
   val io = IO(new Bundle() {
     val mbist = if(MBIST.isMaxLevel(level)) Some(new MBISTBus(bd.params)) else None
@@ -143,7 +190,7 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}") e
   val arrayHit = node.array_id.map(_.U === bd.mbist_array).map(_.asUInt).reduce(Cat(_,_)).orR
   val activated = bd.mbist_all | (bd.mbist_req & arrayHit)
 
-  val pipelineNodes   = node.children.filter(_.isInstanceOf[PipelineNode]).map(_.asInstanceOf[PipelineNode])
+  val pipelineNodes   = node.children.filter(_.isInstanceOf[PipelineBaseNode]).map(_.asInstanceOf[PipelineBaseNode])
   val pipelineNodesAck= if(pipelineNodes.nonEmpty) pipelineNodes.map(_.bd.mbist_ack).reduce(_|_) else true.B
   val activatedReg    =   RegNext(activated)
 
@@ -176,12 +223,16 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}") e
   node.children.foreach(_.bd.init_en := node.bd.init_en)
   node.children.foreach(_.bd.init_val := node.bd.init_val)
   node.children.foreach(_.bd.clkungate := node.bd.clkungate)
+  node.children.foreach(_.bd.IP_RESET_B := node.bd.IP_RESET_B)
+  node.children.foreach(_.bd.WRAPPER_RD_CLK_EN := node.bd.WRAPPER_RD_CLK_EN)
+  node.children.foreach(_.bd.WRAPPER_WR_CLK_EN := node.bd.WRAPPER_WR_CLK_EN)
+  node.children.foreach(_.bd.OUTPUT_RESET := node.bd.OUTPUT_RESET)
 
   val nodeSelected = node.children.map(_.array_id).map(_.map(_.U === arrayReg).map(_.asUInt | allReg).reduce(Cat(_,_)).orR)
   dataOutSelected := Mux1H(nodeSelected,dataOut)
 
   node.children.zip(nodeSelected).zip(dataOut).foreach({
-    case ((child:SRAMNode,selected),dout) => {
+    case ((child:RAMBaseNode,selected),dout) => {
       child.bd.addr           := Mux(selected,addrReg(child.bd.params.addrWidth-1,0),0.U)
       child.bd.addr_rd        := Mux(selected,addrRdReg(child.bd.params.addrWidth-1,0),0.U)
       child.bd.wdata          := Mux(selected,dataInReg(child.bd.params.dataWidth-1,0),0.U)
@@ -191,7 +242,7 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}") e
       child.bd.ack            := Mux(selected,activatedReg,false.B)
       dout             := child.bd.rdata
     }
-    case ((child:PipelineNode,selected),dout) => {
+    case ((child:PipelineBaseNode,selected),dout) => {
       child.bd.mbist_array   := Mux(selected,arrayReg(child.bd.params.arrayWidth-1,0),0.U)
       child.bd.mbist_req     := Mux(selected,reqReg,0.U)
       child.bd.mbist_all     := Mux(selected,allReg,0.U)

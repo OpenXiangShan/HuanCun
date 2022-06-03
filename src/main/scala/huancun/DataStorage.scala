@@ -22,10 +22,10 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.mbist.MBISTPipeline
+import huancun.mbist.MBISTPipeline.placePipelines
 import huancun.utils._
 
-class DataStorage(implicit p: Parameters) extends HuanCunModule {
+class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val sourceC_raddr = Flipped(DecoupledIO(new DSAddress))
     val sourceC_rdata = Output(new DSData)
@@ -61,27 +61,33 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val eccBits = dataCode.width(8 * bankBytes) - 8 * bankBytes
   println(s"Data ECC bits:$eccBits")
 
-  val bankedData = Seq.fill(nrBanks) {
+  val bankedData = (0 until nrBanks).map(idx => {
     Module(
       new SRAMWrapper(
         gen = UInt((8 * bankBytes).W),
         set = nrRows,
         n = cacheParams.sramDepthDiv,
-        clk_div_by_2 = cacheParams.sramClkDivBy2
+        clk_div_by_2 = cacheParams.sramClkDivBy2,
+        hasRepair = if(cacheParams.level == 3) true else false,
+        parentName = parentName + f"bankedData${idx}_"
       )
     )
-  }
+  })
   val dataEccArray = if (eccBits > 0) {
-    Seq.fill(nrStacks) {
+    (0 until nrStacks).map(idx => {
       Module(new SRAMWrapper(
         gen = UInt((eccBits * stackSize).W),
         set = nrRows,
         n = cacheParams.sramDepthDiv,
-        clk_div_by_2 = cacheParams.sramClkDivBy2
+        clk_div_by_2 = cacheParams.sramClkDivBy2,
+        hasRepair = if(cacheParams.level == 3) true else false,
+        parentName = parentName + f"dataEcc${idx}_"
       ))
-    }
-  } else null
-  val dataStorageMbistPipeline = Module(new MBISTPipeline(level = 2))
+    })
+  } else {
+    null
+  }
+  val(dataStorageMbistPipelineSram,dataStorageMbistPipelineRf) = placePipelines(level = 2,infoName = "DataStorage")
   val stackRdy = if (cacheParams.sramClkDivBy2) {
     RegInit(VecInit(Seq.fill(nrStacks) {
       true.B

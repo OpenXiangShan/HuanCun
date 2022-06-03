@@ -39,9 +39,8 @@ class UltiscanIO (
     val mode_atspeed = Output(Bool())
     val state = Output(Bool())
 
-    val byplatrst = Output(Bool())
+
     val byplatrst_b = Output(Bool())
-    val byprst = Output(Bool())
     val byprst_b = Output(Bool())
     val clkgenctrl = Output(UInt((NUM_CLKGENCTRL + 1).W))
     val clkgenctrlen = Output(UInt((NUM_CLKGENCTRLEN + 1).W))
@@ -108,15 +107,4 @@ class Ultiscan (
     top_scan.dft_mode := io.fscan.rstbypen
     top_scan
   }
-}
-
-class UltiscanTestTop extends RawModule {
-  val xsl2_ultiscan = Module(new Ultiscan(3400, 20, 20, 1, 1, 0, 0, "xsl2"))
-  val xsx_ultiscan = Module(new Ultiscan(1100, 10, 10, 1, 1, 0, 0, "xsx"))
-
-  val xsl2 = IO(xsl2_ultiscan.io.cloneType)
-  val xsx = IO(xsx_ultiscan.io.cloneType)
-
-  xsl2 <> xsl2_ultiscan.io
-  xsx <> xsx_ultiscan.io
 }

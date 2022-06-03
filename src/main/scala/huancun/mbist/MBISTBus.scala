@@ -20,9 +20,9 @@ trait MBISTBundleLike {
   }
 }
 abstract class MBISTCommonBundle extends Bundle with MBISTBundleLike{
-  val sram_trim_fuse = Input(UInt(11.W))
+  val sram_trim_fuse = Input(UInt(20.W))
   val sram_sleep_fuse = Input(UInt(2.W))
-  val rf_trim_fuse = Input(UInt(11.W))
+  val rf_trim_fuse = Input(UInt(20.W))
   val rf_sleep_fuse = Input(UInt(2.W))
   val bypsel = Input(Bool())
   val wdis_b = Input(Bool())
@@ -30,6 +30,10 @@ abstract class MBISTCommonBundle extends Bundle with MBISTBundleLike{
   val init_en = Input(Bool())
   val init_val = Input(Bool())
   val clkungate = Input(Bool())
+  val IP_RESET_B = Input(Bool())
+  val WRAPPER_RD_CLK_EN = Input(Bool())
+  val WRAPPER_WR_CLK_EN = Input(Bool())
+  val OUTPUT_RESET = Input(Bool())
 }
 
 case class MBISTBusParams
@@ -37,7 +41,7 @@ case class MBISTBusParams
   array: Int,
   set: Int,
   dataWidth: Int,
-  maskWidth: Int
+  maskWidth: Int,
 ) {
   val arrayWidth = log2Up(array)
   val addrWidth = log2Up(set)
@@ -62,18 +66,21 @@ class MBISTBus(val params: MBISTBusParams) extends MBISTCommonBundle{
     "mbist_array", "mbist_all", "mbist_req", "mbist_writeen", "mbist_be",
     "mbist_addr", "mbist_indata", "mbist_readen", "mbist_addr_rd",
     "sram_trim_fuse","sram_sleep_fuse", "rf_trim_fuse","rf_sleep_fuse",
-    "bypsel","wdis_b","rdis_b","init_en","init_val","clkungate"
+    "bypsel","wdis_b","rdis_b","init_en","init_val","clkungate",
+    "IP_RESET_B","WRAPPER_RD_CLK_EN","WRAPPER_WR_CLK_EN","OUTPUT_RESET"
   )
 
   override def source_elms: Seq[String] = Seq("mbist_ack", "mbist_outdata")
 }
 
-case class SRAM2MBISTParams
+case class RAM2MBISTParams
 (
   set: Int,
   dataWidth: Int,
   maskWidth: Int,
-  singlePort: Boolean
+  singlePort: Boolean,
+  vname:String,
+  hierarchyName:String
 ) {
   val addrWidth = log2Up(set)
 
@@ -84,7 +91,7 @@ case class SRAM2MBISTParams
     f"BE width: ${maskWidth}"
 }
 
-class SRAM2MBIST(val params: SRAM2MBISTParams) extends MBISTCommonBundle{
+class RAM2MBIST(val params: RAM2MBISTParams) extends MBISTCommonBundle{
   val addr, addr_rd = Input(UInt(params.addrWidth.W))
   val wdata = Input(UInt(params.dataWidth.W))
   val wmask = Input(UInt(params.maskWidth.W))

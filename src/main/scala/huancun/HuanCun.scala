@@ -26,8 +26,11 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleFieldBase, UIntToOH1}
 import huancun.mbist.MBISTPipeline
+import huancun.mbist.MBISTPipeline.placePipelines
 import huancun.prefetch._
 import utils.{DFTResetGen, FastArbiter, Pipeline, ResetGen}
+
+import scala.collection.mutable
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -168,7 +171,7 @@ abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with Has
 
 abstract class HuanCunModule(implicit val p: Parameters) extends MultiIOModule with HasHuanCunParameters
 
-class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
+class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
   val xfer = TransferSizes(blockBytes, blockBytes)
   val atom = TransferSizes(1, cacheParams.channelBytes.d.get)
@@ -274,7 +277,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
       out <> arbiter.io.out
     }
-    val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
+    val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher(parentName + "prefetcher_")(pftParams)))
     val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
@@ -306,7 +309,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
         val rst = ResetGen(2, Some(io.dfx_scan))
-        val slice = withReset(rst){ Module(new Slice()(p.alterPartial {
+        val slice = withReset(rst){ Module(new Slice(parentName + s"slice${i}_")(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut
           case BankBitsKey => bankBits
@@ -343,14 +346,15 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             }
         }
         io.perfEvents(i) := slice.perfinfo
-        val sliceMbistPipeline =
-          if(cacheParams.level == 3) Some(Module(new MBISTPipeline(level = Int.MaxValue,infoName = f"MBIST_L3S${i}_SRAM_info"))) else None
-        (slice,sliceMbistPipeline)
+        val mbistLevel = if(cacheParams.level == 3) Int.MaxValue else 3
+        val mbistName = if(cacheParams.level == 3) "L3S" else "L2S"
+        val (sliceMbistPipelineSram,sliceMbistPipelineRf) = placePipelines(level = mbistLevel,infoName = s"${mbistName}${i}")
+        (slice,(sliceMbistPipelineSram,sliceMbistPipelineRf))
     }
+    val l2MbistPipeline = Seq(if(cacheParams.level != 3 ) Some(placePipelines(level = Int.MaxValue,infoName = "L2")) else None)
     val slices = slicesWithItsMBISTPipeline.map(_._1)
-    val sliceMbistPipelines = slicesWithItsMBISTPipeline.map(_._2)
-    val huancunMbistPipeline =
-      if(cacheParams.level != 3 ) Some(Seq(Module(new MBISTPipeline(level = Int.MaxValue,infoName = "MBIST_L2_SRAM_info")))) else None
+    val sliceMbistPipelines = if(cacheParams.level == 3 ) slicesWithItsMBISTPipeline.map(_._2) else Seq(l2MbistPipeline.head.get)
+
 
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
     val slices_ecc = slices.zipWithIndex.map {
@@ -393,18 +397,32 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
 
 
-    val mbist = IO(
-      if(cacheParams.level == 3) {
-        MixedVec(sliceMbistPipelines.indices.map(idx => sliceMbistPipelines(idx).get.io.mbist.get.cloneType))
-      } else {
-        MixedVec(huancunMbistPipeline.get.indices.map(idx => huancunMbistPipeline.get(idx).io.mbist.get.cloneType))
-      }
-    )
-    if(cacheParams.level == 3){
-      mbist.zipWithIndex.foreach({case(port,idx) => port <> sliceMbistPipelines(idx).get.io.mbist.get})
+    val (sramMbistPorts,rfMbistPorts) = {
+      val sramPipelineList = new mutable.ListBuffer[MBISTPipeline]()
+      val rfPipelineList = new mutable.ListBuffer[MBISTPipeline]()
+      sliceMbistPipelines.foreach({
+        case (sramPort,rfPort) =>
+        if(sramPort.isDefined) sramPipelineList += sramPort.get
+        if(rfPort.isDefined) rfPipelineList += rfPort.get
+      })
+      (sramPipelineList.toList,rfPipelineList.toList)
     }
-    else{
-      mbist.zipWithIndex.foreach({case(port,idx) => port <> huancunMbistPipeline.get(idx).io.mbist.get})
+
+    val mbist_sram = if(sramMbistPorts.nonEmpty) Some(IO(MixedVec(sramMbistPorts.map(port => port.io.mbist.get.cloneType)))) else None
+    val mbist_rf = if(rfMbistPorts.nonEmpty) Some(IO(MixedVec(rfMbistPorts.map(port => port.io.mbist.get.cloneType)))) else None
+    if(mbist_sram.isDefined) {
+      dontTouch(mbist_sram.get)
+      mbist_sram.get.zip(sramMbistPorts).foreach({
+        case (ep,ip) =>
+          ip.io.mbist.get <> ep
+      })
+    }
+    if(mbist_rf.isDefined) {
+      dontTouch(mbist_rf.get)
+      mbist_rf.get.zip(rfMbistPorts).foreach({
+        case (ep,ip) =>
+          ip.io.mbist.get <> ep
+      })
     }
   }
 }
