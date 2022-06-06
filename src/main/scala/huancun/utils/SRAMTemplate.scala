@@ -236,10 +236,11 @@ object SRAMArray {
       instances += sram_key
     }
     val sram_index = instances.indexOf(sram_key)
-    val mcpPrefix = if (MCP) "_multi_cycle" else ""
+    val mcpPrefix = if (MCP) "_multiCycle" else ""
+    val repair = if(hasRepair) "_repair" else ""
     val numPort = if (singlePort) 1 else 2
     val maskWidth = width / maskSegments
-    val sramName = Some(s"sram_array_${sram_index}_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix")
+    val sramName = Some(s"sram_array_${sram_index}_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix$repair")
     val array = if (singlePort) {
       Module(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName,isSRAM,hasRepair))
     } else {

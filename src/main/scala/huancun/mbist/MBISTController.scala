@@ -71,7 +71,7 @@ class MBISTController
   })
   dontTouch(io)
 
-  val regex = """(bankedData|dataEcc)\d{1,2}_bank\d{1,2}_""".r
+  val regex = """(bankedData|dataEcc)\d{1,2}_bank\d{1,2}""".r
   val repairPort = if(repairNodes.isDefined) Some(List.fill(repairNodes.get.length)(IO(Flipped(new RepairBundle)))) else None
   if(repairPort.isDefined) {
     repairPort.get.zip(repairNodes.get).foreach({
