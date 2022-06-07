@@ -111,6 +111,22 @@ object TransactionLatencyCounter {
 }
 
 object XSPerfPrint {
+  def apply(doPrint: Boolean, pable: Printable): Any = {
+    if (doPrint)
+      apply(pable)
+  }
+
+  def apply(doPrint: Boolean, valid: Bool, pable: Printable): Any = {
+    if (doPrint)
+      apply(valid, pable)
+  }
+
+  def apply(valid: Bool, pable: Printable): Any = {
+    when (valid) {
+      apply(pable)
+    }
+  }
+
   def apply(fmt: String, data: Bits*): Any =
     apply(Printable.pack(fmt, data: _*))
 

@@ -131,6 +131,7 @@ class SubDirectory[T <: Data](
     eccRead.foreach(_ := 0.U)
   }
 
+  // zeal4u: the way number is given, how can we know which way from the upper level?
   tagArray.io.w(
     io.tag_w.fire(),
     io.tag_w.bits.tag,
@@ -169,8 +170,10 @@ class SubDirectory[T <: Data](
   val tag_decode = tagCode.decode(eccRead(io.resp.bits.way) ## tagRead(io.resp.bits.way))
   val tag = tagRead(io.resp.bits.way)
   io.resp.bits.hit := Cat(hitVec).orR()
+  // zeal4u: return chosenWay to upper layers if misses
   io.resp.bits.way := Mux(reqReg.wayMode, reqReg.way, Mux(io.resp.bits.hit, hitWay, chosenWay))
   io.resp.bits.dir := meta
+  // zeal4u: this is the tag for the data that will be repalced when misses!
   io.resp.bits.tag := tag
   io.resp.bits.error := io.resp.bits.hit && tag_decode.error
 

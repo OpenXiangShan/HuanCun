@@ -275,12 +275,14 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
     val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
+    val prefetchEvicts = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new EvictionInfo()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
     prefetchOpt.foreach {
       case _ =>
         arbTasks(prefetcher.get.io.train, prefetchTrains.get, Some("prefetch_train"))
         prefetcher.get.io.req.ready := Cat(prefetchReqsReady).orR
         arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
+        arbTasks(prefetcher.get.io.evict, prefetchEvicts.get, Some("prefetch_evict"))
     }
 
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
@@ -324,22 +326,35 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             prefetchReqsReady(i) := s.req.ready && bank_eq(p.io.req.bits.set, i, bankBits)
             val train = Pipeline(s.train)
             val resp = Pipeline(s.resp)
+            // zeal4u
+            val evict = Pipeline(s.evict)
             prefetchTrains.get(i) <> train
             prefetchResps.get(i) <> resp
+            prefetchEvicts.get(i) <> evict
             // restore to full address
             if(bankBits != 0){
               val train_full_addr = Cat(
                 train.bits.tag, train.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
               )
               val (train_tag, train_set, _) = s.parseFullAddress(train_full_addr)
+
               val resp_full_addr = Cat(
                 resp.bits.tag, resp.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
               )
               val (resp_tag, resp_set, _) = s.parseFullAddress(resp_full_addr)
+
+              // zeal4u
+              val evict_full_addr = Cat(
+                evict.bits.tag, evict.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
+              )
+              val (evict_tag, evict_set, _) = s.parseFullAddress(evict_full_addr)
+
               prefetchTrains.get(i).bits.tag := train_tag
               prefetchTrains.get(i).bits.set := train_set
               prefetchResps.get(i).bits.tag := resp_tag
               prefetchResps.get(i).bits.set := resp_set
+              prefetchEvicts.get(i).bits.tag := evict_tag
+              prefetchEvicts.get(i).bits.set := evict_set
             }
         }
         io.perfEvents(i) := slice.perfinfo

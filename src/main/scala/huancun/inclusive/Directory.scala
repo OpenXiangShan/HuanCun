@@ -42,6 +42,8 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Dir
   val tagWReq = Flipped(DecoupledIO(new TagWrite))
 }
 
+// zeal4u: we can get tag (refer to page address?) directly from the directory
+// maybe, we can also get eviction info from it
 class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite] {
 
   val io = IO(new DirectoryIO())

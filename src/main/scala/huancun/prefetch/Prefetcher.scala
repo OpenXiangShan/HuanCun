@@ -12,6 +12,8 @@ class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val set = UInt(setBits.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
+
+  def addr = Cat(tag, set, 0.U(offsetBits.W))
 }
 
 class PrefetchResp(implicit p: Parameters) extends PrefetchBundle {
@@ -33,10 +35,19 @@ class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
   def addr = Cat(tag, set, 0.U(offsetBits.W))
 }
 
+// zeal4u:
+class EvictionInfo(implicit p: Parameters) extends PrefetchBundle {
+  val tag = UInt(fullTagBits.W)
+  val set = UInt(setBits.W)
+
+  def addr = Cat(tag, set, 0.U(offsetBits.W))
+}
+
 class PrefetchIO(implicit p: Parameters) extends PrefetchBundle {
   val train = Flipped(DecoupledIO(new PrefetchTrain))
   val req = DecoupledIO(new PrefetchReq)
   val resp = Flipped(DecoupledIO(new PrefetchResp))
+  val evict = Flipped(DecoupledIO(new EvictionInfo))
 }
 
 class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
@@ -85,6 +96,37 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
       pft.io.train <> io.train
       pft.io.resp <> io.resp
+      pftQueue.io.enq <> pft.io.req
+      pipe.io.in <> pftQueue.io.deq
+      io.req <> pipe.io.out
+    case sp: SandboxParameters =>
+      val pft = Module(new SandboxPrefetcher)
+      val pftQueue = Module(new PrefetchQueue)
+      val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
+      pft.io.train <> io.train
+      pft.io.resp <> io.resp
+      pft.io.resp <> io.resp
+      pft.io.evict <> io.evict
+      pftQueue.io.enq <> pft.io.req
+      pipe.io.in <> pftQueue.io.deq
+      io.req <> pipe.io.out
+    case spp: SPPParameters =>
+      val pft = Module(new SignaturePathPrefetcher)
+      val pftQueue = Module(new PrefetchQueue)
+      val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
+      pft.io.train <> io.train
+      pft.io.resp <> io.resp
+      pft.io.evict <> io.evict
+      pftQueue.io.enq <> pft.io.req
+      pipe.io.in <> pftQueue.io.deq
+      io.req <> pipe.io.out
+    case sms: SMSParameters =>
+      val pft = Module(new SpatialMemoryStreaming)
+      val pftQueue = Module(new PrefetchQueue)
+      val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
+      pft.io.train <> io.train
+      pft.io.resp <> io.resp
+      pft.io.evict <> io.evict
       pftQueue.io.enq <> pft.io.req
       pipe.io.in <> pftQueue.io.deq
       io.req <> pipe.io.out

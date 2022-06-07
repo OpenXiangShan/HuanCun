@@ -477,6 +477,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     train.bits.source := io.id
   }
 
+  // zeal4u: the info is the same as prefetch_train 
   io.tasks.prefetch_resp.foreach { resp =>
     resp.bits.tag := req.tag
     resp.bits.set := req.set

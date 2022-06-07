@@ -2,19 +2,19 @@ package huancun
 
 import chipsalliance.rocketchip.config.Config
 import chiseltest._
-import chiseltest.internal.{VerilatorBackendAnnotation, WriteVcdAnnotation}
-import chiseltest.legacy.backends.verilator.{VerilatorCFlags, VerilatorFlags}
+import chiseltest.simulator.{WriteVcdAnnotation, VerilatorBackendAnnotation, VerilatorCFlags, VerilatorFlags}
 import firrtl.AnnotationSeq
 import firrtl.stage.RunFirrtlTransformAnnotation
 import org.scalatest.flatspec._
 import org.scalatest.matchers.should._
 import huancun.prefetch._
 
-abstract class L2Tester extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+abstract class L2Tester(val prefetch: Option[PrefetchParameters] = None) extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
   behavior of "L2"
   implicit val defaultConfig = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
-      prefetch = Some(BOPParameters()),// None,
+      // zeal4u: we can use it to test our prefetcher!!!!
+      prefetch = prefetch,// None,
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2")),
       sramClkDivBy2 = true

@@ -60,6 +60,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val eccBits = dataCode.width(8 * bankBytes) - 8 * bankBytes
   println(s"Data ECC bits:$eccBits")
 
+  // zeal4u: there is no way to know the evicted data
   val bankedData = Seq.fill(nrBanks) {
     Module(
       new SRAMWrapper(

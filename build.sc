@@ -10,7 +10,7 @@ import $file.`rocket-chip`.hardfloat.build
 val defaultVersions = Map(
   "chisel3" -> "3.5.0-RC1",
   "chisel3-plugin" -> "3.5.0-RC1",
-  "chiseltest" -> "0.3.2",
+  "chiseltest" -> "0.5.3",
   "scala" -> "2.12.13",
   "scalatest" -> "3.2.7"
 )
@@ -99,5 +99,9 @@ object HuanCun extends SbtModule with ScalafmtModule with CommonModule {
     )
 
     def testFramework = "org.scalatest.tools.Framework"
+
+    // def testOnly(args: String*) = T.command {
+    //   super.runMain("org.scalatest.tools.Runner", args: _*)
+    // }
   }
 }

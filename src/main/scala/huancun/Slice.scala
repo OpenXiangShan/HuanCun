@@ -97,7 +97,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val ms_abc = ms.init.init
   val ms_bc = ms.init.last
   val ms_c = ms.last
-
+  
+  // zeal4u: data must be stored in here, how can we get eviction info?
   val dataStorage = Module(new DataStorage())
 
   dataStorage.io.sinkD_wdata := sinkD.io.bs_wdata
@@ -372,7 +373,11 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     if (cacheParams.inclusive) new inclusive.Directory()
     else new noninclusive.Directory()
   })
-  directory.io.read <> ctrl_arb(mshrAlloc.io.dirRead, ctrl.map(_.io.dir_read))
+
+  // zeal4u: we should get the eviction info from the read result of directory!
+  // if miss, it must be an eviction, than we can use the returned tag and set.
+  val ctrl_arb_res = ctrl_arb(mshrAlloc.io.dirRead, ctrl.map(_.io.dir_read))
+  directory.io.read <> ctrl_arb_res
   ctrl.map(c => {
     c.io.dir_result.valid := directory.io.result.valid && directory.io.result.bits.idOH(1, 0) === "b11".U
     c.io.dir_result.bits := directory.io.result.bits
@@ -493,6 +498,18 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
+  val (evict_valid, evict_tag, evict_set) = if (cacheParams.inclusive) {
+    val dirResult = directory.io.result.bits.asInstanceOf[inclusive.DirResult]
+    val isprefetch = if (hasPrefetchBit) dirResult.prefetch.get else false.B
+    val valid = directory.io.result.valid && !dirResult.hit && !isprefetch
+    (valid, dirResult.tag, RegNext(ctrl_arb_res.bits.set))
+  } else {
+    val dirResult = directory.io.result.bits.asInstanceOf[noninclusive.DirResult]
+    val isprefetch = if (hasPrefetchBit) dirResult.self.prefetch.get else false.B
+    val valid = directory.io.result.valid && !dirResult.self.hit && !isprefetch
+    (valid, dirResult.self.tag, dirResult.set)
+  }
+
   io.prefetch.foreach { pft =>
 
     // connect abc mshrs to prefetcher
@@ -510,6 +527,10 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io.tasks.prefetch_train.foreach(_.ready := true.B)
       mshr.io.tasks.prefetch_resp.foreach(_.ready := true.B)
     }
+
+    pft.evict.valid := evict_valid
+    pft.evict.bits.tag := evict_tag
+    pft.evict.bits.set := evict_set
   }
 
   // Resps to MSHRs
