@@ -70,6 +70,12 @@ object ResetGen {
     }
   }
 
+  def apply(clock: Clock, reset: Reset, SYNC_NUM: Int, dft: Option[DFTResetGen]): AsyncReset = {
+    withClockAndReset(clock, reset) {
+      apply(SYNC_NUM, dft)
+    }
+  }
+
   def apply(resetTree: ResetNode, reset: Reset, sim: Boolean, dft: Option[DFTResetGen]): Unit = {
     if(!sim) {
       resetTree match {
