@@ -348,8 +348,8 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
         io.perfEvents(i) := slice.perfinfo
         val mbistLevel = if(cacheParams.level == 3) Int.MaxValue else 3
         val mbistName = if(cacheParams.level == 3) "L3S" else "L2S"
-        val (sliceMbistPipelineSram,sliceMbistPipelineRf) = placePipelines(level = mbistLevel,infoName = s"${mbistName}${i}")
-        (slice,(sliceMbistPipelineSram,sliceMbistPipelineRf))
+        val (sliceMbistPipelineSram,sliceMbistPipelineRf,sliceMbistPipelineSramRepair,sliceMbistPipelineRfRepair) = placePipelines(level = mbistLevel,infoName = s"${mbistName}${i}")
+        (slice,(sliceMbistPipelineSram,sliceMbistPipelineRf,sliceMbistPipelineSramRepair,sliceMbistPipelineRfRepair))
     }
     val l2MbistPipeline = Seq(if(cacheParams.level != 3 ) Some(placePipelines(level = Int.MaxValue,infoName = "L2")) else None)
     val slices = slicesWithItsMBISTPipeline.map(_._1)
@@ -397,19 +397,26 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     }
 
 
-    val (sramMbistPorts,rfMbistPorts) = {
+    val (sramMbistPorts,rfMbistPorts,sramRepairMbistPorts,rfRepairMbistPorts) = {
       val sramPipelineList = new mutable.ListBuffer[MBISTPipeline]()
       val rfPipelineList = new mutable.ListBuffer[MBISTPipeline]()
+      val sramRepairPipelineList = new mutable.ListBuffer[MBISTPipeline]()
+      val rfRepairPipelineList = new mutable.ListBuffer[MBISTPipeline]()
       sliceMbistPipelines.foreach({
-        case (sramPort,rfPort) =>
-        if(sramPort.isDefined) sramPipelineList += sramPort.get
-        if(rfPort.isDefined) rfPipelineList += rfPort.get
+        case (sramPort,rfPort,sramRepairPort,rfRepairPort) =>
+          if(sramPort.isDefined) sramPipelineList += sramPort.get
+          if(rfPort.isDefined) rfPipelineList += rfPort.get
+          if(sramRepairPort.isDefined) sramRepairPipelineList += sramRepairPort.get
+          if(rfRepairPort.isDefined) rfRepairPipelineList += rfRepairPort.get
       })
-      (sramPipelineList.toList,rfPipelineList.toList)
+      (sramPipelineList.toList,rfPipelineList.toList,sramRepairPipelineList.toList,rfRepairPipelineList.toList)
     }
 
     val mbist_sram = if(sramMbistPorts.nonEmpty) Some(IO(MixedVec(sramMbistPorts.map(port => port.io.mbist.get.cloneType)))) else None
     val mbist_rf = if(rfMbistPorts.nonEmpty) Some(IO(MixedVec(rfMbistPorts.map(port => port.io.mbist.get.cloneType)))) else None
+    val mbist_sram_repair = if(sramRepairMbistPorts.nonEmpty) Some(IO(MixedVec(sramRepairMbistPorts.map(port => port.io.mbist.get.cloneType)))) else None
+    val mbist_rf_repair = if(rfRepairMbistPorts.nonEmpty) Some(IO(MixedVec(rfRepairMbistPorts.map(port => port.io.mbist.get.cloneType)))) else None
+
     if(mbist_sram.isDefined) {
       dontTouch(mbist_sram.get)
       mbist_sram.get.zip(sramMbistPorts).foreach({
@@ -420,6 +427,20 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     if(mbist_rf.isDefined) {
       dontTouch(mbist_rf.get)
       mbist_rf.get.zip(rfMbistPorts).foreach({
+        case (ep,ip) =>
+          ip.io.mbist.get <> ep
+      })
+    }
+    if(mbist_sram_repair.isDefined) {
+      dontTouch(mbist_sram_repair.get)
+      mbist_sram_repair.get.zip(sramRepairMbistPorts).foreach({
+        case (ep,ip) =>
+          ip.io.mbist.get <> ep
+      })
+    }
+    if(mbist_rf_repair.isDefined) {
+      dontTouch(mbist_rf_repair.get)
+      mbist_rf_repair.get.zip(rfRepairMbistPorts).foreach({
         case (ep,ip) =>
           ip.io.mbist.get <> ep
       })

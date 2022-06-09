@@ -38,15 +38,33 @@ object MBIST {
     var ramParamsBelongToThis: Seq[RAM2MBISTParams] = Seq()
     require(level > 0)
   }
+
   sealed class SRAMNode(bd: RAM2MBIST, prefix: String, id:Int)
     extends RAMBaseNode(bd, prefix, id)
   sealed class RFNode(bd: RAM2MBIST, prefix: String, id:Int)
     extends RAMBaseNode(bd, prefix, id)
+  sealed class SRAMNodeRepair(bd: RAM2MBIST, prefix: String, id:Int)
+    extends RAMBaseNode(bd, prefix, id)
+  sealed class RFNodeRepair(bd: RAM2MBIST, prefix: String, id:Int)
+    extends RAMBaseNode(bd, prefix, id)
+
   sealed class PipelineNodeSRAM(bd: MBISTBus, prefix: String, level: Int, array_id:Seq[Int], array_depth: Seq[Int])
     extends PipelineBaseNode(bd, prefix, level, array_id, array_depth)
   sealed class PipelineNodeRF(bd: MBISTBus, prefix: String, level: Int, array_id:Seq[Int], array_depth: Seq[Int])
     extends PipelineBaseNode(bd, prefix, level, array_id, array_depth)
+  sealed class PipelineNodeSRAMRepair(bd: MBISTBus, prefix: String, level: Int, array_id:Seq[Int], array_depth: Seq[Int])
+    extends PipelineBaseNode(bd, prefix, level, array_id, array_depth)
+  sealed class PipelineNodeRFRepair(bd: MBISTBus, prefix: String, level: Int, array_id:Seq[Int], array_depth: Seq[Int])
+    extends PipelineBaseNode(bd, prefix, level, array_id, array_depth)
 
+  def inferMBITSBusParamsFromParams(children: Seq[MBISTBusParams]): MBISTBusParams =
+    MBISTBusParams(
+      children.map(_.array).max,
+      children.map(_.set).max,
+      children.map(_.dataWidth).max,
+      children.map(_.maskWidth).max,
+      isRF = children.head.isRF
+    )
 
   def inferMBITSBusParams(children: Seq[BaseNode]): MBISTBusParams =
     MBISTBusParams(
@@ -62,11 +80,17 @@ object MBIST {
       (children map {
         case ram: RAMBaseNode => ram.bd.params.maskWidth
         case pl: PipelineBaseNode => pl.bd.params.maskWidth
-      }).max
+      }).max,
+      isRF = children.head.bd.isRF
     )
 
-  def addRamNode(bd: RAM2MBIST, prefix: String, id:Int, isSRAM:Boolean): RAMBaseNode = {
-    val node = if(isSRAM) new SRAMNode(bd, prefix, id) else new RFNode(bd, prefix, id)
+  def addRamNode(bd: RAM2MBIST, prefix: String, id:Int, isSRAM:Boolean, isRepair:Boolean): RAMBaseNode = {
+    val node = (isSRAM,isRepair) match {
+      case(false,false) => new RFNode (bd, prefix, id)
+      case(false,true ) => new RFNodeRepair (bd, prefix, id)
+      case(true,false)  => new SRAMNode (bd, prefix, id)
+      case(true,true)   => new SRAMNodeRepair (bd, prefix, id)
+    }
     globalNodes = globalNodes :+ node
     bd.source_elms.foreach(e => bd.elm_add_source(e, prefix))
     bd.sink_elms.foreach(e => bd.elm_add_sink(e, prefix))
@@ -75,12 +99,13 @@ object MBIST {
 
   def isMaxLevel(level: Int) = level == Int.MaxValue
 
-  def addController(prefix: String, level: Int, isSRAM: Boolean): PipelineBaseNode = {
+  def addController(prefix: String, level: Int, isSRAM: Boolean, isRepair:Boolean): PipelineBaseNode = {
     require(globalNodes.nonEmpty,"No nodes were created before implementing mbist controller!")
-    val candidateNodes = if(isSRAM) {
-      globalNodes.filter(inst => inst.isInstanceOf[SRAMNode] || inst.isInstanceOf[PipelineNodeSRAM])
-    }else{
-      globalNodes.filter(inst => inst.isInstanceOf[RFNode] || inst.isInstanceOf[PipelineNodeRF])
+    val candidateNodes = (isSRAM,isRepair) match {
+      case(false,false) => globalNodes.filter(inst => inst.isInstanceOf[RFNode] || inst.isInstanceOf[PipelineNodeRF])
+      case(false,true ) => globalNodes.filter(inst => inst.isInstanceOf[RFNodeRepair] || inst.isInstanceOf[PipelineNodeRFRepair])
+      case(true,false)  => globalNodes.filter(inst => inst.isInstanceOf[SRAMNode] || inst.isInstanceOf[PipelineNodeSRAM])
+      case(true,true)   => globalNodes.filter(inst => inst.isInstanceOf[SRAMNodeRepair] || inst.isInstanceOf[PipelineNodeSRAMRepair])
     }
     val children = candidateNodes.filter(_.level < level)
     val remain = globalNodes.filterNot(children.contains(_))
@@ -90,27 +115,30 @@ object MBIST {
     bd := DontCare
     val ids = children.flatMap(_.array_id)
     val depth = children.flatMap(_.array_depth.map(_ + 1))
-    val node = if(isSRAM) {
-      new PipelineNodeSRAM(bd, prefix, level,ids,depth)
-    }else{
-      new PipelineNodeRF(bd, prefix, level,ids,depth)
+    val node = (isSRAM,isRepair) match {
+      case(false,false) => new PipelineNodeRF (bd, prefix, level,ids,depth)
+      case(false,true ) => new PipelineNodeRFRepair (bd, prefix, level,ids,depth)
+      case(true,false)  => new PipelineNodeSRAM (bd, prefix, level,ids,depth)
+      case(true,true)   => new PipelineNodeSRAMRepair (bd, prefix, level,ids,depth)
     }
     node.children = children.map {
       case ram: RAMBaseNode =>
         val childBd = Wire(ram.bd.cloneType)
         childBd := DontCare
-        if (isSRAM) {
-          new SRAMNode(childBd, ram.prefix, ram.array_id.head)
-        } else {
-          new RFNode(childBd, ram.prefix, ram.array_id.head)
+        (isSRAM,isRepair) match {
+          case(false,false) => new RFNode (childBd, ram.prefix, ram.array_id.head)
+          case(false,true ) => new RFNodeRepair (childBd, ram.prefix, ram.array_id.head)
+          case(true,false)  => new SRAMNode (childBd, ram.prefix, ram.array_id.head)
+          case(true,true)   => new SRAMNodeRepair (childBd, ram.prefix, ram.array_id.head)
         }
       case pl: PipelineBaseNode =>
         val childBd = Wire(pl.bd.cloneType)
         childBd := DontCare
-        if (isSRAM) {
-          new PipelineNodeSRAM(childBd, pl.prefix, pl.level, pl.array_id, pl.array_depth)
-        }else {
-          new PipelineNodeRF(childBd, pl.prefix, pl.level, pl.array_id, pl.array_depth)
+        (isSRAM,isRepair) match {
+          case(false,false) => new PipelineNodeRF (childBd, pl.prefix, pl.level,pl.array_id,pl.array_depth)
+          case(false,true ) => new PipelineNodeRFRepair (childBd, pl.prefix, pl.level,pl.array_id,pl.array_depth)
+          case(true,false)  => new PipelineNodeSRAM (childBd, pl.prefix, pl.level,pl.array_id,pl.array_depth)
+          case(true,true)   => new PipelineNodeSRAMRepair (childBd, pl.prefix, pl.level,pl.array_id,pl.array_depth)
         }
     }
     node.ramParamsBelongToThis = children.flatMap ({
@@ -144,6 +172,16 @@ object MBIST {
 
   def checkRfChildrenExistence(level:Int):Boolean = {
     val rfChildren = globalNodes.filter(inst => inst.isInstanceOf[RFNode] || inst.isInstanceOf[PipelineNodeRF]).filter(_.level < level)
+    rfChildren.nonEmpty
+  }
+
+  def checkSramRepairChildrenExistence(level:Int):Boolean = {
+    val sramChildren = globalNodes.filter(inst => inst.isInstanceOf[SRAMNodeRepair] || inst.isInstanceOf[PipelineNodeSRAMRepair]).filter(_.level < level)
+    sramChildren.nonEmpty
+  }
+
+  def checkRfRepairChildrenExistence(level:Int):Boolean = {
+    val rfChildren = globalNodes.filter(inst => inst.isInstanceOf[RFNodeRepair] || inst.isInstanceOf[PipelineNodeRFRepair]).filter(_.level < level)
     rfChildren.nonEmpty
   }
   //(depth,width,mask)

@@ -87,7 +87,7 @@ class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends
   } else {
     null
   }
-  val(dataStorageMbistPipelineSram,dataStorageMbistPipelineRf) = placePipelines(level = 2,infoName = "DataStorage")
+  val(dataStorageMbistPipelineSram,dataStorageMbistPipelineRf,dataStorageMbistPipelineSramRepair,dataStorageMbistPipelineRfRepair) = placePipelines(level = 2,infoName = "DataStorage")
   val stackRdy = if (cacheParams.sramClkDivBy2) {
     RegInit(VecInit(Seq.fill(nrStacks) {
       true.B

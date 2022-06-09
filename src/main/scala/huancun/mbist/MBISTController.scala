@@ -18,11 +18,6 @@ class JTAGInterface extends Bundle{
   val diag_done = Output(Bool())
 }
 
-class FUSEInterface extends Bundle{
-  val trim_fuse = Input(UInt(20.W))
-  val sleep_fuse = Input(UInt(2.W))
-}
-
 class FSCANInputInterface extends Bundle {
   val bypsel = Input(Bool())
   val wdis_b = Input(Bool())
@@ -30,6 +25,15 @@ class FSCANInputInterface extends Bundle {
   val init_en = Input(Bool())
   val init_val = Input(Bool())
 }
+
+class BISRInputInterface extends Bundle {
+  val shift_en = Input(Bool())
+  val clock = Input(Bool())
+  val reset = Input(Bool())
+  val scan_in = Input(Bool())
+  val scan_out = Input(Bool())
+}
+
 object MBISTController{
   def connectRepair(ports:List[RepairBundle],nodes:Seq[RepairNode]) = {
     val newNodes = nodes.map({
@@ -51,7 +55,8 @@ object MBISTController{
 class MBISTController
 (
   mbistParams: Seq[MBISTBusParams],
-  fscanPortNum: Int,
+  fscanInPortNum: Int,
+  fscanOutPortNum: Int,
   prefix: Seq[String],
   repairNodes:Option[Seq[RepairNode]]
 ) extends RawModule {
@@ -61,13 +66,15 @@ class MBISTController
   val io = IO(new Bundle{
     val mbist_ijtag = new JTAGInterface
     val mbist = MixedVec(mbistParams.indices.map(idx => Flipped(new MbitsStandardInterface(mbistParams(idx)))))
-    val fscan_ram = Vec(mbistParams.length, Flipped(new MbitsFscanInterface))
-    val static = Vec(mbistParams.length, Flipped(new MbitsStaticInterface))
-    val hd2prf_in = new FUSEInterface
-    val hsuspsr_in = new FUSEInterface
-    val fscan_in = Vec(fscanPortNum, new FSCANInputInterface)
+    val fscan_ram = Vec(fscanOutPortNum, Flipped(new MbitsFscanInterface))
+    val hd2prf_out = Flipped(new MbitsFuseInterface(isSRAM = false))
+    val hsuspsr_out = Flipped(new MbitsFuseInterface(isSRAM = true))
+    val hd2prf_in = new MbitsFuseInterface(isSRAM = false)
+    val hsuspsr_in = new MbitsFuseInterface(isSRAM = true)
+    val fscan_in = Vec(fscanInPortNum, new FSCANInputInterface)
     val fscan_clkungate = Input(Bool())
     val clock = Input(Clock())
+    val bisr = if(repairNodes.isDefined) Some(new BISRInputInterface) else None
   })
   dontTouch(io)
 

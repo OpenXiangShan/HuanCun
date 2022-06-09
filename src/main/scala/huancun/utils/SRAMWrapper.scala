@@ -50,5 +50,5 @@ class SRAMWrapper[T <: Data]
 
   io.w.req.ready := Cat(banks.map(_.io.w.req.ready)).andR()
 
-  val(sramWrapperMbistPipelineSram,sramWrapperMbistPipelineRf) = placePipelines(level = 1,infoName = "SramWrapper")
+  val(sramWrapperMbistPipelineSram,sramWrapperMbistPipelineRf,sramWrapperMbistPipelineSramRepair,sramWrapperMbistPipelineRfRepair) = placePipelines(level = 1,infoName = "SramWrapper")
 }

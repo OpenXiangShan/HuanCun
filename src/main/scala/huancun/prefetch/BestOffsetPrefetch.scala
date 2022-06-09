@@ -106,7 +106,7 @@ class RecentRequestTable(parentName:String = "Unknown")(implicit p: Parameters) 
   val rrTable = Module(
     new SRAMTemplate(rrTableEntry(), set = rrTableEntries, way = 1, shouldReset = true, singlePort = true, parentName = parentName + "rrTable_")
   )
-  val(bestOffsetPrefetchMbistPipelineSram,bestOffsetPrefetchMbistPipelineRf) = placePipelines(level = 2,infoName = "BestOffsetPrefetch")
+  val(bestOffsetPrefetchMbistPipelineSram,bestOffsetPrefetchMbistPipelineRf,bestOffsetPrefetchMbistPipelineSramRepair,bestOffsetPrefetchMbistPipelineRfRepair) = placePipelines(level = 2,infoName = "BestOffsetPrefetch")
 
   val wAddr = io.w.bits
   rrTable.io.w.req.valid := io.w.valid && !io.r.req.valid

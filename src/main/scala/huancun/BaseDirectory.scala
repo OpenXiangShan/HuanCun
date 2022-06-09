@@ -158,7 +158,7 @@ class SubDirectory[T <: Data]
     replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
     repl_state
   }
-  val(baseDirectoryMbistPipelineSram,baseDirectoryMbistPipelineRf) = placePipelines(level = 2,infoName = "BaseDirectory")
+  val(baseDirectoryMbistPipelineSram,baseDirectoryMbistPipelineRf,baseDirectoryMbistPipelineSramRepair,baseDirectoryMbistPipelineRfRepair) = placePipelines(level = 2,infoName = "BaseDirectory")
   io.resp.valid := reqValidReg
   val metas = metaArray.io.r(io.read.fire(), io.read.bits.set).resp.data
   val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
