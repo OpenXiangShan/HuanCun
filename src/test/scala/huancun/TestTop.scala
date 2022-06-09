@@ -9,7 +9,7 @@ import freechips.rocketchip.tilelink._
 
 import scala.collection.mutable.ArrayBuffer
 
-class TestTop_L2(n: Int)(implicit p: Parameters) extends LazyModule {
+class TestTop_L2(n: Int = 2)(implicit p: Parameters) extends LazyModule {
 
   /* L1D   L1D
    *  \    /
@@ -32,7 +32,7 @@ class TestTop_L2(n: Int)(implicit p: Parameters) extends LazyModule {
         channelBytes = TLChannelBeatBytes(cacheParams.blockBytes),
         minLatency = 1,
         echoFields = cacheParams.echoField,
-        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField()),
+        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField(), AliasField(2)),
         responseKeys = cacheParams.respKey
       )
     ))
@@ -65,7 +65,7 @@ class TestTop_L2(n: Int)(implicit p: Parameters) extends LazyModule {
   }
 }
 
-class TestTop_L2L3(n: Int)(implicit p: Parameters) extends LazyModule {
+class TestTop_L2L3(n: Int = 2)(implicit p: Parameters) extends LazyModule {
 
   /* L1D   L1D
    *  |     |
@@ -90,7 +90,7 @@ class TestTop_L2L3(n: Int)(implicit p: Parameters) extends LazyModule {
         channelBytes = TLChannelBeatBytes(cacheParams.blockBytes),
         minLatency = 1,
         echoFields = cacheParams.echoField,
-        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField()),
+        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField(), AliasField(2)),
         responseKeys = cacheParams.respKey
       )
     ))
@@ -115,6 +115,7 @@ class TestTop_L2L3(n: Int)(implicit p: Parameters) extends LazyModule {
       level = 3,
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L3")),
+      echoField = Seq(DirtyField()),
       simulation = true
     )
   })))
@@ -149,10 +150,11 @@ object TestTop_L2 extends App {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2"))
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2", aliasBitsOpt = Some(2))),
+      echoField = Seq(DirtyField())
     )
   })
-  val top = LazyModule(new TestTop_L2(2)(config))
+  val top = DisableMonitors(p => LazyModule(new TestTop_L2()(p)) )(config)
 
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
@@ -163,10 +165,11 @@ object TestTop_L2L3 extends App {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2"))
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2", aliasBitsOpt = Some(2))),
+      echoField = Seq(DirtyField())
     )
   })
-  val top = LazyModule(new TestTop_L2L3(2)(config))
+  val top = DisableMonitors(p => LazyModule(new TestTop_L2L3()(p)) )(config)
 
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
