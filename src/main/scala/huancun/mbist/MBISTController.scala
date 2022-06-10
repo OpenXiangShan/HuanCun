@@ -55,7 +55,6 @@ object MBISTController{
 class MBISTController
 (
   mbistParams: Seq[MBISTBusParams],
-  fscanInPortNum: Int,
   fscanOutPortNum: Int,
   prefix: Seq[String],
   repairNodes:Option[Seq[RepairNode]]
@@ -71,7 +70,8 @@ class MBISTController
     val hsuspsr_out = Flipped(new MbitsFuseInterface(isSRAM = true))
     val hd2prf_in = new MbitsFuseInterface(isSRAM = false)
     val hsuspsr_in = new MbitsFuseInterface(isSRAM = true)
-    val fscan_in = Vec(fscanInPortNum, new FSCANInputInterface)
+    val xsx_fscan_in = new FSCANInputInterface
+    val xsl2_fscan_in = new FSCANInputInterface
     val fscan_clkungate = Input(Bool())
     val clock = Input(Clock())
     val bisr = if(repairNodes.isDefined) Some(new BISRInputInterface) else None

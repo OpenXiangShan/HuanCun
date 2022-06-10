@@ -282,4 +282,5 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
       dout             := child.bd.mbist_outdata
     }
   })
+  MBIST.noDedup(this)
 }

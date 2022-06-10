@@ -4,7 +4,7 @@ import chisel3._
 import huancun.utils.DFTResetGen
 
 class UltiscanJTAGInterface extends Bundle {
-  val fdfx_powergood = Input(Bool())
+
   val capture = Input(Bool())
   val reset_b = Input(Bool())
   val select = Input(Bool())
@@ -60,7 +60,7 @@ class UltiscanIO (
       val wrdis_b = Output(Bool())
     }
   }
-
+  val fdfx_powergood = Input(Bool())
   val ijtag = new UltiscanJTAGInterface
 
   val scanchains_so_end = Input(UInt((NUM_CHAINS - 2).W))

@@ -528,6 +528,7 @@ class SRAMTemplate[T <: Data] (
           MBIST.addRamNode(node, sram_prefix, SRAMTemplate.getID(!isRF) + idx, !isRF, hasRepair)
       })
     }
+    MBIST.noDedup(this)
   }
 
   val PWR_MGNT_IN0 = if(hasMbist) Some(Wire(UInt(1.W))) else None
