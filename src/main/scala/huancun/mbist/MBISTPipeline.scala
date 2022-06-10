@@ -204,7 +204,6 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   }
 
   val PWR_MGNT = if(MBIST.isMaxLevel(level)) Some(SRAMTemplate.getAndClear(isSRAM,isRepair)) else None
-
   val io = IO(new Bundle() {
     val mbist = if(MBIST.isMaxLevel(level)) Some(new MBISTBus(bd.params)) else None
   })

@@ -28,6 +28,7 @@ import huancun.mbist._
 import huancun.utils.SRAMTemplate.uniqueId
 
 import scala.collection.mutable.ListBuffer
+import scala.math.sqrt
 
 object HoldUnless {
   def apply[T <: Data](x: T, en: Bool, init: Option[T] = None): T = {
@@ -321,13 +322,28 @@ object SRAMTemplate {
     "_L2_", "_XSCore_"
   )
 
-  def getWayNumForEachNodeAndNodeNum(dw: Int, way: Int, mw: Int): (Int, Int) = {
+  def getWayNumForEachNodeAndNodeNum_1toN(dw: Int, way: Int, mw: Int): (Int, Int) = {
     val dataNum1toNNode = mw / dw
     val numVec = (1 until dataNum1toNNode + 1)
     val validVec = numVec.map(num => (way % num == 0) && (way >= num))
     val validNum = numVec.zip(validVec).filter(_._2)
     val res = if(validNum.isEmpty) (1,way) else validNum.last
     (res._1, way / res._1)
+  }
+
+  def getDivisor(in:Int):Seq[Int] = {
+    val end = sqrt(in).toInt
+    val divisors = Seq.tabulate(end)(_+1).map(idx => (in % idx == 0, Seq(idx,in/idx))).filter(_._1).flatMap(_._2).sorted
+    divisors
+  }
+
+  def getNodeNumForEachWayAndNodeNum_Nto1(dw: Int, way: Int, mw: Int): (Int, Int) = {
+    val divisors = getDivisor(dw)
+    val validDivisors = divisors.filter(_<mw)
+    val goodNodeNumForEachWay = dw / validDivisors.max
+    val defaultNodeNumForEachWay = ((dw + mw - 1) / mw)
+    val finalNodeNumForEachWay = if(goodNodeNumForEachWay > 4 * defaultNodeNumForEachWay) defaultNodeNumForEachWay else goodNodeNumForEachWay
+    (finalNodeNumForEachWay, way * finalNodeNumForEachWay)
   }
 
   def restartIndexing(isSRAM:Boolean):Unit={
@@ -362,11 +378,11 @@ object SRAMTemplate {
   def doAddSink(srcSeq:Seq[String],signal:UInt,signalName:String,info:String):Seq[String]= {
     if(srcSeq.isEmpty){
       BoringUtils.addSink(signal,signalName)
-      println(s"Addding head sink to ${info} Seq: ${signalName}")
+//      println(s"Addding head sink to ${info} Seq: ${signalName}")
       Seq(signalName)
     }else{
       BoringUtils.addSink(signal,srcSeq.last)
-      println(s"Connecting in ${info} Seq: ${srcSeq.last} to ${signalName}")
+//      println(s"Connecting in ${info} Seq: ${srcSeq.last} to ${signalName}")
       srcSeq.init
     }
   }
@@ -380,7 +396,7 @@ object SRAMTemplate {
   }
   def doAddSource(srcSeq:Seq[String],signal:UInt,signalName:String,info:String):Seq[String]= {
     BoringUtils.addSource(signal,signalName)
-    println(s"Addding source to ${info} Seq: ${signalName}")
+//    println(s"Addding source to ${info} Seq: ${signalName}")
     srcSeq :+ signalName
   }
   def addSourcePWRMGNTSignal(signal:UInt,signalName:String,isSRAM:Boolean,hasRepair:Boolean) = {
@@ -443,8 +459,7 @@ class SRAMTemplate[T <: Data] (
   val implementSinglePort = if(isRF) false else singlePort
   val (array,vname) = SRAMArray(clock, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist,isSRAM = !isRF,hasRepair = hasRepair)
   /*************implement mbist interface node(multiple nodes for one way)********/
-  val mbistNodeNumNto1 = way * ((gen.getWidth + maxMbistDataWidth - 1) / maxMbistDataWidth)
-  val mbistNodeNumForEachWay = mbistNodeNumNto1 / way
+  val (mbistNodeNumForEachWay,mbistNodeNumNto1) = SRAMTemplate.getNodeNumForEachWayAndNodeNum_Nto1(gen.getWidth,way,maxMbistDataWidth)
   val maskWidthNto1 = 1
   val mbistDataWidthNto1 = (gen.getWidth + mbistNodeNumForEachWay - 1) / mbistNodeNumForEachWay
 
@@ -475,7 +490,7 @@ class SRAMTemplate[T <: Data] (
 
   /*************implement mbist interface node(one node for multiple ways)********/
 
-  val (wayNumForEachNode, mbistNodeNum1toN) = SRAMTemplate.getWayNumForEachNodeAndNodeNum(gen.getWidth, way, maxMbistDataWidth)
+  val (wayNumForEachNode, mbistNodeNum1toN) = SRAMTemplate.getWayNumForEachNodeAndNodeNum_1toN(gen.getWidth, way, maxMbistDataWidth)
 
   val mbistDataWidth1toN = wayNumForEachNode * gen.getWidth
   val maskWidth1toN = wayNumForEachNode
