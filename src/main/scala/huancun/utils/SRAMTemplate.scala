@@ -1,19 +1,19 @@
 /** *************************************************************************************
-  * Copyright (c) 2020 Institute of Computing Technology, CAS
-  * Copyright (c) 2020 University of Chinese Academy of Sciences
-  * Copyright (c) 2020-2021 Peng Cheng Laboratory
-  *
-  * NutShell is licensed under Mulan PSL v2.
-  * You can use this software according to the terms and conditions of the Mulan PSL v2.
-  * You may obtain a copy of Mulan PSL v2 at:
-  *             http://license.coscl.org.cn/MulanPSL2
-  *
-  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
-  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
-  * FIT FOR A PARTICULAR PURPOSE.
-  *
-  * See the Mulan PSL v2 for more details.
-  * *************************************************************************************
+ * Copyright (c) 2020 Institute of Computing Technology, CAS
+ * Copyright (c) 2020 University of Chinese Academy of Sciences
+ * Copyright (c) 2020-2021 Peng Cheng Laboratory
+ *
+ * NutShell is licensed under Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *             http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+ * FIT FOR A PARTICULAR PURPOSE.
+ *
+ * See the Mulan PSL v2 for more details.
+ * *************************************************************************************
  */
 
 // See LICENSE.SiFive for license details.
@@ -22,11 +22,13 @@ package huancun.utils
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental.BoringUtils
 import freechips.rocketchip.tilelink.LFSR64
 import huancun.mbist._
 import huancun.utils.SRAMTemplate.uniqueId
 
 import scala.collection.mutable.ListBuffer
+import scala.math.sqrt
 
 object HoldUnless {
   def apply[T <: Data](x: T, en: Bool, init: Option[T] = None): T = {
@@ -40,21 +42,43 @@ object ReadAndHold {
   def apply[T <: Data](x: SyncReadMem[T], addr: UInt, en: Bool): T = HoldUnless(x.read(addr, en), RegNext(en))
 }
 
-class SRAMMbistIO extends Bundle {
-  val trim_fuse = Input(UInt(11.W))
-  val sleep_fuse = Input(UInt(2.W))
+class SRAMMbistIO(isSRAM:Boolean) extends Bundle {
+  val sram_trim_fuse = Input(UInt(if(isSRAM) 20.W else 0.W))
+  val sram_sleep_fuse = Input(UInt(if(isSRAM) 2.W else 0.W))
+  val rf_trim_fuse = Input(UInt(if(!isSRAM) 11.W else 0.W))
+  val rf_sleep_fuse = Input(UInt(if(!isSRAM) 2.W else 0.W))
+
   val bypsel = Input(Bool())
   val wdis_b = Input(Bool())
   val rdis_b = Input(Bool())
   val init_en = Input(Bool())
   val init_val = Input(Bool())
   val clkungate = Input(Bool())
+
+  val IP_RESET_B = Input(Bool())
+  val WRAPPER_RD_CLK_EN = Input(UInt((if(!isSRAM) 1 else 0).W))
+  val WRAPPER_WR_CLK_EN = Input(UInt((if(!isSRAM) 1 else 0).W))
+  val WRAPPER_CLK_EN = Input(UInt((if(isSRAM) 1 else 0).W))
+  val OUTPUT_RESET = Input(Bool())
+
+  val PWR_MGNT_IN = Input(UInt((if(isSRAM) 5 else 4).W))
+  val PWR_MGNT_IN0 = Input(UInt(1.W))
+  val PWR_MGNT_OUT = Output(UInt(1.W))
+}
+class RepairIO(hasRepair:Boolean) extends Bundle{
+  val rowRepair = Input(UInt(if(hasRepair) 26.W else 0.W))
+  val colRepair = Input(UInt(if(hasRepair) 14.W else 0.W))
 }
 
-abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None) extends RawModule {
-  val mbist = if (hasMbist) Some(IO(new SRAMMbistIO)) else None
+abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None,isSRAM:Boolean,hasRepair:Boolean) extends RawModule {
+  val mbist = if (hasMbist) Some(IO(new SRAMMbistIO(isSRAM))) else None
   if (mbist.isDefined) {
+    mbist.get.PWR_MGNT_OUT := DontCare
     dontTouch(mbist.get)
+  }
+  val repair = if (hasMbist) Some(IO(new RepairIO(hasRepair))) else None
+  if (repair.isDefined) {
+    dontTouch(repair.get)
   }
 
   override def desiredName: String = sramName.getOrElse(super.desiredName)
@@ -72,8 +96,8 @@ abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None) ext
   def write(addr: UInt, data: UInt, mask: UInt): Unit
 }
 
-class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
-  extends SRAMArray(hasMbist, sramName) {
+class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None,isSRAM:Boolean,hasRepair:Boolean)
+  extends SRAMArray(hasMbist, sramName,isSRAM,hasRepair) {
   val RW0 = IO(new Bundle() {
     val clk   = Input(Clock())
     val addr  = Input(UInt(log2Ceil(depth).W))
@@ -130,8 +154,8 @@ class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
   }
 }
 
-class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
-  extends SRAMArray(hasMbist, sramName)  {
+class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None,isSRAM:Boolean,hasRepair:Boolean)
+  extends SRAMArray(hasMbist, sramName,isSRAM,hasRepair)  {
   require(width % maskSegments == 0)
 
   val R0 = IO(new Bundle() {
@@ -206,24 +230,27 @@ object SRAMArray {
             maskSegments: Int = 1,
             MCP: Boolean = false,
             writeClock: Option[Clock] = None,
-            hasMbist: Boolean
-           ): SRAMArray = {
+            hasMbist: Boolean,
+            isSRAM:Boolean,
+            hasRepair:Boolean
+           ): (SRAMArray,String) = {
     val sram_key = (singlePort, depth, width, maskSegments, hasMbist)
     if (!instances.contains(sram_key)) {
       instances += sram_key
     }
     val sram_index = instances.indexOf(sram_key)
-    val mcpPrefix = if (MCP) "_multi_cycle" else ""
+    val mcpPrefix = if (MCP) "_multiCycle" else ""
+    val repair = if(hasRepair) "_repair" else ""
     val numPort = if (singlePort) 1 else 2
     val maskWidth = width / maskSegments
-    val sramName = Some(s"sram_array_${sram_index}_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix")
+    val sramName = Some(s"sram_array_${sram_index}_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix$repair")
     val array = if (singlePort) {
-      Module(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName))
+      Module(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName,isSRAM,hasRepair))
     } else {
-      Module(new SRAMArray2P(depth, width, maskSegments, hasMbist, sramName))
+      Module(new SRAMArray2P(depth, width, maskSegments, hasMbist, sramName,isSRAM,hasRepair))
     }
     array.init(clock, writeClock)
-    array
+    (array,sramName.get)
   }
 }
 
@@ -284,8 +311,18 @@ class SRAMWriteBus[T <: Data](private val gen: T, val set: Int, val way: Int = 1
 
 object SRAMTemplate {
   private var uniqueId = 0
+  private var mbistArrayRfId = 0
+  private var mbistArraySramId = 0
+  var sramRepairSerialSignals = Seq[String]()
+  var sramNonRepairSerialSignals = Seq[String]()
+  var rfRepairSerialSignals = Seq[String]()
+  var rfNonRepairSerialSignals = Seq[String]()
+  private val domainName = Seq(
+    "_L3_slice0_", "_L3_slice1_", "_L3_slice2_", "_L3_slice3_",
+    "_L2_", "_XSCore_"
+  )
 
-  def getWayNumForEachNodeAndNodeNum(dw: Int, way: Int, mw: Int): (Int, Int) = {
+  def getWayNumForEachNodeAndNodeNum_1toN(dw: Int, way: Int, mw: Int): (Int, Int) = {
     val dataNum1toNNode = mw / dw
     val numVec = (1 until dataNum1toNNode + 1)
     val validVec = numVec.map(num => (way % num == 0) && (way >= num))
@@ -293,17 +330,123 @@ object SRAMTemplate {
     val res = if(validNum.isEmpty) (1,way) else validNum.last
     (res._1, way / res._1)
   }
+
+  def getDivisor(in:Int):Seq[Int] = {
+    val end = sqrt(in).toInt
+    val divisors = Seq.tabulate(end)(_+1).map(idx => (in % idx == 0, Seq(idx,in/idx))).filter(_._1).flatMap(_._2).sorted
+    divisors
+  }
+
+  def getNodeNumForEachWayAndNodeNum_Nto1(dw: Int, way: Int, mw: Int): (Int, Int) = {
+    val divisors = getDivisor(dw)
+    val validDivisors = divisors.filter(_<=mw)
+    val goodNodeNumForEachWay = dw / validDivisors.max
+    val defaultNodeNumForEachWay = ((dw + mw - 1) / mw)
+    val finalNodeNumForEachWay = if(goodNodeNumForEachWay > 4 * defaultNodeNumForEachWay) defaultNodeNumForEachWay else goodNodeNumForEachWay
+    (finalNodeNumForEachWay, way * finalNodeNumForEachWay)
+  }
+
+  def restartIndexing(isSRAM:Boolean):Unit={
+    if(isSRAM)
+      mbistArraySramId = 0
+    else
+      mbistArrayRfId = 0
+  }
+
+  def getID(isSRAM:Boolean):Int = {
+    if(isSRAM)
+      mbistArraySramId
+    else
+      mbistArrayRfId
+  }
+
+  def increaseID(add:Int,isSRAM:Boolean):Unit = {
+    if(isSRAM)
+      mbistArraySramId += add
+    else
+      mbistArrayRfId += add
+  }
+
+  def uniqueID:Int = uniqueId
+
+  def getDomainName(parentName:String) = {
+    val matchSeq = domainName.map(str=>(str,parentName.contains(str)))
+    val res = matchSeq.filter(_._2).head._1.init.tail
+    res
+  }
+
+  def doAddSink(srcSeq:Seq[String],signal:UInt,signalName:String,info:String):Seq[String]= {
+    if(srcSeq.isEmpty){
+      BoringUtils.addSink(signal,signalName)
+//      println(s"Addding head sink to ${info} Seq: ${signalName}")
+      Seq(signalName)
+    }else{
+      BoringUtils.addSink(signal,srcSeq.last)
+//      println(s"Connecting in ${info} Seq: ${srcSeq.last} to ${signalName}")
+      srcSeq.init
+    }
+  }
+  def addSinkPWRMGNTSignal(signal:UInt,signalName:String,isSRAM:Boolean,hasRepair:Boolean) = {
+    (isSRAM,hasRepair) match {
+      case(false,false) => rfNonRepairSerialSignals = doAddSink(rfNonRepairSerialSignals,signal,signalName,"RF_NonRepair")
+      case(false,true)  => rfRepairSerialSignals = doAddSink(rfRepairSerialSignals,signal,signalName,"RF_Repair")
+      case(true,false)  => sramNonRepairSerialSignals = doAddSink(sramNonRepairSerialSignals,signal,signalName,"Sram_NonRepair")
+      case(true,true)   => sramRepairSerialSignals = doAddSink(sramRepairSerialSignals,signal,signalName,"Sram_Repair")
+    }
+  }
+  def doAddSource(srcSeq:Seq[String],signal:UInt,signalName:String,info:String):Seq[String]= {
+    BoringUtils.addSource(signal,signalName)
+//    println(s"Addding source to ${info} Seq: ${signalName}")
+    srcSeq :+ signalName
+  }
+  def addSourcePWRMGNTSignal(signal:UInt,signalName:String,isSRAM:Boolean,hasRepair:Boolean) = {
+    (isSRAM,hasRepair) match {
+      case(false,false) => rfNonRepairSerialSignals = doAddSource(rfNonRepairSerialSignals,signal,signalName,"RF_NonRepair")
+      case(false,true)  => rfRepairSerialSignals = doAddSource(rfRepairSerialSignals,signal,signalName,"RF_Repair")
+      case(true,false)  => sramNonRepairSerialSignals = doAddSource(sramNonRepairSerialSignals,signal,signalName,"Sram_NonRepair")
+      case(true,true)   => sramRepairSerialSignals = doAddSource(sramRepairSerialSignals,signal,signalName,"Sram_Repair")
+    }
+  }
+  def getAndClear(isSRAM:Boolean,hasRepair:Boolean):(String,String) = {
+    (isSRAM,hasRepair) match {
+      case(false,false) => {
+        val res = (rfNonRepairSerialSignals.head,rfNonRepairSerialSignals.last)
+//        println(s"rfNonRepair is cleared: ${rfNonRepairSerialSignals.toString}")
+        rfNonRepairSerialSignals = Seq()
+        res
+      }
+      case(false,true)  => {
+        val res = (rfRepairSerialSignals.head,rfRepairSerialSignals.last)
+//        println(s"rfRepair is cleared: ${rfRepairSerialSignals.toString}")
+        rfRepairSerialSignals = Seq()
+        res
+      }
+      case(true,false)  => {
+        val res = (sramNonRepairSerialSignals.head,sramNonRepairSerialSignals.last)
+//        println(s"sramNonRepair is cleared: ${sramNonRepairSerialSignals.toString}")
+        sramNonRepairSerialSignals = Seq()
+        res
+      }
+      case(true,true)   => {
+        val res = (sramRepairSerialSignals.head,sramRepairSerialSignals.last)
+//        println(s"sramRepair is cleared: ${sramRepairSerialSignals.toString}")
+        sramRepairSerialSignals = Seq()
+        res
+      }
+    }
+  }
 }
 
 class SRAMTemplate[T <: Data] (
-  gen: T, set: Int, way: Int = 1, singlePort: Boolean = false,
-  shouldReset: Boolean = false, extraReset: Boolean = false,
-  holdRead: Boolean = false, bypassWrite: Boolean = false,
-  // multi-cycle path
-  clk_div_by_2: Boolean = false,
-  // mbist support
-  hasMbist: Boolean = true, maxMbistDataWidth: Int = 256
-) extends Module {
+                                gen: T, set: Int, way: Int = 1, singlePort: Boolean = false,
+                                shouldReset: Boolean = false, extraReset: Boolean = false,
+                                holdRead: Boolean = false, bypassWrite: Boolean = false,
+                                // multi-cycle path
+                                clk_div_by_2: Boolean = false,
+                                // mbist support
+                                hasMbist: Boolean = true, maxMbistDataWidth: Int = 256,
+                                hasRepair:Boolean = false, parentName:String = s"Unknown"
+                              ) extends Module {
 
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
@@ -312,9 +455,11 @@ class SRAMTemplate[T <: Data] (
   val extra_reset = if (extraReset) Some(IO(Input(Bool()))) else None
 
   val isNto1 = gen.getWidth > maxMbistDataWidth
+  val isRF = MBIST.isRF(set,gen.getWidth * way,way)
+  val implementSinglePort = if(isRF) false else singlePort
+  val (array,vname) = SRAMArray(clock, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist,isSRAM = !isRF,hasRepair = hasRepair)
   /*************implement mbist interface node(multiple nodes for one way)********/
-  val mbistNodeNumNto1 = way * ((gen.getWidth + maxMbistDataWidth - 1) / maxMbistDataWidth)
-  val mbistNodeNumForEachWay = mbistNodeNumNto1 / way
+  val (mbistNodeNumForEachWay,mbistNodeNumNto1) = SRAMTemplate.getNodeNumForEachWayAndNodeNum_Nto1(gen.getWidth,way,maxMbistDataWidth)
   val maskWidthNto1 = 1
   val mbistDataWidthNto1 = (gen.getWidth + mbistNodeNumForEachWay - 1) / mbistNodeNumForEachWay
 
@@ -325,9 +470,9 @@ class SRAMTemplate[T <: Data] (
       mbistDataWidthNto1
   })
 
-  val mbistNodesNto1: Seq[SRAM2MBIST] = (0 until mbistNodeNumNto1).map({idx =>
-    val params = SRAM2MBISTParams(set, mbistDataWidthsForEachNode1toNWay(idx % mbistNodeNumForEachWay),maskWidthNto1,singlePort)
-    val bd = Wire(new SRAM2MBIST(params))
+  val mbistNodesNto1: Seq[RAM2MBIST] = (0 until mbistNodeNumNto1).map({idx =>
+    val params = RAM2MBISTParams(set, mbistDataWidthsForEachNode1toNWay(idx % mbistNodeNumForEachWay),maskWidthNto1,implementSinglePort,vname,parentName + s"node${idx}",isRF)
+    val bd = Wire(new RAM2MBIST(params))
     if(isNto1) dontTouch(bd)
     bd := DontCare
     bd
@@ -345,13 +490,13 @@ class SRAMTemplate[T <: Data] (
 
   /*************implement mbist interface node(one node for multiple ways)********/
 
-  val (wayNumForEachNode, mbistNodeNum1toN) = SRAMTemplate.getWayNumForEachNodeAndNodeNum(gen.getWidth, way, maxMbistDataWidth)
+  val (wayNumForEachNode, mbistNodeNum1toN) = SRAMTemplate.getWayNumForEachNodeAndNodeNum_1toN(gen.getWidth, way, maxMbistDataWidth)
 
   val mbistDataWidth1toN = wayNumForEachNode * gen.getWidth
   val maskWidth1toN = wayNumForEachNode
-  val mbistNodes1toN: Seq[SRAM2MBIST] = (0 until mbistNodeNum1toN).map({idx =>
-    val params = SRAM2MBISTParams(set, mbistDataWidth1toN, maskWidth1toN,singlePort)
-    val bd = Wire(new SRAM2MBIST(params))
+  val mbistNodes1toN: Seq[RAM2MBIST] = (0 until mbistNodeNum1toN).map({idx =>
+    val params = RAM2MBISTParams(set, mbistDataWidth1toN, maskWidth1toN,implementSinglePort,vname,parentName + s"node${idx}",isRF)
+    val bd = Wire(new RAM2MBIST(params))
     if(!isNto1) dontTouch(bd)
     bd := DontCare
     bd
@@ -373,20 +518,32 @@ class SRAMTemplate[T <: Data] (
       mbistNodesNto1.zipWithIndex.foreach({
         case (node, idx) =>
           val sram_prefix = "sram_" + (uniqueId + idx) + "_"
-          MBIST.addSRAM(node, sram_prefix, uniqueId + idx)
+          MBIST.addRamNode(node, sram_prefix, SRAMTemplate.getID(!isRF) + idx, !isRF, hasRepair)
       })
     }
     else {
       mbistNodes1toN.zipWithIndex.foreach({
         case (node, idx) =>
           val sram_prefix = "sram_" + (uniqueId + idx) + "_"
-          MBIST.addSRAM(node, sram_prefix, uniqueId + idx)
+          MBIST.addRamNode(node, sram_prefix, SRAMTemplate.getID(!isRF) + idx, !isRF, hasRepair)
       })
     }
+    MBIST.noDedup(this)
   }
-  MBIST.noDedup(this)
-  val addId = if(isNto1) mbistNodeNumNto1 else mbistNodeNum1toN
-  uniqueId += addId
+
+  val PWR_MGNT_IN0 = if(hasMbist) Some(Wire(UInt(1.W))) else None
+  val PWR_MGNT_OUT = if(hasMbist) Some(Wire(UInt(1.W))) else None
+  if(hasMbist) {
+    PWR_MGNT_IN0.get := DontCare
+    dontTouch(PWR_MGNT_IN0.get)
+    dontTouch(PWR_MGNT_OUT.get)
+    SRAMTemplate.addSinkPWRMGNTSignal(PWR_MGNT_IN0.get, s"sink_${uniqueId}", !isRF, hasRepair)
+    SRAMTemplate.addSourcePWRMGNTSignal(PWR_MGNT_OUT.get, s"source_${uniqueId}", !isRF, hasRepair)
+    val addId = if (isNto1) mbistNodeNumNto1 else mbistNodeNum1toN
+    uniqueId += addId
+    SRAMTemplate.increaseID(addId, !isRF)
+  }
+
   /*******************************select signals between two set*******************************/
   val mbistAddr           = if(isNto1) mbistAddrNto1 else mbistAddr1toN
   val mbistAddrRead       = if(isNto1) mbistAddrReadNto1 else mbistAddrRead1toN
@@ -396,26 +553,75 @@ class SRAMTemplate[T <: Data] (
   val mbistWMask          = if(isNto1) mbistWMaskNto1 else mbistWMask1toN
   val mbistFuncSel         = if(isNto1) mbistFuncSelNto1 else mbistFuncSel1toN
   /********************************************************************************************/
-  val wordType = UInt(gen.getWidth.W)
-  val array = SRAMArray(clock, singlePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist)
 
-  val trim_fuse = if(isNto1) mbistNodesNto1.head.sram_trim_fuse else mbistNodes1toN.head.sram_trim_fuse
-  val sleep_fuse = if(isNto1) mbistNodesNto1.head.sram_sleep_fuse else mbistNodes1toN.head.sram_sleep_fuse
+
+  val wordType = UInt(gen.getWidth.W)
+
+
+  val sram_trim_fuse = if(isNto1) mbistNodesNto1.head.sram_trim_fuse else mbistNodes1toN.head.sram_trim_fuse
+  val sram_sleep_fuse = if(isNto1) mbistNodesNto1.head.sram_sleep_fuse else mbistNodes1toN.head.sram_sleep_fuse
+  val rf_trim_fuse = if(isNto1) mbistNodesNto1.head.rf_trim_fuse else mbistNodes1toN.head.rf_trim_fuse
+  val rf_sleep_fuse = if(isNto1) mbistNodesNto1.head.rf_sleep_fuse else mbistNodes1toN.head.rf_sleep_fuse
   val bypsel = if(isNto1) mbistNodesNto1.head.bypsel else mbistNodes1toN.head.bypsel
   val wdis_b = if(isNto1) mbistNodesNto1.head.wdis_b else mbistNodes1toN.head.wdis_b
   val rdis_b = if(isNto1) mbistNodesNto1.head.rdis_b else mbistNodes1toN.head.rdis_b
   val init_en = if(isNto1) mbistNodesNto1.head.init_en else mbistNodes1toN.head.init_en
   val init_val = if(isNto1) mbistNodesNto1.head.init_val else mbistNodes1toN.head.init_val
   val clkungate = if(isNto1) mbistNodesNto1.head.clkungate else mbistNodes1toN.head.clkungate
-  array.mbist.get.trim_fuse <> trim_fuse
-  array.mbist.get.sleep_fuse <> sleep_fuse
-  array.mbist.get.bypsel <> bypsel
-  array.mbist.get.wdis_b <> wdis_b
-  array.mbist.get.rdis_b <> rdis_b
-  array.mbist.get.init_en <> init_en
-  array.mbist.get.init_val <> init_val
-  array.mbist.get.clkungate <> clkungate
 
+  val IP_RESET_B = if(isNto1) mbistNodesNto1.head.IP_RESET_B else mbistNodes1toN.head.IP_RESET_B
+  val WRAPPER_RD_CLK_EN = if(isNto1) mbistNodesNto1.head.WRAPPER_RD_CLK_EN else mbistNodes1toN.head.WRAPPER_RD_CLK_EN
+  val WRAPPER_WR_CLK_EN = if(isNto1) mbistNodesNto1.head.WRAPPER_WR_CLK_EN else mbistNodes1toN.head.WRAPPER_WR_CLK_EN
+  val WRAPPER_CLK_EN = if(isNto1) mbistNodesNto1.head.WRAPPER_CLK_EN else mbistNodes1toN.head.WRAPPER_CLK_EN
+  val OUTPUT_RESET = if(isNto1) mbistNodesNto1.head.OUTPUT_RESET else mbistNodes1toN.head.OUTPUT_RESET
+  val PWR_MGNT_IN = if(isNto1) mbistNodesNto1.head.PWR_MGNT_IN else mbistNodes1toN.head.PWR_MGNT_IN
+
+  if(hasMbist) {
+    if (!isRF) {
+      array.mbist.get.sram_trim_fuse <> sram_trim_fuse
+      array.mbist.get.sram_sleep_fuse <> sram_sleep_fuse
+      array.mbist.get.rf_trim_fuse := DontCare
+      array.mbist.get.rf_sleep_fuse := DontCare
+      array.mbist.get.WRAPPER_RD_CLK_EN <> WRAPPER_RD_CLK_EN
+      array.mbist.get.WRAPPER_WR_CLK_EN <> WRAPPER_WR_CLK_EN
+      array.mbist.get.WRAPPER_CLK_EN := DontCare
+      array.mbist.get.PWR_MGNT_IN := PWR_MGNT_IN
+    } else {
+      array.mbist.get.sram_trim_fuse := DontCare
+      array.mbist.get.sram_sleep_fuse := DontCare
+      array.mbist.get.rf_trim_fuse <> rf_trim_fuse
+      array.mbist.get.rf_sleep_fuse <> rf_sleep_fuse
+      array.mbist.get.WRAPPER_RD_CLK_EN <> DontCare
+      array.mbist.get.WRAPPER_WR_CLK_EN <> DontCare
+      array.mbist.get.WRAPPER_CLK_EN <> WRAPPER_CLK_EN
+      array.mbist.get.PWR_MGNT_IN := PWR_MGNT_IN
+    }
+    array.mbist.get.bypsel <> bypsel
+    array.mbist.get.wdis_b <> wdis_b
+    array.mbist.get.rdis_b <> rdis_b
+    array.mbist.get.init_en <> init_en
+    array.mbist.get.init_val <> init_val
+    array.mbist.get.clkungate <> clkungate
+
+    array.mbist.get.IP_RESET_B <> IP_RESET_B
+
+    array.mbist.get.OUTPUT_RESET <> OUTPUT_RESET
+
+    array.repair.get.colRepair := DontCare
+    array.repair.get.rowRepair := DontCare
+
+    array.mbist.get.PWR_MGNT_IN0 := PWR_MGNT_IN0.get
+    PWR_MGNT_OUT.get := array.mbist.get.PWR_MGNT_OUT
+
+    if (hasRepair) {
+      val bd = Wire(new RepairBundle)
+      Repair.addRepairNodeToGlobal(bd, parentName)
+      array.repair.get.colRepair <> bd.colRepair
+      array.repair.get.rowRepair <> bd.rowRepair
+      bd := DontCare
+      dontTouch(bd)
+    }
+  }
   val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
 
   if (shouldReset) {
@@ -433,7 +639,7 @@ class SRAMTemplate[T <: Data] (
   }
 
   val (ren, wen) = (io.r.req.valid, io.w.req.valid || resetState)
-  val realRen = (if (singlePort) ren && !wen else ren)
+  val realRen = (if (implementSinglePort) ren && !wen else ren)
 
   val setIdx = Mux(resetState, resetSet, io.w.req.bits.setIdx)
   val wdata = VecInit(Mux(resetState, 0.U.asTypeOf(Vec(way, gen)), io.w.req.bits.data).map(_.asTypeOf(wordType)))
@@ -446,7 +652,7 @@ class SRAMTemplate[T <: Data] (
   val finalWmask = if(hasMbist) Mux(mbistFuncSel, mbistWMask, waymask) else waymask
   val finalWriteData = if(hasMbist) Mux(mbistFuncSel, mbistWriteData, wdata) else wdata
 
-  val toSRAMRen = if (singlePort) (finalRen && !finalWen) else finalRen
+  val toSRAMRen = if (implementSinglePort) (finalRen && !finalWen) else finalRen
 
   //  val raw_rdata = array.read(io.r.req.bits.setIdx, realRen).asTypeOf(Vec(way, wordType))
   //  when (wen) { array.write(setIdx, wdata.asUInt, waymask) }
@@ -454,20 +660,23 @@ class SRAMTemplate[T <: Data] (
   val raw_rdata = array.read(finalReadSetIdx, toSRAMRen).asTypeOf(Vec(way, wordType))
 
   // bypass for dual-port SRAMs
-  require(!bypassWrite || bypassWrite && !singlePort)
-  def need_bypass(wen: Bool, waddr: UInt, wmask: UInt, ren: Bool, raddr: UInt) : UInt = {
+  require(!bypassWrite || bypassWrite && !implementSinglePort)
+  def need_bypass(wen: Bool, waddr: UInt, wmask: UInt, ren: Bool, raddr: UInt, isDoingMbist:Bool) : UInt = {
     val need_check = RegNext(ren && wen)
     val waddr_reg = RegNext(waddr)
     val raddr_reg = RegNext(raddr)
     require(wmask.getWidth == way)
-    val bypass = Fill(way, need_check && waddr_reg === raddr_reg) & RegNext(wmask)
+    val bypass = Mux(isDoingMbist,
+      Fill(way, false.B),
+      Fill(way, need_check && waddr_reg === raddr_reg) & RegNext(wmask)
+    )
     bypass.asTypeOf(UInt(way.W))
   }
   val bypass_wdata = if (bypassWrite) VecInit(RegNext(io.w.req.bits.data).map(_.asTypeOf(wordType)))
   else VecInit((0 until way).map(_ => LFSR64().asTypeOf(wordType)))
-  val bypass_mask = need_bypass(io.w.req.valid, io.w.req.bits.setIdx, io.w.req.bits.waymask.getOrElse("b1".U), io.r.req.valid, io.r.req.bits.setIdx)
+  val bypass_mask = need_bypass(io.w.req.valid, io.w.req.bits.setIdx, io.w.req.bits.waymask.getOrElse("b1".U), io.r.req.valid, io.r.req.bits.setIdx,mbistFuncSel)
   val mem_rdata = {
-    if (singlePort) raw_rdata
+    if (implementSinglePort) raw_rdata
     else VecInit(bypass_mask.asBools.zip(raw_rdata).zip(bypass_wdata).map {
       case ((m, r), w) => Mux(m, w, r)
     })
@@ -493,7 +702,7 @@ class SRAMTemplate[T <: Data] (
   }
 
   io.r.resp.data := VecInit(rdata)
-  io.r.req.ready := !resetState && (if (singlePort) !wen else true.B)
+  io.r.req.ready := !resetState && (if (implementSinglePort) !wen else true.B)
   io.w.req.ready := true.B
 
   /*************************************mbist rdata output**************************************************/
@@ -524,9 +733,13 @@ class SRAMTemplate[T <: Data] (
 
 }
 
-class FoldedSRAMTemplate[T <: Data](gen: T, set: Int, width: Int = 4, way: Int = 1,
-                                    shouldReset: Boolean = false, extraReset: Boolean = false,
-                                    holdRead: Boolean = false, singlePort: Boolean = false, bypassWrite: Boolean = false) extends Module {
+class FoldedSRAMTemplate[T <: Data]
+(
+  gen: T, set: Int, width: Int = 4, way: Int = 1,
+  shouldReset: Boolean = false, extraReset: Boolean = false,
+  holdRead: Boolean = false, singlePort: Boolean = false, bypassWrite: Boolean = false,
+  parentName:String
+) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
@@ -542,7 +755,7 @@ class FoldedSRAMTemplate[T <: Data](gen: T, set: Int, width: Int = 4, way: Int =
   val nRows = set / width
 
   val array = Module(new SRAMTemplate(gen, set=nRows, way=width*way,
-    shouldReset=shouldReset, extraReset=extraReset, holdRead=holdRead, singlePort=singlePort))
+    shouldReset=shouldReset, extraReset=extraReset, holdRead=holdRead, singlePort=singlePort,parentName = parentName))
   if (array.extra_reset.isDefined) {
     array.extra_reset.get := extra_reset.get
   }

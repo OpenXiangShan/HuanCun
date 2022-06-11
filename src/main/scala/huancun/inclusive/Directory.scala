@@ -42,7 +42,7 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Dir
   val tagWReq = Flipped(DecoupledIO(new TagWrite))
 }
 
-class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite] {
+class Directory(parentName:String = "Unknown")(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite] {
 
   val io = IO(new DirectoryIO())
 
@@ -55,6 +55,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
 
   val dir = Module(
     new SubDirectoryDoUpdate[DirectoryEntry](
+      parentName = parentName + "dir_",
       wports = mshrsAll,
       sets = cacheParams.sets,
       ways = cacheParams.ways,

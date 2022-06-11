@@ -1,6 +1,7 @@
 package huancun.mbist
 
 import chisel3._
+import chisel3.util.experimental.BoringUtils
 import chisel3.util.{HasBlackBoxInline, MixedVec}
 
 import scala.collection.mutable
@@ -13,13 +14,8 @@ class JTAGInterface extends Bundle{
   val ue = Input(Bool())
   val sel = Input(Bool())
   val si = Input(Bool())
-  val so = Input(Bool())
+  val so = Output(Bool())
   val diag_done = Output(Bool())
-}
-
-class FUSEInterface extends Bundle{
-  val trim_fuse = Input(UInt(11.W))
-  val sleep_fuse = Input(UInt(2.W))
 }
 
 class FSCANInputInterface extends Bundle {
@@ -30,58 +26,84 @@ class FSCANInputInterface extends Bundle {
   val init_val = Input(Bool())
 }
 
-class MBISTController (
+class BISRInputInterface extends Bundle {
+  val shift_en = Input(Bool())
+  val clock = Input(Bool())
+  val reset = Input(Bool())
+  val scan_in = Input(Bool())
+  val scan_out = Input(Bool())
+}
+
+object MBISTController{
+  def connectRepair(ports:List[RepairBundle],nodes:Seq[RepairNode]) = {
+    val newNodes = nodes.map({
+      node =>
+        val bd = Wire(new RepairBundle)
+        bd := DontCare
+        dontTouch(bd)
+        val res = new RepairNode(bd,node.prefix)
+        val source_elms = res.sink_elms
+        source_elms.foreach(sigName => BoringUtils.addSource(res.bd.elements(sigName), res.prefix + sigName))
+        res
+    })
+    ports.zip(newNodes).foreach({
+      case(port,node) =>
+        node.bd := port
+    })
+  }
+}
+class MBISTController
+(
   mbistParams: Seq[MBISTBusParams],
-  fscanPortNum: Int,
+  mbistName:Seq[String],
   prefix: Seq[String],
-  sim: Boolean = false
+  repairNodes:Option[Seq[RepairNode]]
 ) extends RawModule {
   require(mbistParams.nonEmpty)
-  require(mbistParams.length == prefix.length, "mbist params number not match prefixes number")
+  require(mbistParams.length == mbistName.length)
   override val desiredName = s"mbist_controller_${prefix.reduce(_ + _)}_dfx_top"
 
   val io = IO(new Bundle{
     val mbist_ijtag = new JTAGInterface
-    val mbist = MixedVec(prefix.indices.map(idx => Flipped(new MbitsStandardInterface(mbistParams(idx)))))
-    val fscan_ram = Vec(prefix.length, Flipped(new MbitsFscanInterface))
-    val static = Vec(prefix.length, Flipped(new MbitsStaticInterface))
-    val hd2prf_in = new FUSEInterface
-    val hsuspsr_in = new FUSEInterface
-    val fscan_in = Vec(fscanPortNum, new FSCANInputInterface)
+    val hd2prf_out = Flipped(new MbitsFuseInterface(isSRAM = false))
+    val hsuspsr_out = Flipped(new MbitsFuseInterface(isSRAM = true))
+    val hd2prf_in = new MbitsFuseInterface(isSRAM = false)
+    val hsuspsr_in = new MbitsFuseInterface(isSRAM = true)
+    val xsx_fscan_in = new FSCANInputInterface
+    val xsl2_fscan_in = new FSCANInputInterface
     val fscan_clkungate = Input(Bool())
     val clock = Input(Clock())
+    val bisr = if(repairNodes.isDefined) Some(new BISRInputInterface) else None
   })
   dontTouch(io)
 
+  val regex = """(bankedData|dataEcc)\d{1,2}_bank\d{1,2}""".r
+  val repairPort = if(repairNodes.isDefined) Some(List.fill(repairNodes.get.length)(IO(Flipped(new RepairBundle)))) else None
+  if(repairPort.isDefined) {
+    repairPort.get.zip(repairNodes.get).foreach({
+      case (port, node) => port.suggestName("slice_" + regex.findFirstIn(node.prefix).get)
+    })
+    repairPort.get.foreach(port => {
+      port := DontCare
+      dontTouch(port)
+    })
+  }
+
+  val mbist = mbistParams.indices.map(idx => IO(Flipped(new MbitsStandardInterface(mbistParams(idx)))))
+  mbist.zip(mbistName).foreach({
+    case(port,name) =>
+      port.suggestName("io_" + name)
+      port := DontCare
+      dontTouch(port)
+  })
+
+  val fscan_ram = prefix.indices.map(idx => IO(Flipped(new MbitsFscanInterface)))
+  fscan_ram.zip(prefix).foreach({
+    case(port,name) =>
+      port.suggestName("io_fscan_ram_" + name)
+      port := DontCare
+      dontTouch(port)
+  })
+
   io := DontCare
-}
-
-class MBISTControllerDFXWrapperTestTop (
-  mbistParams: Seq[MBISTBusParams],
-  fscanPortNum: Int,
-  prefix: Seq[String]
-) extends RawModule {
-  require(mbistParams.nonEmpty)
-  require(mbistParams.length == prefix.length, "mbist params number not match prefixes number")
-  val numOfController = mbistParams.length
-  val mbist_ijtag = IO(new JTAGInterface)
-  val mbist = IO(MixedVec(prefix.indices.map(idx => Flipped(new MbitsStandardInterface(mbistParams(idx))))))
-  val fscan_ram = IO(Vec(prefix.length, Flipped(new MbitsFscanInterface)))
-  val static = IO(Vec(prefix.length, Flipped(new MbitsStaticInterface)))
-  val hd2prf_in = IO(new FUSEInterface)
-  val hsuspsr_in = IO(new FUSEInterface)
-  val fscan_in = IO(Vec(fscanPortNum,new FSCANInputInterface))
-  val fscan_clkungate = IO(Input(Bool()))
-  val clock = IO(Input(Bool()))
-
-  val ctrl = Module(new MBISTController(mbistParams, fscanPortNum, prefix))
-  ctrl.io.mbist_ijtag <> mbist_ijtag
-  ctrl.io.mbist.zip(mbist).foreach({ case (a,b) => a <> b })
-  ctrl.io.fscan_ram.zip(fscan_ram).foreach({ case (a,b) => a <> b })
-  ctrl.io.static.zip(static).foreach({ case (a,b) => a <> b })
-  ctrl.io.hd2prf_in <> hd2prf_in
-  ctrl.io.hsuspsr_in <> hsuspsr_in
-  ctrl.io.fscan_in.zip(fscan_in).foreach({ case (a,b) => b <> a })
-  ctrl.io.clock := clock
-  ctrl.io.fscan_clkungate := fscan_clkungate
 }

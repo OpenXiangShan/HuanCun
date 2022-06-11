@@ -116,7 +116,7 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Sel
   val clientTagWreq = Flipped(DecoupledIO(new ClientTagWrite))
 }
 
-class Directory(implicit p: Parameters)
+class Directory(parentName:String = "Unknown")(implicit p: Parameters)
     extends BaseDirectory[DirResult, SelfDirWrite, SelfTagWrite]
     with HasClientInfo {
   val io = IO(new DirectoryIO())
@@ -178,6 +178,7 @@ class Directory(implicit p: Parameters)
 
   val clientDir = Module(
     new SubDirectory[Vec[ClientDirEntry]](
+      parentName = parentName + "clientDir_",
       wports = mshrsAll,
       sets = clientSets,
       ways = clientWays,
@@ -213,6 +214,7 @@ class Directory(implicit p: Parameters)
   }
   val selfDir = Module(
     new SubDirectoryDoUpdate[SelfDirEntry](
+      parentName = parentName + "selfDir_",
       wports = mshrsAll,
       sets = cacheParams.sets,
       ways = cacheParams.ways,

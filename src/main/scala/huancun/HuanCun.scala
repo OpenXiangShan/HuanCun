@@ -25,9 +25,12 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleFieldBase, UIntToOH1}
-import huancun.mbist.MBISTPipeline
+import huancun.mbist._
+import huancun.mbist.MBISTPipeline.placePipelines
 import huancun.prefetch._
 import utils.{DFTResetGen, FastArbiter, Pipeline, ResetGen}
+
+import scala.collection.mutable
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -168,7 +171,7 @@ abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with Has
 
 abstract class HuanCunModule(implicit val p: Parameters) extends MultiIOModule with HasHuanCunParameters
 
-class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
+class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
   val xfer = TransferSizes(blockBytes, blockBytes)
   val atom = TransferSizes(1, cacheParams.channelBytes.d.get)
@@ -228,34 +231,38 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   lazy val module = new LazyModuleImp(this) {
     val banks = node.in.size
     val io = IO(new Bundle {
-      val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
+      val perfEvents = Vec(banks, Vec(numPCntHc, Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
       val dfx_scan = Input(new DFTResetGen)
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
+
     def sizeBytesToStr(sizeBytes: Double): String = sizeBytes match {
       case _ if sizeBytes >= 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
-      case _ if sizeBytes >= 1024        => (sizeBytes / 1024) + "KB"
-      case _                            => "B"
+      case _ if sizeBytes >= 1024 => (sizeBytes / 1024) + "KB"
+      case _ => "B"
     }
+
     val sizeStr = sizeBytesToStr(sizeBytes)
-    val bankBits = if(banks == 1) 0 else log2Up(banks)
+    val bankBits = if (banks == 1) 0 else log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
     println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) $prefetch ======")
     println(s"bankBits: ${bankBits}")
     println(s"sets:${cacheParams.sets} ways:${cacheParams.ways} blockBytes:${cacheParams.blockBytes}")
-    if(!cacheParams.inclusive){
+    if (!cacheParams.inclusive) {
       val clientParam = cacheParams.clientCaches.head
       println(s"[client] size:${sizeBytesToStr(clientParam.capacity.toDouble)}")
       println(s"[client] sets:${clientParam.sets} ways:${clientParam.ways} blockBytes:${clientParam.blockBytes}")
     }
+
     def print_bundle_fields(fs: Seq[BundleFieldBase], prefix: String) = {
-      if(fs.nonEmpty){
-        println(fs.map{f => s"$prefix/${f.key.name}: (${f.data.getWidth}-bit)"}.mkString("\n"))
+      if (fs.nonEmpty) {
+        println(fs.map { f => s"$prefix/${f.key.name}: (${f.data.getWidth}-bit)" }.mkString("\n"))
       }
     }
+
     print_bundle_fields(node.in.head._2.bundle.requestFields, "usr")
     print_bundle_fields(node.in.head._2.bundle.echoFields, "echo")
 
@@ -264,6 +271,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case EdgeOutKey => node.out.head._2
       case BankBitsKey => bankBits
     }
+
     def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
       val arbiter = Module(new FastArbiter[T](chiselTypeOf(out.bits), in.size))
       if (name.nonEmpty) {
@@ -274,7 +282,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
       out <> arbiter.io.out
     }
-    val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
+
+    val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher(parentName + "prefetcher_")(pftParams)))
     val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
@@ -286,14 +295,15 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
 
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
-      if(bankBits == 0) true.B else set(bankBits - 1, 0) === bankId.U
+      if (bankBits == 0) true.B else set(bankBits - 1, 0) === bankId.U
     }
 
     def restoreAddress(x: UInt, idx: Int) = {
       restoreAddressUInt(x, idx.U)
     }
+
     def restoreAddressUInt(x: UInt, idx: UInt) = {
-      if(bankBits == 0){
+      if (bankBits == 0) {
         x
       } else {
         val high = x >> offsetBits
@@ -306,11 +316,13 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
         val rst = ResetGen(2, Some(io.dfx_scan))
-        val slice = withReset(rst){ Module(new Slice()(p.alterPartial {
-          case EdgeInKey  => edgeIn
-          case EdgeOutKey => edgeOut
-          case BankBitsKey => bankBits
-        })) }
+        val slice = withReset(rst) {
+          Module(new Slice(parentName + s"slice${i}_")(p.alterPartial {
+            case EdgeInKey => edgeIn
+            case EdgeOutKey => edgeOut
+            case BankBitsKey => bankBits
+          }))
+        }
         slice.io.in <> in
         in.b.bits.address := restoreAddress(slice.io.in.b.bits.address, i)
         out <> slice.io.out
@@ -327,7 +339,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             prefetchTrains.get(i) <> train
             prefetchResps.get(i) <> resp
             // restore to full address
-            if(bankBits != 0){
+            if (bankBits != 0) {
               val train_full_addr = Cat(
                 train.bits.tag, train.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
               )
@@ -343,14 +355,15 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             }
         }
         io.perfEvents(i) := slice.perfinfo
-        val sliceMbistPipeline =
-          if(cacheParams.level == 3) Some(Module(new MBISTPipeline(level = Int.MaxValue,infoName = f"MBIST_L3S${i}_SRAM_info"))) else None
-        (slice,sliceMbistPipeline)
+        val mbistLevel = if (cacheParams.level == 3) Int.MaxValue else 3
+        val mbistName = if (cacheParams.level == 3) "L3S" else "L2S"
+        val (sliceMbistPipelineSram, sliceMbistPipelineRf, sliceMbistPipelineSramRepair, sliceMbistPipelineRfRepair) = placePipelines(level = mbistLevel, infoName = s"${mbistName}${i}")
+        (slice, (sliceMbistPipelineSram, sliceMbistPipelineRf, sliceMbistPipelineSramRepair, sliceMbistPipelineRfRepair))
     }
+    val l2MbistPipeline = Seq(if (cacheParams.level != 3) Some(placePipelines(level = Int.MaxValue, infoName = "L2")) else None)
     val slices = slicesWithItsMBISTPipeline.map(_._1)
-    val sliceMbistPipelines = slicesWithItsMBISTPipeline.map(_._2)
-    val huancunMbistPipeline =
-      if(cacheParams.level != 3 ) Some(Seq(Module(new MBISTPipeline(level = Int.MaxValue,infoName = "MBIST_L2_SRAM_info")))) else None
+    val sliceMbistPipelines = if (cacheParams.level == 3) slicesWithItsMBISTPipeline.map(_._2) else Seq(l2MbistPipeline.head.get)
+
 
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
     val slices_ecc = slices.zipWithIndex.map {
@@ -368,7 +381,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
       val bank_match = slices.map(_ => Wire(Bool()))
       c.module.io_req.ready := Mux1H(bank_match, ctl_reqs.map(_.ready))
-      for((s, i) <- ctl_reqs.zipWithIndex){
+      for ((s, i) <- ctl_reqs.zipWithIndex) {
         bank_match(i) := bank_eq(c.module.io_req.bits.set, i, bankBits)
         s.valid := c.module.io_req.valid && bank_match(i)
         s.bits := c.module.io_req.bits
@@ -392,19 +405,83 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
     }
 
-
-    val mbist = IO(
-      if(cacheParams.level == 3) {
-        MixedVec(sliceMbistPipelines.indices.map(idx => sliceMbistPipelines(idx).get.io.mbist.get.cloneType))
-      } else {
-        MixedVec(huancunMbistPipeline.get.indices.map(idx => huancunMbistPipeline.get(idx).io.mbist.get.cloneType))
-      }
-    )
-    if(cacheParams.level == 3){
-      mbist.zipWithIndex.foreach({case(port,idx) => port <> sliceMbistPipelines(idx).get.io.mbist.get})
+    /** **************************************Under L2 configuration*******************************************************/
+    val mbist_sram = if (cacheParams.level == 2) Some(IO(sliceMbistPipelines.head._1.get.io.mbist.get.cloneType)) else None
+    val mbist_rf = if (cacheParams.level == 2) Some(IO(sliceMbistPipelines.head._2.get.io.mbist.get.cloneType)) else None
+    if (cacheParams.level == 2) {
+      sliceMbistPipelines.head._1.get.io.mbist.get <> mbist_sram.get
+      sliceMbistPipelines.head._2.get.io.mbist.get <> mbist_rf.get
     }
-    else{
-      mbist.zipWithIndex.foreach({case(port,idx) => port <> huancunMbistPipeline.get(idx).io.mbist.get})
+
+    /** **************************************Under L3 configuration*******************************************************/
+
+    val mbist_extra_banks,mbist_extra_dirs = if (cacheParams.level == 3) Some(IO(Vec(sliceMbistPipelines.length,new MbitsExtraFullInterface))) else None
+    val fscan_clkungate = if (cacheParams.level == 3) Some(IO(Input(Bool()))) else None
+    val xsx_ultiscan = if (cacheParams.level == 3) Some(IO(new FSCANInputInterface)) else None
+    val xsl2_ultiscan = if (cacheParams.level == 3) Some(IO(new FSCANInputInterface)) else None
+    val hd2prf_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = false))) else None
+    val hsuspsr_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = true))) else None
+    val bisr = if (cacheParams.level == 3) Some(IO(Vec(sliceMbistPipelines.length,new BISRInputInterface))) else None
+    val mbist_jtag = if (cacheParams.level == 3) Some(IO(Vec(sliceMbistPipelines.length,new JTAGInterface))) else None
+
+    if (cacheParams.level == 3){
+      val dirPipeline = sliceMbistPipelines.map(_._1.get)
+      val bankPipeline = sliceMbistPipelines.map(_._3.get)
+
+      val mbistInterfaces = bankPipeline.indices.zip(dirPipeline).zip(bankPipeline).map({
+        case((idx,dirPl),bankPl) => {
+          val intfName = f"MBIST_SRAM_L3_Slice_${idx}_intf"
+          val intf = Module(new MBISTInterface(
+            Seq(dirPl.io.mbist.get.params,bankPl.io.mbist.get.params),
+            intfName,
+            true,
+            2
+          ))
+          intf.toPipeline(0) <> dirPl.io.mbist.get
+          intf.toPipeline(1) <> bankPl.io.mbist.get
+          intf.extra(0) := DontCare
+          intf.extra(1) := DontCare
+          intf.clock := clock
+          mbist_extra_dirs.get(idx).connectExtra(intf.extra(0))
+          mbist_extra_banks.get(idx).connectExtra(intf.extra(1))
+          mbist_extra_dirs.get(idx).connectPWR_MGNT(dirPl.PWR_MGNT.get._1,dirPl.PWR_MGNT.get._2)
+          mbist_extra_banks.get(idx).connectPWR_MGNT(bankPl.PWR_MGNT.get._1,bankPl.PWR_MGNT.get._2)
+          intf
+        }
+      })
+      val repairNodesList = Repair.globalRepairNode
+      val repairNodesForEveyController = mbistInterfaces.indices.map({ idx =>
+          repairNodesList.filter(_.prefix.contains(s"slice${idx}"))
+      })
+      val mbistControllers = mbistInterfaces.zip(repairNodesForEveyController).zipWithIndex.map({
+        case ((intf,nodes),idx) =>
+          val prefix = "L3"
+          val ctrl = Module(new MBISTController(
+            Seq(intf.mbist.params),
+            Seq("L3_SRAM"),
+            Seq(prefix),
+            Some(nodes)
+          ))
+          dontTouch(ctrl.io)
+          ctrl.repairPort.get.foreach(dontTouch(_))
+          MBISTController.connectRepair(ctrl.repairPort.get,nodes)
+          ctrl.mbist.head <> intf.mbist
+          ctrl.fscan_ram.head <> intf.fscan_ram
+          ctrl.io.hd2prf_out := DontCare
+          ctrl.io.hsuspsr_out <> intf.fuse
+          ctrl.io.fscan_clkungate := fscan_clkungate.get
+          ctrl.io.clock := clock
+          ctrl.io.hd2prf_in := hd2prf_in.get
+          ctrl.io.hsuspsr_in := hsuspsr_in.get
+          ctrl.io.xsx_fscan_in<> xsx_ultiscan.get
+          ctrl.io.xsl2_fscan_in <> xsl2_ultiscan.get
+          ctrl
+      })
+      mbistControllers.zip(bisr.get).zip(mbist_jtag.get).foreach({
+        case((ctrl,bisrPort),jtagPort) =>
+          ctrl.io.bisr.get <> bisrPort
+          ctrl.io.mbist_ijtag <> jtagPort
+      })
     }
   }
 }

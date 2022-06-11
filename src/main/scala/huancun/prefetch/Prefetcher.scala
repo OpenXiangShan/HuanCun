@@ -75,12 +75,12 @@ class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
   io.deq.bits := Mux(empty, io.enq.bits, queue(head))
 }
 
-class Prefetcher(implicit p: Parameters) extends PrefetchModule {
+class Prefetcher(parentName:String = "Unknown")(implicit p: Parameters) extends PrefetchModule {
   val io = IO(new PrefetchIO)
 
   prefetchOpt.get match {
     case bop: BOPParameters =>
-      val pft = Module(new BestOffsetPrefetch)
+      val pft = Module(new BestOffsetPrefetch(parentName))
       val pftQueue = Module(new PrefetchQueue)
       val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
       pft.io.train <> io.train

@@ -24,7 +24,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.random.LFSR
 import freechips.rocketchip.tilelink.TLMessages
-import huancun.mbist.MBISTPipeline
+import huancun.mbist.MBISTPipeline.placePipelines
 import huancun.utils._
 
 trait BaseDirResult extends HuanCunBundle {
@@ -58,7 +58,9 @@ abstract class BaseDirectory[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite,
   val io: BaseDirectoryIO[T_RESULT, T_DIR_W, T_TAG_W]
 }
 
-class SubDirectory[T <: Data](
+class SubDirectory[T <: Data]
+(
+  parentName:  String = "Unknown",
   wports:      Int,
   sets:        Int,
   ways:        Int,
@@ -102,7 +104,7 @@ class SubDirectory[T <: Data](
 
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true))
+  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, parentName = parentName + "metaArray_"))
 
   val tag_wen = io.tag_w.valid
   val dir_wen = io.dir_w.valid
@@ -118,9 +120,9 @@ class SubDirectory[T <: Data](
   println(s"Tag ECC bits:$eccBits")
   val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true))
+  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, parentName = parentName + "tagArray_"))
   if(eccBits > 0){
-    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true))
+    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, parentName = parentName + "eccArray_"))
     eccArray.io.w(
       io.tag_w.fire(),
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
@@ -150,13 +152,13 @@ class SubDirectory[T <: Data](
     }
     0.U
   } else {
-    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
+    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, parentName = parentName + "replacerSram_"))
     val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
     val next_state = repl.get_next_state(repl_state, io.resp.bits.way)
     replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
     repl_state
   }
-  val baseDirectoryMbistPipeline = Module(new MBISTPipeline(level = 2))
+  val(baseDirectoryMbistPipelineSram,baseDirectoryMbistPipelineRf,baseDirectoryMbistPipelineSramRepair,baseDirectoryMbistPipelineRfRepair) = placePipelines(level = 2,infoName = "BaseDirectory")
   io.resp.valid := reqValidReg
   val metas = metaArray.io.r(io.read.fire(), io.read.bits.set).resp.data
   val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
@@ -207,7 +209,9 @@ trait UpdateOnAcquire extends HasUpdate {
   }
 }
 
-abstract class SubDirectoryDoUpdate[T <: Data](
+abstract class SubDirectoryDoUpdate[T <: Data]
+(
+  parentName:  String = "Unknown",
   wports:      Int,
   sets:        Int,
   ways:        Int,
@@ -217,6 +221,7 @@ abstract class SubDirectoryDoUpdate[T <: Data](
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
   replacement: String)(implicit p: Parameters)
     extends SubDirectory[T](
+      parentName,
       wports, sets, ways, tagBits,
       dir_init_fn, dir_hit_fn, invalid_way_sel,
       replacement

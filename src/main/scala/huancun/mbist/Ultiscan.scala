@@ -3,8 +3,37 @@ package huancun.mbist
 import chisel3._
 import huancun.utils.DFTResetGen
 
+
+class UltiscanExternalInterface extends Bundle{
+  val mode = Input(Bool())
+
+  val byprst_b = Input(Bool())
+  val clkungate = Input(Bool())
+  val clkungate_syn = Input(Bool())
+  val rstbypen = Input(Bool())
+  val core_shiften = Input(Bool())
+
+  val ram = new Bundle () {
+    val bypsel = Input(Bool())
+    val hold = Input(Bool())
+    val init_en = Input(Bool())
+    val init_val = Input(Bool())
+    val mcp = Input(Bool())
+    val odis_b = Input(Bool())
+    val rddis_b = Input(Bool())
+    val wrdis_b = Input(Bool())
+  }
+
+  def toResetGen: DFTResetGen = {
+    val top_scan = Wire(new DFTResetGen)
+    top_scan.scan_mode := rstbypen
+    top_scan.dft_reset := !byprst_b
+    top_scan.dft_mode := rstbypen
+    top_scan
+  }
+}
 class UltiscanJTAGInterface extends Bundle {
-  val fdfx_powergood = Input(Bool())
+
   val capture = Input(Bool())
   val reset_b = Input(Bool())
   val select = Input(Bool())
@@ -39,9 +68,8 @@ class UltiscanIO (
     val mode_atspeed = Output(Bool())
     val state = Output(Bool())
 
-    val byplatrst = Output(Bool())
+
     val byplatrst_b = Output(Bool())
-    val byprst = Output(Bool())
     val byprst_b = Output(Bool())
     val clkgenctrl = Output(UInt((NUM_CLKGENCTRL + 1).W))
     val clkgenctrlen = Output(UInt((NUM_CLKGENCTRLEN + 1).W))
@@ -61,7 +89,7 @@ class UltiscanIO (
       val wrdis_b = Output(Bool())
     }
   }
-
+  val fdfx_powergood = Input(Bool())
   val ijtag = new UltiscanJTAGInterface
 
   val scanchains_so_end = Input(UInt((NUM_CHAINS - 2).W))
@@ -108,15 +136,4 @@ class Ultiscan (
     top_scan.dft_mode := io.fscan.rstbypen
     top_scan
   }
-}
-
-class UltiscanTestTop extends RawModule {
-  val xsl2_ultiscan = Module(new Ultiscan(3400, 20, 20, 1, 1, 0, 0, "xsl2"))
-  val xsx_ultiscan = Module(new Ultiscan(1100, 10, 10, 1, 1, 0, 0, "xsx"))
-
-  val xsl2 = IO(xsl2_ultiscan.io.cloneType)
-  val xsx = IO(xsx_ultiscan.io.cloneType)
-
-  xsl2 <> xsl2_ultiscan.io
-  xsx <> xsx_ultiscan.io
 }
