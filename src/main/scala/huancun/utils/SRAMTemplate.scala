@@ -339,7 +339,7 @@ object SRAMTemplate {
 
   def getNodeNumForEachWayAndNodeNum_Nto1(dw: Int, way: Int, mw: Int): (Int, Int) = {
     val divisors = getDivisor(dw)
-    val validDivisors = divisors.filter(_<mw)
+    val validDivisors = divisors.filter(_<=mw)
     val goodNodeNumForEachWay = dw / validDivisors.max
     val defaultNodeNumForEachWay = ((dw + mw - 1) / mw)
     val finalNodeNumForEachWay = if(goodNodeNumForEachWay > 4 * defaultNodeNumForEachWay) defaultNodeNumForEachWay else goodNodeNumForEachWay
@@ -411,25 +411,25 @@ object SRAMTemplate {
     (isSRAM,hasRepair) match {
       case(false,false) => {
         val res = (rfNonRepairSerialSignals.head,rfNonRepairSerialSignals.last)
-        println(s"rfNonRepair is cleared: ${rfNonRepairSerialSignals.toString}")
+//        println(s"rfNonRepair is cleared: ${rfNonRepairSerialSignals.toString}")
         rfNonRepairSerialSignals = Seq()
         res
       }
       case(false,true)  => {
         val res = (rfRepairSerialSignals.head,rfRepairSerialSignals.last)
-        println(s"rfRepair is cleared: ${rfRepairSerialSignals.toString}")
+//        println(s"rfRepair is cleared: ${rfRepairSerialSignals.toString}")
         rfRepairSerialSignals = Seq()
         res
       }
       case(true,false)  => {
         val res = (sramNonRepairSerialSignals.head,sramNonRepairSerialSignals.last)
-        println(s"sramNonRepair is cleared: ${sramNonRepairSerialSignals.toString}")
+//        println(s"sramNonRepair is cleared: ${sramNonRepairSerialSignals.toString}")
         sramNonRepairSerialSignals = Seq()
         res
       }
       case(true,true)   => {
         val res = (sramRepairSerialSignals.head,sramRepairSerialSignals.last)
-        println(s"sramRepair is cleared: ${sramRepairSerialSignals.toString}")
+//        println(s"sramRepair is cleared: ${sramRepairSerialSignals.toString}")
         sramRepairSerialSignals = Seq()
         res
       }

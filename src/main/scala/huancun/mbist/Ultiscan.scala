@@ -3,6 +3,35 @@ package huancun.mbist
 import chisel3._
 import huancun.utils.DFTResetGen
 
+
+class UltiscanExternalInterface extends Bundle{
+  val mode = Input(Bool())
+
+  val byprst_b = Input(Bool())
+  val clkungate = Input(Bool())
+  val clkungate_syn = Input(Bool())
+  val rstbypen = Input(Bool())
+  val core_shiften = Input(Bool())
+
+  val ram = new Bundle () {
+    val bypsel = Input(Bool())
+    val hold = Input(Bool())
+    val init_en = Input(Bool())
+    val init_val = Input(Bool())
+    val mcp = Input(Bool())
+    val odis_b = Input(Bool())
+    val rddis_b = Input(Bool())
+    val wrdis_b = Input(Bool())
+  }
+
+  def toResetGen: DFTResetGen = {
+    val top_scan = Wire(new DFTResetGen)
+    top_scan.scan_mode := rstbypen
+    top_scan.dft_reset := !byprst_b
+    top_scan.dft_mode := rstbypen
+    top_scan
+  }
+}
 class UltiscanJTAGInterface extends Bundle {
 
   val capture = Input(Bool())

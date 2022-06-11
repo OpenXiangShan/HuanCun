@@ -55,17 +55,16 @@ object MBISTController{
 class MBISTController
 (
   mbistParams: Seq[MBISTBusParams],
-  fscanOutPortNum: Int,
+  mbistName:Seq[String],
   prefix: Seq[String],
   repairNodes:Option[Seq[RepairNode]]
 ) extends RawModule {
   require(mbistParams.nonEmpty)
+  require(mbistParams.length == mbistName.length)
   override val desiredName = s"mbist_controller_${prefix.reduce(_ + _)}_dfx_top"
 
   val io = IO(new Bundle{
     val mbist_ijtag = new JTAGInterface
-    val mbist = MixedVec(mbistParams.indices.map(idx => Flipped(new MbitsStandardInterface(mbistParams(idx)))))
-    val fscan_ram = Vec(fscanOutPortNum, Flipped(new MbitsFscanInterface))
     val hd2prf_out = Flipped(new MbitsFuseInterface(isSRAM = false))
     val hsuspsr_out = Flipped(new MbitsFuseInterface(isSRAM = true))
     val hd2prf_in = new MbitsFuseInterface(isSRAM = false)
@@ -89,5 +88,22 @@ class MBISTController
       dontTouch(port)
     })
   }
+
+  val mbist = mbistParams.indices.map(idx => IO(Flipped(new MbitsStandardInterface(mbistParams(idx)))))
+  mbist.zip(mbistName).foreach({
+    case(port,name) =>
+      port.suggestName("io_" + name)
+      port := DontCare
+      dontTouch(port)
+  })
+
+  val fscan_ram = prefix.indices.map(idx => IO(Flipped(new MbitsFscanInterface)))
+  fscan_ram.zip(prefix).foreach({
+    case(port,name) =>
+      port.suggestName("io_fscan_ram_" + name)
+      port := DontCare
+      dontTouch(port)
+  })
+
   io := DontCare
 }

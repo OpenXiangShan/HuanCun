@@ -53,8 +53,10 @@ case class MBISTBusParams
   set: Int,
   dataWidth: Int,
   maskWidth: Int,
-  isRF: Boolean
+  isRF: Boolean,
+  domainName:String = "Unkown"
 ) {
+
   val arrayWidth = log2Up(array)
   val addrWidth = log2Up(set)
 }

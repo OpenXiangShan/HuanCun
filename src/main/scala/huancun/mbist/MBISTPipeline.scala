@@ -63,6 +63,7 @@ class MbitsFuseInterface(isSRAM:Boolean) extends Bundle{
   val sleep_fuse = Input(UInt(2.W))
 }
 class MbitsStandardInterface(val params:MBISTBusParams) extends Bundle{
+  val isRF = params.isRF
   val array = Input(UInt(params.arrayWidth.W))
   val all, req= Input(Bool())
   val ack = Output(Bool())
@@ -73,7 +74,7 @@ class MbitsStandardInterface(val params:MBISTBusParams) extends Bundle{
   val indata = Input(UInt(params.dataWidth.W))
   // read
   val readen = Input(Bool())
-  val addr_rd = Input(UInt(params.addrWidth.W)) // not used for single port srams
+  val addr_rd = Input(UInt(if(isRF) params.addrWidth.W else 0.W)) // not used for single port srams
   val outdata = Output(UInt(params.dataWidth.W))
 }
 
@@ -87,6 +88,10 @@ class MBISTInterface(params:Seq[MBISTBusParams],name:String,isSRAM:Boolean,pipel
   val fscan_ram = IO(new MbitsFscanInterface)
   val fuse = IO(new MbitsFuseInterface(isSRAM))
   val extra = IO(Vec(pipelineNum,new MbitsExtraInterface(isSRAM)))
+  val clock = IO(Input(Clock()))
+
+  dontTouch(clock)
+  dontTouch(mbist)
 
   mbist.ack := toPipeline.map(_.mbist_ack).reduce(_|_)
   mbist.outdata := toPipeline.map(_.mbist_outdata).reduce(_|_)
@@ -152,9 +157,9 @@ object MBISTPipeline {
 
     val fileHandle = new PrintWriter(f"build/$infoName.csv")
     val heads = if(isSRAM) {
-      "\"SRAM Name\",\"SRAM Type\",\"SRAM array\",\"data width\",\"be width\",\"single port\",\"pipeline depth\""
+      "\"SRAM Name\",\"SRAM Type\",\"SRAM array\",\"data width\",\"addr width\",\"be width\",\"single port\",\"pipeline depth\""
     } else {
-      "\"RF Name\",\"RF Type\",\"SRAM array\",\"data width\",\"be width\",\"single port\",\"pipeline depth\""
+      "\"RF Name\",\"RF Type\",\"SRAM array\",\"data width\",\"addr width\",\"be width\",\"single port\",\"pipeline depth\""
     }
     fileHandle.println(heads)
     node.ramParamsBelongToThis.zip(node.array_id).zip(node.array_depth).foreach({
@@ -163,6 +168,7 @@ object MBISTPipeline {
         fileHandle.print(p.vname + ",")
         fileHandle.print(id.toString + ",")
         fileHandle.print(p.dataWidth.toString + ",")
+        fileHandle.print(p.addrWidth.toString + ",")
         fileHandle.print(p.maskWidth.toString + ",")
         fileHandle.print((if(p.singlePort) "true" else "false")  + ",")
         fileHandle.print((depth * 2 + 1).toString)
