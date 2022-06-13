@@ -102,7 +102,8 @@ class SRAMTemplate[T <: Data]
   gen: T, set: Int, way: Int = 1,
   shouldReset: Boolean = false, holdRead: Boolean = false,
   singlePort: Boolean = false, bypassWrite: Boolean = false,
-  clk_div_by_2: Boolean = false
+  clk_div_by_2: Boolean = false,
+  forbid_write_on_reset: Boolean = false
 ) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
@@ -121,8 +122,9 @@ class SRAMTemplate[T <: Data]
     resetState := _resetState
     resetSet := _resetSet
   }
-
-  val (ren, wen) = (io.r.req.valid, io.w.req.valid || resetState)
+  val firstcycle = RegNext(false.B, init = true.B)
+  val reset_write_forbiden = if (forbid_write_on_reset) firstcycle else false.B
+  val (ren, wen) = (io.r.req.valid, (io.w.req.valid || resetState) && !reset_write_forbiden)
   val realRen = (if (singlePort) ren && !wen else ren)
 
   val setIdx = Mux(resetState, resetSet, io.w.req.bits.setIdx)

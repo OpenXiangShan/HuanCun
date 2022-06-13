@@ -101,7 +101,8 @@ class SubDirectory[T <: Data](
 
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true))
+  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true,
+      forbid_write_on_reset = true))
 
   val tag_wen = io.tag_w.valid
   val dir_wen = io.dir_w.valid
@@ -117,9 +118,9 @@ class SubDirectory[T <: Data](
   println(s"Tag ECC bits:$eccBits")
   val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true))
+  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, forbid_write_on_reset = true))
   if(eccBits > 0){
-    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true))
+    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, forbid_write_on_reset = true))
     eccArray.io.w(
       io.tag_w.fire(),
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
@@ -149,7 +150,7 @@ class SubDirectory[T <: Data](
     }
     0.U
   } else {
-    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
+    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, forbid_write_on_reset = true))
     val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
     val next_state = repl.get_next_state(repl_state, io.resp.bits.way)
     replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
