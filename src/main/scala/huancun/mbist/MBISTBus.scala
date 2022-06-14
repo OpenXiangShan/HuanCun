@@ -3,6 +3,7 @@ package huancun.mbist
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
+import huancun.utils.SramType
 
 trait MBISTBundleLike {
   this: Bundle =>
@@ -19,11 +20,16 @@ trait MBISTBundleLike {
     BoringUtils.addSink(elements(elm), prefix + elm)
   }
 }
-abstract class MBISTCommonBundle(val isRF:Boolean) extends Bundle with MBISTBundleLike{
-  val sram_trim_fuse = Input(UInt((if(!isRF) 20 else 0).W))
-  val sram_sleep_fuse = Input(UInt((if(!isRF) 2 else 0).W))
-  val rf_trim_fuse = Input(UInt((if(isRF) 11 else 0).W))
-  val rf_sleep_fuse = Input(UInt((if(isRF) 2 else 0).W))
+abstract class MBISTCommonBundle(val sramType:Int) extends Bundle with MBISTBundleLike{
+  val isRF = sramType == SramType.hd2prf.id
+  val hd2prf_trim_fuse = Input(UInt(11.W))
+  val hd2prf_sleep_fuse = Input(UInt(2.W))
+  val hsuspsr_trim_fuse = Input(UInt(20.W))
+  val hsuspsr_sleep_fuse = Input(UInt(2.W))
+  val uhdusplr_trim_fuse = Input(UInt(20.W))
+  val uhdusplr_sleep_fuse = Input(UInt(2.W))
+  val hduspsr_trim_fuse = Input(UInt(20.W))
+  val hduspsr_sleep_fuse = Input(UInt(2.W))
   val bypsel = Input(Bool())
   val wdis_b = Input(Bool())
   val rdis_b = Input(Bool())
@@ -38,13 +44,19 @@ abstract class MBISTCommonBundle(val isRF:Boolean) extends Bundle with MBISTBund
   val PWR_MGNT_IN = Input(UInt((if(isRF) 4 else 5).W))
 
   val typeSpecificSignal = if(isRF)
-    Seq("rf_trim_fuse","rf_sleep_fuse","WRAPPER_RD_CLK_EN","WRAPPER_WR_CLK_EN")
+    Seq("WRAPPER_RD_CLK_EN","WRAPPER_WR_CLK_EN")
   else
-    Seq("sram_trim_fuse","sram_sleep_fuse","WRAPPER_CLK_EN")
+    Seq("WRAPPER_CLK_EN")
 
   override def sink_elms =
-    Seq("bypsel","wdis_b","rdis_b","init_en","init_val","clkungate",
-    "IP_RESET_B","OUTPUT_RESET", "PWR_MGNT_IN") ++ typeSpecificSignal
+    Seq(
+      "hd2prf_trim_fuse","hd2prf_sleep_fuse",
+      "hsuspsr_trim_fuse","hsuspsr_sleep_fuse",
+      "uhdusplr_trim_fuse","uhdusplr_sleep_fuse",
+      "hduspsr_trim_fuse","hduspsr_sleep_fuse",
+      "bypsel","wdis_b","rdis_b","init_en","init_val","clkungate",
+      "IP_RESET_B","OUTPUT_RESET", "PWR_MGNT_IN"
+  ) ++ typeSpecificSignal
 }
 
 case class MBISTBusParams
@@ -53,15 +65,15 @@ case class MBISTBusParams
   set: Int,
   dataWidth: Int,
   maskWidth: Int,
-  isRF: Boolean,
+  sramType: Int,
   domainName:String = "Unkown"
 ) {
-
-  val arrayWidth = log2Up(array)
-  val addrWidth = log2Up(set)
+  val isRF = sramType == SramType.hd2prf.id
+  val arrayWidth = log2Up(array + 1)
+  val addrWidth = log2Up(set + 1)
 }
 
-class MBISTBus(val params: MBISTBusParams) extends MBISTCommonBundle(params.isRF){
+class MBISTBus(val params: MBISTBusParams) extends MBISTCommonBundle(params.sramType){
   // control signals
   val mbist_array = Input(UInt(params.arrayWidth.W))
   val mbist_all, mbist_req = Input(Bool())
@@ -92,12 +104,13 @@ case class RAM2MBISTParams
   singlePort: Boolean,
   vname:String,
   hierarchyName:String,
-  isRF:Boolean
+  sramType:Int
 ) {
-  val addrWidth = log2Up(set)
+  val isRF = sramType == SramType.hd2prf.id
+  val addrWidth = log2Up(set + 1)
 }
 
-class RAM2MBIST(val params: RAM2MBISTParams) extends MBISTCommonBundle(params.isRF){
+class RAM2MBIST(val params: RAM2MBISTParams) extends MBISTCommonBundle(params.sramType){
   val addr, addr_rd = Input(UInt(params.addrWidth.W))
   val wdata = Input(UInt(params.dataWidth.W))
   val wmask = Input(UInt(params.maskWidth.W))

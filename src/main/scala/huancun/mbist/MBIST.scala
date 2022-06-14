@@ -63,7 +63,7 @@ object MBIST {
       children.map(_.set).max,
       children.map(_.dataWidth).max,
       children.map(_.maskWidth).max,
-      isRF = children.head.isRF
+      sramType = children.head.sramType
     )
 
   def inferMBITSBusParams(children: Seq[BaseNode]): MBISTBusParams =
@@ -81,7 +81,7 @@ object MBIST {
         case ram: RAMBaseNode => ram.bd.params.maskWidth
         case pl: PipelineBaseNode => pl.bd.params.maskWidth
       }).max,
-      isRF = children.head.bd.isRF
+      sramType = children.head.bd.sramType
     )
 
   def addRamNode(bd: RAM2MBIST, prefix: String, id:Int, isSRAM:Boolean, isRepair:Boolean): RAMBaseNode = {
@@ -183,30 +183,5 @@ object MBIST {
   def checkRfRepairChildrenExistence(level:Int):Boolean = {
     val rfChildren = globalNodes.filter(inst => inst.isInstanceOf[RFNodeRepair] || inst.isInstanceOf[PipelineNodeRFRepair]).filter(_.level < level)
     rfChildren.nonEmpty
-  }
-  //(depth,width,mask)
-  private val RfTable = Seq(
-    (128,   232,  8),
-    (128,   4096, 8),
-    (128,   256,  8),
-    (256,   24,   2),
-    (2048,  4,    2),
-    (256,   24,   4),
-    (128,   50,   1),
-    (128,   100,  2),
-    (64,    236,  1),
-    (64,    512,  1),
-    (32,    548,  2),
-    (128,   1380, 4),
-    (256,   64,   1),
-    (256,   208,  8),
-    (128,   83,   1),
-    (256,   13,   1),
-    (128,   80,   10),
-    (128,   230,  10),
-    (128,   60,   10)
-  )
-  def isRF(depth:Int,width:Int,mask:Int):Boolean = {
-    RfTable.contains((depth,width,mask))
   }
 }

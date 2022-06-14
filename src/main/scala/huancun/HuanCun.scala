@@ -421,6 +421,8 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     val xsl2_ultiscan = if (cacheParams.level == 3) Some(IO(new FSCANInputInterface)) else None
     val hd2prf_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = false))) else None
     val hsuspsr_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = true))) else None
+    val uhdusplr_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = false))) else None
+    val hduspsr_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = true))) else None
     val bisr = if (cacheParams.level == 3) Some(IO(Vec(sliceMbistPipelines.length,new BISRInputInterface))) else None
     val mbist_jtag = if (cacheParams.level == 3) Some(IO(Vec(sliceMbistPipelines.length,new JTAGInterface))) else None
 
@@ -467,12 +469,16 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
           MBISTController.connectRepair(ctrl.repairPort.get,nodes)
           ctrl.mbist.head <> intf.mbist
           ctrl.fscan_ram.head <> intf.fscan_ram
-          ctrl.io.hd2prf_out := DontCare
-          ctrl.io.hsuspsr_out <> intf.fuse
+          ctrl.io.hd2prf_out <> intf.hd2prf_fuse
+          ctrl.io.hsuspsr_out <> intf.hsuspsr_fuse
+          ctrl.io.uhdusplr_out <> intf.uhdusplr_fuse
+          ctrl.io.hduspsr_out <> intf.hduspsr_fuse
           ctrl.io.fscan_clkungate := fscan_clkungate.get
           ctrl.io.clock := clock
           ctrl.io.hd2prf_in := hd2prf_in.get
           ctrl.io.hsuspsr_in := hsuspsr_in.get
+          ctrl.io.uhdusplr_in := uhdusplr_in.get
+          ctrl.io.hduspsr_in := hduspsr_in.get
           ctrl.io.xsx_fscan_in<> xsx_ultiscan.get
           ctrl.io.xsl2_fscan_in <> xsl2_ultiscan.get
           ctrl

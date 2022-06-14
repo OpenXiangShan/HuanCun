@@ -86,7 +86,10 @@ class MBISTInterface(params:Seq[MBISTBusParams],name:String,isSRAM:Boolean,pipel
   val toPipeline = IO(MixedVec(Seq.tabulate(pipelineNum)(idx => Flipped(new MBISTBus(params(idx))))))
   val mbist = IO(new MbitsStandardInterface(myMbistBusParams))
   val fscan_ram = IO(new MbitsFscanInterface)
-  val fuse = IO(new MbitsFuseInterface(isSRAM))
+  val hd2prf_fuse = IO(new MbitsFuseInterface(false))
+  val hsuspsr_fuse = IO(new MbitsFuseInterface(true))
+  val uhdusplr_fuse = IO(new MbitsFuseInterface(true))
+  val hduspsr_fuse = IO(new MbitsFuseInterface(true))
   val extra = IO(Vec(pipelineNum,new MbitsExtraInterface(isSRAM)))
   val clock = IO(Input(Clock()))
 
@@ -120,21 +123,22 @@ class MBISTInterface(params:Seq[MBISTBusParams],name:String,isSRAM:Boolean,pipel
       toPipeline.PWR_MGNT_IN := extra.PWR_MGNT_IN
       toPipeline.OUTPUT_RESET := extra.OUTPUT_RESET
 
+      toPipeline.hd2prf_trim_fuse := hd2prf_fuse.trim_fuse
+      toPipeline.hd2prf_sleep_fuse := hd2prf_fuse.sleep_fuse
+      toPipeline.hsuspsr_trim_fuse := hsuspsr_fuse.trim_fuse
+      toPipeline.hsuspsr_sleep_fuse := hsuspsr_fuse.sleep_fuse
+      toPipeline.uhdusplr_trim_fuse := uhdusplr_fuse.trim_fuse
+      toPipeline.uhdusplr_sleep_fuse := uhdusplr_fuse.sleep_fuse
+      toPipeline.hduspsr_trim_fuse := hduspsr_fuse.trim_fuse
+      toPipeline.hduspsr_sleep_fuse := hduspsr_fuse.sleep_fuse
+
       if(isSRAM){
         toPipeline.mbist_addr_rd := mbist.addr
-        toPipeline.sram_trim_fuse := fuse.trim_fuse
-        toPipeline.sram_sleep_fuse := fuse.sleep_fuse
-        toPipeline.rf_trim_fuse := DontCare
-        toPipeline.rf_sleep_fuse := DontCare
         toPipeline.WRAPPER_RD_CLK_EN := DontCare
         toPipeline.WRAPPER_WR_CLK_EN := DontCare
         toPipeline.WRAPPER_CLK_EN := extra.WRAPPER_CLK_EN
       }else{
         toPipeline.mbist_addr_rd := mbist.addr_rd
-        toPipeline.sram_trim_fuse := DontCare
-        toPipeline.sram_sleep_fuse := DontCare
-        toPipeline.rf_trim_fuse := fuse.trim_fuse
-        toPipeline.rf_sleep_fuse := fuse.sleep_fuse
         toPipeline.WRAPPER_RD_CLK_EN := extra.WRAPPER_RD_CLK_EN
         toPipeline.WRAPPER_WR_CLK_EN := extra.WRAPPER_WR_CLK_EN
         toPipeline.WRAPPER_CLK_EN := DontCare
@@ -244,10 +248,14 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   bd.mbist_outdata         :=  dataOutReg
 
 
-  node.children.foreach(_.bd.sram_trim_fuse := node.bd.sram_trim_fuse)
-  node.children.foreach(_.bd.sram_sleep_fuse := node.bd.sram_sleep_fuse)
-  node.children.foreach(_.bd.rf_trim_fuse := node.bd.rf_trim_fuse)
-  node.children.foreach(_.bd.rf_sleep_fuse := node.bd.rf_sleep_fuse)
+  node.children.foreach(_.bd.hd2prf_trim_fuse := node.bd.hd2prf_trim_fuse)
+  node.children.foreach(_.bd.hd2prf_sleep_fuse := node.bd.hd2prf_sleep_fuse)
+  node.children.foreach(_.bd.hsuspsr_trim_fuse := node.bd.hsuspsr_trim_fuse)
+  node.children.foreach(_.bd.hsuspsr_sleep_fuse := node.bd.hsuspsr_sleep_fuse)
+  node.children.foreach(_.bd.uhdusplr_trim_fuse := node.bd.uhdusplr_trim_fuse)
+  node.children.foreach(_.bd.uhdusplr_sleep_fuse := node.bd.uhdusplr_sleep_fuse)
+  node.children.foreach(_.bd.hduspsr_trim_fuse := node.bd.hduspsr_trim_fuse)
+  node.children.foreach(_.bd.hduspsr_sleep_fuse := node.bd.hduspsr_sleep_fuse)
   node.children.foreach(_.bd.bypsel := node.bd.bypsel)
   node.children.foreach(_.bd.wdis_b := node.bd.wdis_b)
   node.children.foreach(_.bd.rdis_b := node.bd.rdis_b)

@@ -52,8 +52,8 @@ class UltiscanUscanInterface (
   val edt_update = Input(Bool())
   val mode = Input(Bool())
   val scanclk = Input(Bool())
-  val si = Input(UInt((NUM_CHANNELS_IN + 1).W))
-  val so = Output(UInt((NUM_CHANNELS_OUT + 1).W))
+  val si = Input(UInt(NUM_CHANNELS_IN.W))
+  val so = Output(UInt(NUM_CHANNELS_OUT.W))
 }
 
 class UltiscanIO (
@@ -71,8 +71,8 @@ class UltiscanIO (
 
     val byplatrst_b = Output(Bool())
     val byprst_b = Output(Bool())
-    val clkgenctrl = Output(UInt((NUM_CLKGENCTRL + 1).W))
-    val clkgenctrlen = Output(UInt((NUM_CLKGENCTRLEN + 1).W))
+    val clkgenctrl = Output(UInt(NUM_CLKGENCTRL.W))
+    val clkgenctrlen = Output(UInt(NUM_CLKGENCTRLEN.W))
     val clkungate = Output(Bool())
     val clkungate_syn = Output(Bool())
     val rstbypen = Output(Bool())

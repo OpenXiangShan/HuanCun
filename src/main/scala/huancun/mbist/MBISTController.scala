@@ -67,8 +67,12 @@ class MBISTController
     val mbist_ijtag = new JTAGInterface
     val hd2prf_out = Flipped(new MbitsFuseInterface(isSRAM = false))
     val hsuspsr_out = Flipped(new MbitsFuseInterface(isSRAM = true))
+    val uhdusplr_out = Flipped(new MbitsFuseInterface(isSRAM = true))
+    val hduspsr_out = Flipped(new MbitsFuseInterface(isSRAM = true))
     val hd2prf_in = new MbitsFuseInterface(isSRAM = false)
     val hsuspsr_in = new MbitsFuseInterface(isSRAM = true)
+    val uhdusplr_in = new MbitsFuseInterface(isSRAM = true)
+    val hduspsr_in = new MbitsFuseInterface(isSRAM = true)
     val xsx_fscan_in = new FSCANInputInterface
     val xsl2_fscan_in = new FSCANInputInterface
     val fscan_clkungate = Input(Bool())
