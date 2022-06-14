@@ -73,10 +73,6 @@ class SRAMMbistIO(sramType:Int) extends Bundle {
   val PWR_MGNT_IN = Input(UInt((if(sramType != SramType.hd2prf.id) 6 else 5).W))
   val PWR_MGNT_OUT = Output(UInt(1.W))
 }
-class RepairIO(hasRepair:Boolean) extends Bundle{
-  val rowRepair = Input(UInt(if(hasRepair) 26.W else 0.W))
-  val colRepair = Input(UInt(if(hasRepair) 14.W else 0.W))
-}
 
 abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None,sramType:Int,hasRepair:Boolean) extends RawModule {
   val mbist = if (hasMbist) Some(IO(new SRAMMbistIO(sramType))) else None
@@ -84,7 +80,7 @@ abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None,sram
     mbist.get.PWR_MGNT_OUT := DontCare
     dontTouch(mbist.get)
   }
-  val repair = if (hasMbist) Some(IO(new RepairIO(hasRepair))) else None
+  val repair = if (hasMbist && hasRepair) Some(IO(new RepairBundle)) else None
   if (repair.isDefined) {
     dontTouch(repair.get)
   }
@@ -661,17 +657,13 @@ class SRAMTemplate[T <: Data] (
     array.mbist.get.init_val := init_val
     array.mbist.get.clkungate := clkungate
 
-    array.repair.get.colRepair := DontCare
-    array.repair.get.rowRepair := DontCare
-
     array.mbist.get.PWR_MGNT_IN := Cat(PWR_MGNT_IN,PWR_MGNT_IN0.get)
     PWR_MGNT_OUT.get := array.mbist.get.PWR_MGNT_OUT
 
     if (hasRepair) {
       val bd = Wire(new RepairBundle)
       Repair.addRepairNodeToGlobal(bd, parentName)
-      array.repair.get.colRepair <> bd.colRepair
-      array.repair.get.rowRepair <> bd.rowRepair
+      array.repair.get <> bd
       bd := DontCare
       dontTouch(bd)
     }
