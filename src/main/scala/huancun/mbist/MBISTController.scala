@@ -31,7 +31,7 @@ class BISRInputInterface extends Bundle {
   val clock = Input(Bool())
   val reset = Input(Bool())
   val scan_in = Input(Bool())
-  val scan_out = Input(Bool())
+  val scan_out = Output(Bool())
 }
 
 object MBISTController{
