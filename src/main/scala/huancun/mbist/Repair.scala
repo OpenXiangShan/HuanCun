@@ -4,7 +4,7 @@ import chisel3.experimental.IO
 import chisel3.util.experimental.BoringUtils
 class RepairBundle extends Bundle{
   val rowRepair = Input(UInt(26.W))
-  val colRepair = Input(UInt(14.W))
+  val colRepair = Input(UInt(13.W))
 }
 
 class RepairNode(val bd: RepairBundle, val prefix:String){
