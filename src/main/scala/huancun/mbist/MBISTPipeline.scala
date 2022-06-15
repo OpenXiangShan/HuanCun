@@ -79,7 +79,7 @@ class MbitsStandardInterface(val params:MBISTBusParams) extends Bundle{
 }
 
 class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,isSRAM:Boolean,pipelineNum:Int) extends Module{
-  require(params.length > 0)
+  require(params.nonEmpty)
   require(params.length == pipelineNum,s"Error @ ${name}:Params Number and pipelineNum must be the same!")
   val myMbistBusParams = MBIST.inferMBITSBusParamsFromParams(params)
   override val desiredName = name
