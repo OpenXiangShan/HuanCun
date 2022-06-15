@@ -93,19 +93,20 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
   val hduspsr_fuse = IO(new MbitsFuseInterface(true))
   val extra = IO(Vec(pipelineNum,new MbitsExtraInterface(isSRAM)))
 
-  val arrayReg = RegNext(mbist.array)
+  val gate = mbist.all | mbist.req
+  val arrayReg = RegEnable(mbist.array,gate)
   val allReg = RegNext(mbist.all)
   val reqReg = RegNext(mbist.req)
-  val weReg = RegNext(mbist.writeen)
-  val beReg = RegNext(mbist.be)
-  val addrReg = RegNext(mbist.addr)
-  val inDataReg = RegNext(mbist.indata)
-  val reReg = RegNext(mbist.readen)
-  val addrRdReg = RegNext(mbist.addr_rd)
+  val weReg = RegEnable(mbist.writeen,gate)
+  val beReg = RegEnable(mbist.be,gate)
+  val addrReg = RegEnable(mbist.addr,gate)
+  val inDataReg = RegEnable(mbist.indata,gate)
+  val reReg = RegEnable(mbist.readen,gate)
+  val addrRdReg = RegEnable(mbist.addr_rd,gate)
 
   val hit = if(params.length > 1) ids.map(_.map(_.U === arrayReg).reduce(_|_)) else Seq(true.B)
   val outDataVec = toPipeline.map(_.mbist_outdata)
-  mbist.outdata := RegNext(Mux1H(hit,outDataVec))
+  mbist.outdata := RegEnable(Mux1H(hit,outDataVec),gate)
   val ackVec = toPipeline.map(_.mbist_ack)
   mbist.ack := RegNext(Mux1H(hit,ackVec))
 
