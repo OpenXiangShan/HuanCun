@@ -435,6 +435,7 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
           val intfName = f"MBIST_SRAM_L3_Slice_${idx}_intf"
           val intf = Module(new MBISTInterface(
             Seq(dirPl.io.mbist.get.params,bankPl.io.mbist.get.params),
+            Seq(dirPl.node.array_id,bankPl.node.array_id),
             intfName,
             true,
             2

@@ -78,7 +78,8 @@ class MbitsStandardInterface(val params:MBISTBusParams) extends Bundle{
   val outdata = Output(UInt(params.dataWidth.W))
 }
 
-class MBISTInterface(params:Seq[MBISTBusParams],name:String,isSRAM:Boolean,pipelineNum:Int) extends RawModule{
+class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,isSRAM:Boolean,pipelineNum:Int) extends Module{
+  require(params.length > 0)
   require(params.length == pipelineNum,s"Error @ ${name}:Params Number and pipelineNum must be the same!")
   val myMbistBusParams = MBIST.inferMBITSBusParamsFromParams(params)
   override val desiredName = name
@@ -91,26 +92,35 @@ class MBISTInterface(params:Seq[MBISTBusParams],name:String,isSRAM:Boolean,pipel
   val uhdusplr_fuse = IO(new MbitsFuseInterface(true))
   val hduspsr_fuse = IO(new MbitsFuseInterface(true))
   val extra = IO(Vec(pipelineNum,new MbitsExtraInterface(isSRAM)))
-  val clock = IO(Input(Clock()))
 
-  dontTouch(clock)
-  dontTouch(mbist)
+  val arrayReg = RegNext(mbist.array)
+  val allReg = RegNext(mbist.all)
+  val reqReg = RegNext(mbist.req)
+  val weReg = RegNext(mbist.writeen)
+  val beReg = RegNext(mbist.be)
+  val addrReg = RegNext(mbist.addr)
+  val inDataReg = RegNext(mbist.indata)
+  val reReg = RegNext(mbist.readen)
+  val addrRdReg = RegNext(mbist.addr_rd)
 
-  mbist.ack := toPipeline.map(_.mbist_ack).reduce(_|_)
-  mbist.outdata := toPipeline.map(_.mbist_outdata).reduce(_|_)
+  val hit = if(params.length > 1) ids.map(_.map(_.U === arrayReg).reduce(_|_)) else Seq(true.B)
+  val outDataVec = toPipeline.map(_.mbist_outdata)
+  mbist.outdata := RegNext(Mux1H(hit,outDataVec))
+  val ackVec = toPipeline.map(_.mbist_ack)
+  mbist.ack := RegNext(Mux1H(hit,ackVec))
 
   toPipeline.zip(extra).foreach({
     case(toPipeline,extra) =>
-      toPipeline.mbist_array := mbist.array
-      toPipeline.mbist_all := mbist.all
-      toPipeline.mbist_req := mbist.req
+      toPipeline.mbist_array := arrayReg
+      toPipeline.mbist_all := allReg
+      toPipeline.mbist_req := reqReg
 
-      toPipeline.mbist_writeen := mbist.writeen
-      toPipeline.mbist_be := mbist.be
-      toPipeline.mbist_addr := mbist.addr
-      toPipeline.mbist_indata := mbist.indata
+      toPipeline.mbist_writeen := weReg
+      toPipeline.mbist_be := beReg
+      toPipeline.mbist_addr := addrReg
+      toPipeline.mbist_indata := inDataReg
 
-      toPipeline.mbist_readen := mbist.readen
+      toPipeline.mbist_readen := reReg
 
       toPipeline.bypsel := fscan_ram.bypsel
       toPipeline.wdis_b := fscan_ram.wdis_b
@@ -133,12 +143,12 @@ class MBISTInterface(params:Seq[MBISTBusParams],name:String,isSRAM:Boolean,pipel
       toPipeline.hduspsr_sleep_fuse := hduspsr_fuse.sleep_fuse
 
       if(isSRAM){
-        toPipeline.mbist_addr_rd := mbist.addr
+        toPipeline.mbist_addr_rd := addrReg
         toPipeline.WRAPPER_RD_CLK_EN := DontCare
         toPipeline.WRAPPER_WR_CLK_EN := DontCare
         toPipeline.WRAPPER_CLK_EN := extra.WRAPPER_CLK_EN
       }else{
-        toPipeline.mbist_addr_rd := mbist.addr_rd
+        toPipeline.mbist_addr_rd := addrRdReg
         toPipeline.WRAPPER_RD_CLK_EN := extra.WRAPPER_RD_CLK_EN
         toPipeline.WRAPPER_WR_CLK_EN := extra.WRAPPER_WR_CLK_EN
         toPipeline.WRAPPER_CLK_EN := DontCare
@@ -175,7 +185,7 @@ object MBISTPipeline {
         fileHandle.print(p.addrWidth.toString + ",")
         fileHandle.print(p.maskWidth.toString + ",")
         fileHandle.print((if(p.singlePort) "true" else "false")  + ",")
-        fileHandle.print((depth * 2 + 1).toString)
+        fileHandle.print((depth * 2 + 2).toString)
         fileHandle.print("\n")
     })
     fileHandle.close()
@@ -244,7 +254,7 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   val addrRdReg       =   RegEnable(bd.mbist_addr_rd,0.U,activated)
   val dataOut         =   Wire(Vec(node.children.length,UInt(node.bd.params.dataWidth.W)))
   val dataOutSelected =   Wire(UInt(node.bd.params.dataWidth.W))
-  val dataOutReg      =   RegEnable(dataOutSelected,activated)
+  val dataOutReg      =   RegEnable(dataOutSelected,0.U,activated)
   bd.mbist_outdata         :=  dataOutReg
 
 
