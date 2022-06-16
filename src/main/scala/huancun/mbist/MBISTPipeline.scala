@@ -95,8 +95,8 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
 
   val gate = mbist.all | mbist.req
   val arrayReg = RegEnable(mbist.array,gate)
-  val allReg = RegNext(mbist.all)
-  val reqReg = RegNext(mbist.req)
+  val allReg = RegNext(mbist.all,0.U)
+  val reqReg = RegNext(mbist.req,0.U)
   val weReg = RegEnable(mbist.writeen,gate)
   val beReg = RegEnable(mbist.be,gate)
   val addrReg = RegEnable(mbist.addr,gate)
@@ -108,7 +108,7 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
   val outDataVec = toPipeline.map(_.mbist_outdata)
   mbist.outdata := RegEnable(Mux1H(hit,outDataVec),gate)
   val ackVec = toPipeline.map(_.mbist_ack)
-  mbist.ack := RegNext(Mux1H(hit,ackVec))
+  mbist.ack := RegNext(Mux1H(hit,ackVec),0.U)
 
   toPipeline.zip(extra).foreach({
     case(toPipeline,extra) =>
@@ -241,7 +241,7 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   val activatedReg    =   RegNext(activated)
 
   val arrayReg        =   RegEnable(bd.mbist_array,0.U,activated)
-  val reqReg          =   RegNext(bd.mbist_req)
+  val reqReg          =   RegNext(bd.mbist_req,0.U)
   val allReg          =   RegEnable(bd.mbist_all,0.U,activated)
   bd.mbist_ack        :=  reqReg & pipelineNodesAck
   dontTouch(bd.mbist_ack)
