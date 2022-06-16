@@ -67,16 +67,7 @@ trait HasSPPParams extends HasHuanCunParameters {
 }
 
 abstract class SPPModule(implicit p: Parameters) extends PrefetchModule with HasSPPParams 
-{
-  def getBlock(addr: UInt) = addr(fullAddressBits - 1, offsetBits)
-  def getBlockAddr(addr: UInt) = Cat(addr, 0.U(offsetBits.W))
-}
-
 abstract class SPPBundle(implicit p: Parameters) extends PrefetchBundle with HasSPPParams
-{
-  def getBlock(addr: UInt) = addr(fullAddressBits - 1, offsetBits)
-  def getBlockAddr(addr: UInt) = Cat(addr, 0.U(offsetBits.W))
-}
 
 class SignatureTableEntry(implicit p:Parameters) extends SPPBundle {
   val tag = UInt(sigTableTagBits.W)
@@ -242,10 +233,10 @@ class PatternTable(implicit p:Parameters) extends SPPModule {
     val entry = table.read(nextSig)
     val maxWay = Max(entry.deltaCounters, ptEntriesMask.U, deltaCounterBits)
     val delta = Mux1H(maxWay, entry.deltas)
-    val cur_score = score * entry.deltaCounters(PriorityEncoder(maxWay)) / entry.sigCounter
+    val curScore = score * entry.deltaCounters(PriorityEncoder(maxWay)) / entry.sigCounter
     nextSig := updateSignature(nextSig, delta)
     when (entry.sigCounter === 0.U
-        || cur_score < pfThreshold.U
+        || curScore < pfThreshold.U
         || prefetchCounter.value === (prefetchCounter.n-1).U) {
       XSPerfPrint(printFlag, p"Pattern Table -> Lookahead Over\n")
       doPrefetching := false.B
@@ -267,8 +258,8 @@ class SignaturePathPrefetcher(implicit p: Parameters) extends SPPModule {
   val patternTable = Module(new PatternTable())
 
   val train = Reg(new PrefetchTrain)
-  val next_train = Wire(new PrefetchTrain)
-  next_train := train
+  val nextTrain = Wire(new PrefetchTrain)
+  nextTrain := train
 
   signatureTable.io.updateReq.valid := io.train.fire()
   signatureTable.io.updateReq.bits.block := getBlock(io.train.bits.addr)
@@ -278,10 +269,10 @@ class SignaturePathPrefetcher(implicit p: Parameters) extends SPPModule {
 
   val predictDelta = patternTable.io.resp.bits.lookaheadDelta
   val predictAddr = getBlockAddr((getBlock(train.addr).asSInt() + predictDelta).asUInt())
-  next_train.tag := parseFullAddress(predictAddr)._1
-  next_train.set := parseFullAddress(predictAddr)._2
+  nextTrain.tag := parseFullAddress(predictAddr)._1
+  nextTrain.set := parseFullAddress(predictAddr)._2
 
-  train := Mux(io.train.fire(), io.train.bits, next_train)
+  train := Mux(io.train.fire(), io.train.bits, nextTrain)
   
   io.req.valid := patternTable.io.resp.fire()
   io.req.bits.tag := parseFullAddress(predictAddr)._1

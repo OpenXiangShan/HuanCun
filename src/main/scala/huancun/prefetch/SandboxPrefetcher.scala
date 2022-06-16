@@ -50,15 +50,8 @@ trait HasSandboxParams extends HasHuanCunParameters {
   val candidatePrefetcherNWidth = log2Up(offsetList.length)
 }
 
-abstract class SPModule(implicit p: Parameters) extends PrefetchModule with HasSandboxParams {
-  def getBlock(addr: UInt) = addr(fullAddressBits - 1, offsetBits)
-  def getBlockAddr(addr: UInt) = Cat(addr, 0.U(offsetBits.W))
-}
-
-abstract class SPBundle(implicit p: Parameters) extends PrefetchBundle with HasSandboxParams {
-  def getBlock(addr: UInt) = addr(fullAddressBits - 1, offsetBits)
-  def getBlockAddr(addr: UInt) = Cat(addr, 0.U(offsetBits.W))
-}
+abstract class SPModule(implicit p: Parameters) extends PrefetchModule with HasSandboxParams
+abstract class SPBundle(implicit p: Parameters) extends PrefetchBundle with HasSandboxParams
 
 class BloomFilterBundle(implicit p: Parameters) extends SPBundle {
   val update: Bool = Input(Bool())
@@ -166,7 +159,7 @@ class SandboxPrefetcher(implicit p: Parameters) extends SPModule {
   XSPerfPrint(printFlag, p"SP -> [Training] S0, Current offset:${curOffset}, accuracy:${curAccuracy}, new accuracy:${newAccuracy}\n")
 
   // training finish for all the candidates
-  val s1_update_offsets_list = RegInit(false.B)
+  val s1UpdateOffsetsList = RegInit(false.B)
 
   when(RegNext(roundRobinCount.value) =/= (roundRobinCount.n-1).U && roundRobinCount.value === (roundRobinCount.n-1).U) {
     readyToPrefetch1(currentCandidate.value) := newAccuracy >= threshold1.U
@@ -181,7 +174,7 @@ class SandboxPrefetcher(implicit p: Parameters) extends SPModule {
     // one round for all offsets finished
     when (currentCandidate.value === (currentCandidate.n - 1).U) {
       mask := VecInit(Seq.fill(offsetList.length) {true.B})
-      s1_update_offsets_list := true.B
+      s1UpdateOffsetsList := true.B
     }
 
     bloomFilter.io.reset  := true.B
@@ -191,7 +184,7 @@ class SandboxPrefetcher(implicit p: Parameters) extends SPModule {
   }
 
   // XSDebug(p"***************************Start Updating Offsets****************************\n")
-  when (s1_update_offsets_list) {
+  when (s1UpdateOffsetsList) {
     val minFlags = Min(histAccuracies, mask.asUInt(), accuracyCounterWidth)
     val updateIndex = PriorityEncoder(minFlags)
     val replaceIndex = Random(unusedOffsets.length)
@@ -202,7 +195,7 @@ class SandboxPrefetcher(implicit p: Parameters) extends SPModule {
 
     offsetUpdateStages.inc()
     when (offsetUpdateStages.value === (offsetUpdateStages.n - 1).U) {
-      s1_update_offsets_list := false.B
+      s1UpdateOffsetsList := false.B
     }
     when (updateIndex === currentCandidate.value) {
       curAccuracy := 0.U;

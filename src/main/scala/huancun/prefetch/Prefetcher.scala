@@ -130,6 +130,16 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       pftQueue.io.enq <> pft.io.req
       pipe.io.in <> pftQueue.io.deq
       io.req <> pipe.io.out
+    case matryoshka: MatryoshkaParameters =>
+      val pft = Module(new Matryoshka)
+      val pftQueue = Module(new PrefetchQueue)
+      val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
+      pft.io.train <> io.train
+      pft.io.resp <> io.resp
+      pft.io.evict <> io.evict
+      pftQueue.io.enq <> pft.io.req
+      pipe.io.in <> pftQueue.io.deq
+      io.req <> pipe.io.out
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }

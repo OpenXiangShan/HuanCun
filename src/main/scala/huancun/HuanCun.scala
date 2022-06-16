@@ -153,6 +153,10 @@ trait HasHuanCunParameters {
     (UIntToOH1(size, log2Up(blockBytes)) >> log2Ceil(beatBytes)).asUInt()
   }
 
+  // zeal4u
+  def getBlock(addr: UInt) = addr(fullAddressBits - 1, offsetBits)
+  // zeal4u
+  def getBlockAddr(addr: UInt) = Cat(addr, 0.U(offsetBits.W))
 }
 
 trait DontCareInnerLogic { this: Module =>

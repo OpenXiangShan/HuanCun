@@ -19,7 +19,7 @@ class ExampleSystem(nBanks: Int = 1, l1dReq: Int = 0, l1iReq: Int = 0, ptwReq: I
     *  ram <=
     *         xbar <= l2 bank1 <= { l1d_bank1, l1i_bank1 }
     */
-  val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
+  val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffffL), beatBytes = 32))
   ram.node :=
     TLXbar() :=*
       BankBinder(nBanks, l2.cacheParams.blockBytes) :=*
