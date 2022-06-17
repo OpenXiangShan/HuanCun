@@ -326,9 +326,11 @@ class DeltaSequenceTable(implicit p:Parameters) extends MatryoshkaModule {
     predictDelta := candArbiter.io.out.bits
     io.targetDelta.valid := candArbiter.io.out.fire
     io.targetDelta.bits := candArbiter.io.out.bits
-    XSPerfPrint(printFlag, p"DSS -> Lookhead, Predict Delta:${predictDelta}, Final Score:${finalScores(candArbiter.io.chosen)}\n")
-    XSPerfPrint(printFlag, p"DSS -> Lookhead, Long Hit:${longHitsS2}\n")
-    XSPerfPrint(printFlag, p"DSS -> Lookhead, Short Hit:${shortHitsS2}\n")
+    XSPerfPrint(printFlag, p"DSS -> Lookahead, Candidate Deltas:${targetDeltasS2}\n")
+    XSPerfPrint(printFlag, p"DSS -> Lookahead, Final Scores:${finalScores}\n")
+    XSPerfPrint(printFlag, p"DSS -> Lookahead, Predict Delta:${predictDelta}, Final Score:${finalScores(candArbiter.io.chosen)}\n")
+    XSPerfPrint(printFlag, p"DSS -> Lookahead, Long Hit:${longHitsS2}\n")
+    XSPerfPrint(printFlag, p"DSS -> Lookahead, Short Hit:${shortHitsS2}\n")
   }
 
   prefetchSeq := Mux(io.reqHT.fire, io.reqHT.bits.deltaSeq, Cat(prefetchSeq(deltaBits*2-1, 0), predictDelta))
