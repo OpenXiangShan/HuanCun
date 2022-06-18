@@ -4,8 +4,22 @@ import chisel3._
 import chisel3.util.experimental.BoringUtils
 import huancun.HCCacheParameters
 
-object XSPerfAccumulate {
+trait HasRegularPerfName {
+  def judgeName(perfName: String) = {
+    val regular = """(\w+)""".r
+    perfName match {
+      case regular(_) => true
+      case _ => {
+        println("PerfName " + perfName + " is not '\\w+' regular")
+        require(false)
+      }
+    }
+  }
+}
+
+object XSPerfAccumulate extends HasRegularPerfName {
   def apply(params: HCCacheParameters, perfName: String, perfCnt: UInt) = {
+    judgeName(perfName)
     if (params.enablePerf) {
       val logTimestamp = WireInit(0.U(64.W))
       val perfClean = WireInit(false.B)
@@ -25,7 +39,7 @@ object XSPerfAccumulate {
   }
 }
 
-object XSPerfHistogram {
+object XSPerfHistogram extends HasRegularPerfName {
   // instead of simply accumulating counters
   // this function draws a histogram
   def apply(
@@ -37,6 +51,7 @@ object XSPerfHistogram {
     stop:     Int,
     step:     Int
   ) = {
+    judgeName(perfName)
     if (params.enablePerf) {
       val logTimestamp = WireInit(0.U(64.W))
       val perfClean = WireInit(false.B)
@@ -77,8 +92,9 @@ object XSPerfHistogram {
   }
 }
 
-object XSPerfMax {
+object XSPerfMax extends HasRegularPerfName {
   def apply(params: HCCacheParameters, perfName: String, perfCnt: UInt, enable: Bool) = {
+    judgeName(perfName)
     if (params.enablePerf) {
       val logTimestamp = WireInit(0.U(64.W))
       val perfClean = WireInit(false.B)
