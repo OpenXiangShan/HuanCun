@@ -2,12 +2,11 @@ package huancun.debug
 
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
-import chisel3.experimental.StringParam
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.BundleMap
-import huancun.utils.GTimer
+import huancun.utils.ChiselDB
 
 trait HasCLikeTypes {
   // c++ firendly data types
@@ -26,78 +25,13 @@ class TLLog extends Bundle with HasCLikeTypes {
   val sink = uint8_t
   val address = uint64_t
   val data = Vec(4, uint64_t)
-  val stamp = uint64_t
   val user = uint64_t
   val echo = uint64_t
 }
 
-class TLLogWriter(prefix: String) extends BlackBox(Map("prefix" -> StringParam(prefix))) with HasBlackBoxInline {
-  val io = IO(Input(new TLLog {
-    val wen = Bool()
-    val clock = Clock()
-    val reset = Reset()
-  })).suggestName("io")
-
-  // when integrate into other project as a submodule,
-  // the path of 'resource' can't be found
-  // so we have to inline the verilog file
-
-  val verilog =
-    """
-      |import "DPI-C" function void tl_log_write_helper
-      |(
-      |    input byte channel,
-      |    input byte opcode,
-      |    input byte param,
-      |    input byte source,
-      |    input byte sink,
-      |    input longint address,
-      |    input longint data_0,
-      |    input longint data_1,
-      |    input longint data_2,
-      |    input longint data_3,
-      |    input longint stamp,
-      |    input longint user,
-      |    input longint echo,
-      |    input string prefix
-      |);
-      |
-      |module TLLogWriter #(
-      |    parameter string prefix
-      |)
-      |(
-      |    input [7:0] channel,
-      |    input [7:0] opcode,
-      |    input [7:0] param,
-      |    input [7:0] source,
-      |    input [7:0] sink,
-      |    input [63:0] address,
-      |    input [63:0] data_0,
-      |    input [63:0] data_1,
-      |    input [63:0] data_2,
-      |    input [63:0] data_3,
-      |    input [63:0] stamp,
-      |    input [63:0] user,
-      |    input [63:0] echo,
-      |    input wen,
-      |    input clock,
-      |    input reset
-      |);
-      |
-      |    always @(posedge clock) begin
-      |        if(wen && !reset) begin
-      |            tl_log_write_helper(
-      |                channel, opcode, param, source, sink,
-      |                address, data_0, data_1, data_2, data_3, stamp, user, echo, prefix
-      |            );
-      |        end
-      |    end
-      |
-      |endmodule
-      |""".stripMargin
-
-  setInline("TLLogWriter.v", verilog)
-
+class TLLogWriter(prefix: String) extends Module {
+  val io = IO(Flipped(ValidIO(new TLLog)))
+  TLLogger.table.log(io, prefix, this.clock, this.reset)
 }
 
 class TLLogger(name: String)(implicit p: Parameters) extends LazyModule {
@@ -121,7 +55,9 @@ object TLLogger {
   def d = 3.U
   def e = 4.U // not used
 
-  def writeChannel[T <: TLChannel](log: TLLog, chn: T, stamp: UInt): Unit = {
+  val table = ChiselDB.createTable("TLLog", new TLLog)
+
+  def writeChannel[T <: TLChannel](log: TLLog, chn: T): Unit = {
     for ((name, data) <- log.elements.filterNot(_._1 == "data")) {
       val e = chn.elements.find(_._1 == name)
       if (e.nonEmpty) {
@@ -155,24 +91,23 @@ object TLLogger {
         log.user := bmp_to_uint(d_chn.user)
         log.echo := bmp_to_uint(d_chn.echo)
     }
-    log.stamp := stamp
   }
 
-  def logA(log: TLLog, a: TLBundleA, stamp: UInt) = {
-    writeChannel(log, a, stamp)
+  def logA(log: TLLog, a: TLBundleA) = {
+    writeChannel(log, a)
   }
 
-  def logB(log: TLLog, b: TLBundleB, stamp: UInt) = {
-    writeChannel(log, b, stamp)
+  def logB(log: TLLog, b: TLBundleB) = {
+    writeChannel(log, b)
   }
 
-  def logC(log: TLLog, c: TLBundleC, stamp: UInt) = {
-    writeChannel(log, c, stamp)
+  def logC(log: TLLog, c: TLBundleC) = {
+    writeChannel(log, c)
     log.data := c.data.asTypeOf(log.data)
   }
 
-  def logD(log: TLLog, d: TLBundleD, stamp: UInt, addr: UInt) = {
-    writeChannel(log, d, stamp)
+  def logD(log: TLLog, d: TLBundleD, addr: UInt) = {
+    writeChannel(log, d)
     log.address := addr
     log.data := d.data.asTypeOf(log.data)
   }
@@ -186,22 +121,18 @@ object TLLogger {
     val c_d_addrs = Reg(Vec(numClients, UInt(edge.bundle.addressBits.W)))
     val a_log, b_log, c_log, d_log = WireInit(0.U.asTypeOf(new TLLog))
     val a_writer, b_writer, c_writer, d_writer = Module(new TLLogWriter(name))
-    val timer = GTimer()
 
     def connect(writer: TLLogWriter, log: TLLog, wen: Bool) = {
-      writer.io.channel := log.channel
-      writer.io.opcode := log.opcode
-      writer.io.param := log.param
-      writer.io.source := log.source
-      writer.io.sink := log.sink
-      writer.io.address := log.address
-      writer.io.data := log.data
-      writer.io.stamp := log.stamp
-      writer.io.user := log.user
-      writer.io.echo := log.echo
-      writer.io.wen := wen
-      writer.io.clock := clock
-      writer.io.reset := reset
+      writer.io.bits.channel := log.channel
+      writer.io.bits.opcode := log.opcode
+      writer.io.bits.param := log.param
+      writer.io.bits.source := log.source
+      writer.io.bits.sink := log.sink
+      writer.io.bits.address := log.address
+      writer.io.bits.data := log.data
+      writer.io.bits.user := log.user
+      writer.io.bits.echo := log.echo
+      writer.io.valid := wen
     }
 
     connect(a_writer, a_log, in.a.fire())
@@ -210,16 +141,16 @@ object TLLogger {
     connect(d_writer, d_log, in.d.fire())
 
     when(in.a.fire()) {
-      logA(a_log, in.a.bits, timer)
+      logA(a_log, in.a.bits)
       a_d_addrs(in.a.bits.source) := in.a.bits.address
     }
 
     when(in.b.fire()) {
-      logB(b_log, in.b.bits, timer)
+      logB(b_log, in.b.bits)
     }
 
     when(in.c.fire()) {
-      logC(c_log, in.c.bits, timer)
+      logC(c_log, in.c.bits)
       c_d_addrs(in.c.bits.source) := in.c.bits.address
     }
 
@@ -227,7 +158,7 @@ object TLLogger {
       val a_d = a_d_addrs(in.d.bits.source)
       val c_d = c_d_addrs(in.d.bits.source)
       val addr = Mux(in.d.bits.opcode === TLMessages.ReleaseAck, c_d, a_d)
-      logD(d_log, in.d.bits, timer, addr)
+      logD(d_log, in.d.bits, addr)
     }
 
   }
