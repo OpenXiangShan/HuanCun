@@ -6,7 +6,6 @@ import chisel3.util._
 import freechips.rocketchip.tilelink.TLMessages
 import huancun.MetaData._
 import huancun._
-import huancun.debug.{DirectoryLogger, TypeId}
 import huancun.utils._
 
 trait HasClientInfo { this: HasHuanCunParameters =>
@@ -123,51 +122,6 @@ class Directory(implicit p: Parameters)
 
   val stamp = GTimer()
   val selfDirW = io.dirWReq
-  // dump self dir
-  DirectoryLogger(cacheParams.name, TypeId.self_dir)(
-    selfDirW.bits.set,
-    selfDirW.bits.way,
-    0.U,
-    selfDirW.bits.data,
-    stamp,
-    selfDirW.fire(),
-    this.clock,
-    this.reset
-  )
-  // dump self tag
-  DirectoryLogger(cacheParams.name, TypeId.self_tag)(
-    io.tagWReq.bits.set,
-    io.tagWReq.bits.way,
-    io.tagWReq.bits.tag,
-    0.U,
-    stamp,
-    io.tagWReq.fire(),
-    this.clock,
-    this.reset
-  )
-
-  // dump client dir
-  DirectoryLogger(cacheParams.name, TypeId.client_dir)(
-    io.clientDirWReq.bits.set,
-    io.clientDirWReq.bits.way,
-    0.U,
-    io.clientDirWReq.bits.data,
-    stamp,
-    io.clientDirWReq.fire(),
-    this.clock,
-    this.reset
-  )
-  // dump client tag
-  DirectoryLogger(cacheParams.name, TypeId.client_tag)(
-    io.clientTagWreq.bits.set,
-    io.clientTagWreq.bits.way,
-    io.clientTagWreq.bits.tag,
-    0.U,
-    stamp,
-    io.clientTagWreq.fire(),
-    this.clock,
-    this.reset
-  )
 
   def clientHitFn(dir: ClientDirEntry): Bool = dir.state =/= MetaData.INVALID
   def client_invalid_way_fn(metaVec: Seq[Vec[ClientDirEntry]], repl: UInt): (Bool, UInt) = {
