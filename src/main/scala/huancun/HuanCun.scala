@@ -406,12 +406,10 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     }
 
     /** **************************************Under L2 configuration*******************************************************/
-    val mbist_sram = if (cacheParams.level == 2) Some(IO(sliceMbistPipelines.head._1.get.io.mbist.get.cloneType)) else None
-    val mbist_rf = if (cacheParams.level == 2) Some(IO(sliceMbistPipelines.head._2.get.io.mbist.get.cloneType)) else None
-    if (cacheParams.level == 2) {
-      sliceMbistPipelines.head._1.get.io.mbist.get <> mbist_sram.get
-      sliceMbistPipelines.head._2.get.io.mbist.get <> mbist_rf.get
-    }
+    val mbist_sram = if (cacheParams.level == 2 && sliceMbistPipelines.head._1.isDefined) Some(IO(sliceMbistPipelines.head._1.get.io.mbist.get.cloneType)) else None
+    val mbist_rf = if (cacheParams.level == 2 && sliceMbistPipelines.head._2.isDefined) Some(IO(sliceMbistPipelines.head._2.get.io.mbist.get.cloneType)) else None
+    if(mbist_sram.isDefined) sliceMbistPipelines.head._1.get.io.mbist.get <> mbist_sram.get
+    if(mbist_rf.isDefined) sliceMbistPipelines.head._2.get.io.mbist.get <> mbist_rf.get
 
     /** **************************************Under L3 configuration*******************************************************/
 
