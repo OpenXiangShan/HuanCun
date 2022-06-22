@@ -228,7 +228,7 @@ class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
 }
 
 object SRAMArray {
-  private val instances = ListBuffer.empty[(Boolean, Int, Int, Int, Boolean)]
+  private val instances = ListBuffer.empty[(Boolean, Int, Int, Int, Boolean, Boolean, Boolean)]
 
   def apply(clock: Clock, singlePort: Boolean, depth: Int, width: Int,
             maskSegments: Int = 1,
@@ -238,7 +238,7 @@ object SRAMArray {
             sramType:Int,
             hasRepair:Boolean
            ): (SRAMArray,String) = {
-    val sram_key = (singlePort, depth, width, maskSegments, hasMbist)
+    val sram_key = (singlePort, depth, width, maskSegments, MCP, hasMbist, hasRepair)
     if (!instances.contains(sram_key)) {
       instances += sram_key
     }
