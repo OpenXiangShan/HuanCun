@@ -112,7 +112,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val isProbeAckDataReg = RegEnable(isProbeAckData, io.c.fire())
   val resp_way = Mux(io.c.valid, io.way, RegEnable(io.way, io.c.fire()))
   val resp_set = Mux(io.c.valid, set, RegEnable(set, io.c.fire()))
-  val resp_w_valid = (io.c.valid && can_recv_resp && isProbeAckData) || (!first && isProbeAckDataReg) // ProbeAckData
+  val resp_w_valid = (io.c.valid && !do_release && isProbeAckData) || (!first && isProbeAckDataReg) // ProbeAckData
   val req_w_valid =
     (io.task.fire() && io.task.bits.save) || (busy_r && task_r.save)
 

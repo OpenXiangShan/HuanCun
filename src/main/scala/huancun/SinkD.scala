@@ -32,7 +32,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val bypass_write = Flipped(new SinkDBufferWrite)
     val way = Input(UInt(wayBits.W))
     val set = Input(UInt(setBits.W))
-    val inner_grant = Input(Bool())
+    val inner_grant = Input(Bool())  // sourceD will use bypass data
     val save_data_in_bs = Input(Bool())
     val resp = ValidIO(new SinkDResp)
     val sourceD_r_hazard = Flipped(ValidIO(new SourceDHazard))
@@ -64,7 +64,8 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.resp.bits.bufIdx := io.bypass_write.id
 
   // Save data to Datastorage
-  io.bs_waddr.valid := io.d.valid && bs_ready
+  io.bs_waddr.valid := (io.d.valid && needData && w_safe || !first) && cache &&
+    (bypass_ready || !io.inner_grant)
   io.bs_waddr.bits.way := io.way
   io.bs_waddr.bits.set := io.set
   io.bs_waddr.bits.beat := Mux(io.d.valid, beat, RegEnable(beat + io.bs_waddr.ready.asUInt(), io.d.valid))
