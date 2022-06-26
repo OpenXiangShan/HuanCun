@@ -19,6 +19,7 @@ class DirectoryEntry(implicit p: Parameters) extends HuanCunBundle {
   val dirty = Bool()
   val state = UInt(stateBits.W)
   val clients = UInt(clientBits.W)
+  val aliasVec = aliasBitsOpt.map(w => Vec(clientBits, UInt(w.W)))
   val prefetch = if (hasPrefetchBit) Some(Bool()) else None // whether the block is prefetched
 }
 
@@ -63,6 +64,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
         val init = Wire(new DirectoryEntry())
         init := DontCare
         init.state := MetaData.INVALID
+        init.aliasVec.foreach(_ := DontCare)
         init
       },
       dir_hit_fn = x => x.state =/= MetaData.INVALID,
@@ -90,6 +92,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
   resp.bits.dirty := selfResp.bits.dir.dirty
   resp.bits.state := selfResp.bits.dir.state
   resp.bits.clients := selfResp.bits.dir.clients
+  resp.bits.aliasVec.foreach(_ := selfResp.bits.dir.aliasVec.get)
   resp.bits.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
   resp.bits.error := selfResp.bits.error
   // Self Tag Write

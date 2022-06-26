@@ -68,11 +68,17 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   val req_promoteT = req_acquire && Mux(meta.hit, meta_no_client && meta.state === TIP, gotT)
   val req_realBtoT = meta.hit && (meta.clients & getClientBitOH(req.source)).orR
   val prefetch_miss = hintMiss(meta.state, req.param)
+  val iam = Reg(UInt(log2Up(clientBits).W)) // Which client does this req come from?
+  val alias_mismatch = if (meta.aliasVec.isEmpty) false.B else meta.aliasVec.get(iam) =/= req.alias.get
+  val cache_alias = !req.isPrefetch.getOrElse(false.B) && req_acquire && meta.clients(iam) && alias_mismatch
+  when(io.dirResult.valid && cache_alias) {
+    assert(meta.clients(iam), "id: %d", io.id)
+  }
   val probes_toN = RegInit(0.U(clientBits.W))
   val probes_done = RegInit(0.U(clientBits.W))
   val probe_exclude =
     Mux(
-      req.fromA && meta.hit && skipProbeN(req.opcode),
+      req.fromA && meta.hit && skipProbeN(req.opcode) && !cache_alias,
       getClientBitOH(req.source),
       0.U
     ) // Client acquiring the block does not need to be probed
@@ -125,11 +131,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
       0.U
     )
     new_meta.hit := true.B
+    when(req_acquire) {
+      new_meta.aliasVec.foreach(_ (iam) := req.alias.get)
+    }
   }
   val new_dir = Wire(new DirectoryEntry)
   new_dir.dirty := new_meta.dirty
   new_dir.state := new_meta.state
   new_dir.clients := new_meta.clients
+  new_dir.aliasVec.foreach(_ := new_meta.aliasVec.get)
   new_dir.prefetch.foreach(_ := prefetch_miss && req.opcode === Hint || meta.prefetch.get)
 
   val sink = Reg(UInt(edgeOut.bundle.sinkBits.W))
@@ -291,6 +301,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
       }
       // need pprobe
       when(
+        cache_alias ||
         meta.hit && (req_needT || meta.state === TRUNK) && req.opcode =/= Hint &&
           (
             meta.clients & (~Mux(skipProbeN(req.opcode), getClientBitOH(req.source), 0.U)).asUInt()
@@ -381,7 +392,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
 
   ob.tag := Mux(!s_rprobe, meta.tag, req.tag)
   ob.set := req.set
-  ob.param := Mux(!s_rprobe, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
+  ob.alias.foreach(a => a := meta.aliasVec.get)
+  ob.param := Mux(!s_rprobe || cache_alias, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
   ob.clients := meta.clients & ~probe_exclude // TODO: Provides all clients needing probe
 
   oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), meta.dirty.asUInt))
@@ -576,6 +588,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   when(io.alloc.valid) {
     req_valid := true.B
     req := io.alloc.bits
+    iam := OHToUInt(getClientBitOH(io.alloc.bits.source))
   }
   // Status
   io.status.valid := req_valid
