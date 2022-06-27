@@ -84,7 +84,7 @@ class LatchFastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen
     case (rdy, grant) => rdy := grant && out_valid_reg && io.out.ready
   }
 
-  io.out.valid := out_valid_reg
+  io.out.valid := out_valid_reg && valids(OHToUInt(chosen_reg))
   io.out.bits <> out_bits_reg
   io.chosen := OHToUInt(chosen_reg)
 }
