@@ -26,7 +26,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.leftOR
 import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
 import huancun.prefetch._
-import huancun.utils.{FastArbiter, Pipeline}
+import huancun.utils.{FastArbiter, LatchFastArbiter, Pipeline}
 
 class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
@@ -418,13 +418,13 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
     Pipeline.pipeTo(directory.io.dirWReq),
     add_ctrl(ms.map(_.io.tasks.dir_write), ctrl.map(_.io.s_dir_w))
   )
-  arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
-  arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
-  arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
-  arbTasks(sourceD.io.task, ms.map(_.io.tasks.source_d), Some("sourceD"))
-  arbTasks(sourceE.io.task, ms.map(_.io.tasks.source_e), Some("sourceE"))
-  arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"))
-  arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"))
+  arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"), latch=true)
+  arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"), latch=true)
+  arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"), latch=true)
+  arbTasks(sourceD.io.task, ms.map(_.io.tasks.source_d), Some("sourceD"), latch=true)
+  arbTasks(sourceE.io.task, ms.map(_.io.tasks.source_e), Some("sourceE"), latch=true)
+  arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"), latch=true)
+  arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"), latch=true)
   arbTasks(
     Pipeline.pipeTo(directory.io.tagWReq),
     add_ctrl(ms.map(_.io.tasks.tag_write), ctrl.map(_.io.s_tag_w)),
@@ -456,14 +456,16 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
     out:    DecoupledIO[T],
     in:     Seq[DecoupledIO[T]],
     name:   Option[String] = None,
-    strict: Boolean = false
+    strict: Boolean = false,
+    latch:  Boolean = false
   ) = {
     require(!strict || in.size == mshrsAll)
     if (in.size == mshrsAll) {
       val abc = in.init.init
       val bc = in.init.last
       val c = in.last
-      val arbiter = Module(new FastArbiter[T](chiselTypeOf(out.bits), abc.size))
+      val arbiter = Module(if (latch) new LatchFastArbiter[T](chiselTypeOf(out.bits), abc.size) 
+                           else new FastArbiter[T](chiselTypeOf(out.bits), abc.size))
       if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
       for ((arb, req) <- arbiter.io.in.zip(abc)) {
         arb <> req
