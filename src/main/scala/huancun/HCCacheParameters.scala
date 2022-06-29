@@ -34,6 +34,7 @@ case class CacheParameters
   name: String,
   sets: Int,
   ways: Int,
+  blockGranularity: Int,
   blockBytes: Int = 64,
   aliasBitsOpt: Option[Int] = None,
   inner: Seq[CacheParameters] = Nil
@@ -147,6 +148,7 @@ case class HCCacheParameters
     name = name,
     sets = sets,
     ways = ways,
+    blockGranularity = log2Ceil(sets),
     blockBytes = blockBytes,
     inner = clientCaches
   )

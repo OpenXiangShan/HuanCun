@@ -100,7 +100,7 @@ trait HasHuanCunParameters {
   lazy val outerSinkBits = edgeOut.bundle.sinkBits
 
   val block_granularity = if (!cacheParams.inclusive && cacheParams.clientCaches.nonEmpty) {
-    log2Ceil(cacheParams.clientCaches.head.sets)
+    cacheParams.clientCaches.head.blockGranularity
   } else setBits
 
   def getClientBitOH(sourceId: UInt): UInt = {
@@ -256,7 +256,7 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
       println(s"[client] size:${sizeBytesToStr(clientParam.capacity.toDouble)}")
       println(s"[client] sets:${clientParam.sets} ways:${clientParam.ways} blockBytes:${clientParam.blockBytes}")
     }
-
+    println(s"blockGranularityBits: ${block_granularity}")
     def print_bundle_fields(fs: Seq[BundleFieldBase], prefix: String) = {
       if (fs.nonEmpty) {
         println(fs.map { f => s"$prefix/${f.key.name}: (${f.data.getWidth}-bit)" }.mkString("\n"))

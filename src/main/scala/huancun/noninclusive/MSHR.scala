@@ -107,7 +107,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val cache_alias = !req.isPrefetch.getOrElse(false.B) && client_hit_flag && req_acquire &&
     req_client_meta.alias.getOrElse(0.U) =/= req.alias.getOrElse(0.U)
   val highest_perm = ParallelMax(
-    Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
+    Seq(Mux(self_meta.hit && !io_probeAckDataThrough, self_meta.state, INVALID)) ++
       clients_meta.map(m => Mux(m.hit, m.state, INVALID))
   ) // the highest perm of this whole level, including self and clients
   val highest_perm_reg = Hold(highest_perm, l2Only = false)
@@ -282,7 +282,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         BRANCH    ->    BRANCH
       --------------------------
     */
-    new_self_meta.dirty := self_meta.hit && self_meta.dirty || probe_dirty
+    new_self_meta.dirty := req.fromProbeHelper && !probeAckDataThrough && (self_meta.hit && self_meta.dirty || probe_dirty)
     new_self_meta.state := Mux(self_meta.hit,
       Mux(req.fromProbeHelper && !probeAckDataThrough,
         Mux(isT(self_meta.state), TIP, BRANCH),
@@ -314,7 +314,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       ),
       Mux(req_put,
         true.B,  // Put
-        gotDirty || probe_dirty, // Hint & Get
+        gotDirty || probe_dirty || (self_meta.hit && self_meta.dirty), // Hint & Get
       )
     )
     new_self_meta.state := Mux(
@@ -850,7 +850,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }.elsewhen(req.fromB) {
         b_schedule()
       }.otherwise {
-        a_schedule()
+        when (!(req.opcode === Hint && clients_hit)) {
+          a_schedule()
+        }
       }
     })
   }
@@ -1324,8 +1326,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         s_grantack := false.B
       }
       need_block_downwards := true.B
-      // we assume clients will ack data for us at first,
-      // if they only ack perm, we should change our schedule
+    }
+
+    // we assume clients will ack data for us at first,
+    // if they only ack perm, we should change our schedule
+    when (
+      req.fromA && probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit
+    ) {
       when(!(preferCache || self_meta.hit)) {
         // if we don't save grant data, we should not write tag
         s_wbselftag := true.B
@@ -1424,7 +1431,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // C nest A (C -> A)
   io_is_nestedReleaseData := req.fromC && req_valid
   // B nest A (B -> A)
-  io_is_nestedProbeAckData := req.fromB && clients_hit && req_valid
+  io_is_nestedProbeAckData := req.fromB /*&& clients_hit*/ && req_valid
   io_probeHelperFinish := req.fromB && req.fromProbeHelper && no_schedule && no_wait
 
   // C nest A/B (A/B -> C)
