@@ -64,7 +64,8 @@ object ParallelXOR {
 
 object ParallelMux {
   def apply[T <: Data](in: Seq[(Bool, T)]): T = {
-    val xs = in.map { case (cond, x) => (Fill(x.getWidth, cond) & x.asUInt()).asTypeOf(in.head._2) }
+//    val xs = in.map { case (cond, x) => (Fill(x.getWidth, cond) & x.asUInt()).asTypeOf(in.head._2) }
+    val xs = in.map {case (cond, x) => Mux(cond,x,0.U.asTypeOf(in.head._2))}
     ParallelOR(xs)
   }
 }

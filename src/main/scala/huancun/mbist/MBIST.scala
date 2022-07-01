@@ -20,11 +20,11 @@ object MBIST {
   (
     val bd: RAM2MBIST,
     val prefix: String,
-    val id:Int
+    val ids:Seq[Int]
   ) extends BaseNode {
     override val level: Int = 0
-    override val array_id = Seq(id)
-    override val array_depth = Seq(0)
+    override val array_id = ids
+    override val array_depth = Seq.fill(ids.length)(0)
   }
   sealed class PipelineBaseNode
   (
@@ -39,14 +39,14 @@ object MBIST {
     require(level > 0)
   }
 
-  sealed class SRAMNode(bd: RAM2MBIST, prefix: String, id:Int)
-    extends RAMBaseNode(bd, prefix, id)
-  sealed class RFNode(bd: RAM2MBIST, prefix: String, id:Int)
-    extends RAMBaseNode(bd, prefix, id)
-  sealed class SRAMNodeRepair(bd: RAM2MBIST, prefix: String, id:Int)
-    extends RAMBaseNode(bd, prefix, id)
-  sealed class RFNodeRepair(bd: RAM2MBIST, prefix: String, id:Int)
-    extends RAMBaseNode(bd, prefix, id)
+  sealed class SRAMNode(bd: RAM2MBIST, prefix: String, ids:Seq[Int])
+    extends RAMBaseNode(bd, prefix, ids)
+  sealed class RFNode(bd: RAM2MBIST, prefix: String, ids:Seq[Int])
+    extends RAMBaseNode(bd, prefix, ids)
+  sealed class SRAMNodeRepair(bd: RAM2MBIST, prefix: String, ids:Seq[Int])
+    extends RAMBaseNode(bd, prefix, ids)
+  sealed class RFNodeRepair(bd: RAM2MBIST, prefix: String, ids:Seq[Int])
+    extends RAMBaseNode(bd, prefix, ids)
 
   sealed class PipelineNodeSRAM(bd: MBISTBus, prefix: String, level: Int, array_id:Seq[Int], array_depth: Seq[Int])
     extends PipelineBaseNode(bd, prefix, level, array_id, array_depth)
@@ -84,12 +84,12 @@ object MBIST {
       sramType = children.head.bd.sramType
     )
 
-  def addRamNode(bd: RAM2MBIST, prefix: String, id:Int, isSRAM:Boolean, isRepair:Boolean): RAMBaseNode = {
+  def addRamNode(bd: RAM2MBIST, prefix: String, ids:Seq[Int], isSRAM:Boolean, isRepair:Boolean): RAMBaseNode = {
     val node = (isSRAM,isRepair) match {
-      case(false,false) => new RFNode (bd, prefix, id)
-      case(false,true ) => new RFNodeRepair (bd, prefix, id)
-      case(true,false)  => new SRAMNode (bd, prefix, id)
-      case(true,true)   => new SRAMNodeRepair (bd, prefix, id)
+      case(false,false) => new RFNode (bd, prefix, ids)
+      case(false,true ) => new RFNodeRepair (bd, prefix, ids)
+      case(true,false)  => new SRAMNode (bd, prefix, ids)
+      case(true,true)   => new SRAMNodeRepair (bd, prefix, ids)
     }
     globalNodes = globalNodes :+ node
     bd.source_elms.foreach(e => bd.elm_add_source(e, prefix))
@@ -126,10 +126,10 @@ object MBIST {
         val childBd = Wire(ram.bd.cloneType)
         childBd := DontCare
         (isSRAM,isRepair) match {
-          case(false,false) => new RFNode (childBd, ram.prefix, ram.array_id.head)
-          case(false,true ) => new RFNodeRepair (childBd, ram.prefix, ram.array_id.head)
-          case(true,false)  => new SRAMNode (childBd, ram.prefix, ram.array_id.head)
-          case(true,true)   => new SRAMNodeRepair (childBd, ram.prefix, ram.array_id.head)
+          case(false,false) => new RFNode (childBd, ram.prefix, ram.array_id)
+          case(false,true ) => new RFNodeRepair (childBd, ram.prefix, ram.array_id)
+          case(true,false)  => new SRAMNode (childBd, ram.prefix, ram.array_id)
+          case(true,true)   => new SRAMNodeRepair (childBd, ram.prefix, ram.array_id)
         }
       case pl: PipelineBaseNode =>
         val childBd = Wire(pl.bd.cloneType)
@@ -143,7 +143,7 @@ object MBIST {
     }
     node.ramParamsBelongToThis = children.flatMap ({
       case ram: RAMBaseNode =>
-        Seq(ram.bd.params)
+        ram.bd.params.getAllNodesParams()
       case pl: PipelineBaseNode =>
         pl.ramParamsBelongToThis
     })

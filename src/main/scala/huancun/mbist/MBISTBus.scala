@@ -104,10 +104,19 @@ case class RAM2MBISTParams
   singlePort: Boolean,
   vname:String,
   hierarchyName:String,
-  sramType:Int
+  sramType:Int,
+  nodeNum:Int,
+  maxArrayId:Int
 ) {
   val isRF = sramType == SramType.hd2prf.id
   val addrWidth = log2Up(set + 1)
+  val arrayWidth = log2Up(maxArrayId + 1)
+  def getAllNodesParams():Seq[RAM2MBISTParams] = {
+    val res = Seq.tabulate(nodeNum)(idx => {
+      RAM2MBISTParams(set,dataWidth,maskWidth,singlePort,vname,hierarchyName + s"node${idx}", sramType, nodeNum, maxArrayId)
+    })
+    res
+  }
 }
 
 class RAM2MBIST(val params: RAM2MBISTParams) extends MBISTCommonBundle(params.sramType){
@@ -117,9 +126,10 @@ class RAM2MBIST(val params: RAM2MBISTParams) extends MBISTCommonBundle(params.sr
   val re, we = Input(Bool())
   val rdata = Output(UInt(params.dataWidth.W))
   val ack = Input(Bool())
-
+  val selected = Input(Bool())
+  val array = Input(UInt(params.arrayWidth.W))
   override def sink_elms: Seq[String] =  super.sink_elms ++ Seq(
-    "addr", "addr_rd", "wdata", "wmask", "re", "we","ack"
+    "addr", "addr_rd", "wdata", "wmask", "re", "we","ack","selected","array"
   )
   override def source_elms: Seq[String] = Seq("rdata")
 }

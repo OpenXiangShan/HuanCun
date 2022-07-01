@@ -4,8 +4,8 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 import huancun.mbist.MBIST._
-import huancun.mbist.MBISTPipeline.{generateXLS, uniqueId}
-import huancun.utils.SRAMTemplate
+import huancun.mbist.MBISTPipeline.{generateCSV, uniqueId}
+import huancun.utils.{ParallelMux, ParallelOR, SRAMTemplate}
 
 import java.io.{File, IOException, PrintWriter}
 
@@ -83,6 +83,7 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
   require(params.length == pipelineNum,s"Error @ ${name}:Params Number and pipelineNum must be the same!")
   val myMbistBusParams = MBIST.inferMBITSBusParamsFromParams(params)
   override val desiredName = name
+  MBIST.noDedup(this)
 
   val toPipeline = IO(MixedVec(Seq.tabulate(pipelineNum)(idx => Flipped(new MBISTBus(params(idx))))))
   val mbist = IO(new MbitsStandardInterface(myMbistBusParams))
@@ -103,12 +104,11 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
   val inDataReg = RegEnable(mbist.indata,gate)
   val reReg = RegEnable(mbist.readen,gate)
   val addrRdReg = RegEnable(mbist.addr_rd,gate)
-
-  val hit = if(params.length > 1) ids.map(_.map(_.U === arrayReg).reduce(_|_)) else Seq(true.B)
+  val hit = if(params.length > 1) ids.map(item => ParallelOR(item.map(_.U === arrayReg))) else Seq(true.B)
   val outDataVec = toPipeline.map(_.mbist_outdata)
-  mbist.outdata := RegEnable(Mux1H(hit,outDataVec),gate)
+  mbist.outdata := RegEnable(ParallelMux(hit zip outDataVec),gate)
   val ackVec = toPipeline.map(_.mbist_ack)
-  mbist.ack := RegNext(Mux1H(hit,ackVec),0.U)
+  mbist.ack := RegNext(ParallelMux(hit zip ackVec),0.U)
 
   toPipeline.zip(extra).foreach({
     case(toPipeline,extra) =>
@@ -159,7 +159,7 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
 
 object MBISTPipeline {
   private var uniqueId = 0
-  protected[mbist] def generateXLS(node:PipelineBaseNode,infoName:String,isSRAM:Boolean): Unit ={
+  protected[mbist] def generateCSV(node:PipelineBaseNode,infoName:String,isSRAM:Boolean): Unit ={
     val file = new File(f"build/$infoName.csv")
     if(!file.exists()){
       try{
@@ -219,7 +219,7 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   val bd = node.bd
 
   if(MBIST.isMaxLevel(level)) {
-    generateXLS(node,infoName,isSRAM)
+    generateCSV(node,infoName,isSRAM)
     //Within every mbist domain, sram arrays are indexed from 0
     SRAMTemplate.restartIndexing(isSRAM)
   }
@@ -233,11 +233,11 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
     io.mbist.get <> bd
   }
 
-  val arrayHit = node.array_id.map(_.U === bd.mbist_array).map(_.asUInt).reduce(Cat(_,_)).orR
+  val arrayHit = ParallelOR(node.array_id.map(_.U === bd.mbist_array))
   val activated = bd.mbist_all | (bd.mbist_req & arrayHit)
 
   val pipelineNodes   = node.children.filter(_.isInstanceOf[PipelineBaseNode]).map(_.asInstanceOf[PipelineBaseNode])
-  val pipelineNodesAck= if(pipelineNodes.nonEmpty) pipelineNodes.map(_.bd.mbist_ack).reduce(_|_) else true.B
+  val pipelineNodesAck= if(pipelineNodes.nonEmpty) ParallelOR(pipelineNodes.map(_.bd.mbist_ack)) else true.B
   val activatedReg    =   RegNext(activated)
 
   val arrayReg        =   RegEnable(bd.mbist_array,0.U,activated)
@@ -253,11 +253,13 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
 
   val readEnReg       =   RegEnable(bd.mbist_readen,0.U,activated)
   val addrRdReg       =   RegEnable(bd.mbist_addr_rd,0.U,activated)
-  val dataOut         =   Wire(Vec(node.children.length,UInt(node.bd.params.dataWidth.W)))
-  val dataOutSelected =   Wire(UInt(node.bd.params.dataWidth.W))
-  val dataOutReg      =   RegEnable(dataOutSelected,0.U,activated)
-  bd.mbist_outdata         :=  dataOutReg
 
+  val nodeSelected    =   node.children.map(_.array_id).map(ids => {ParallelOR(ids.map(_.U === arrayReg)) | allReg(0).asBool})
+  val dataOut         =   Wire(Vec(node.children.length,UInt(node.bd.params.dataWidth.W)))
+  val pipelineDataOut =   RegEnable(ParallelOR(node.children.zip(dataOut).filter(_._1.isInstanceOf[PipelineBaseNode]).map(_._2) :+ 0.U),activated)
+  val sramDataOut     =   ParallelOR(node.children.zip(dataOut).filter(_._1.isInstanceOf[RAMBaseNode]).map(_._2) :+ 0.U)
+
+  bd.mbist_outdata    :=  sramDataOut | pipelineDataOut
 
   node.children.foreach(_.bd.hd2prf_trim_fuse := node.bd.hd2prf_trim_fuse)
   node.children.foreach(_.bd.hd2prf_sleep_fuse := node.bd.hd2prf_sleep_fuse)
@@ -280,31 +282,30 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   node.children.foreach(_.bd.PWR_MGNT_IN := node.bd.PWR_MGNT_IN)
   node.children.foreach(_.bd.OUTPUT_RESET := node.bd.OUTPUT_RESET)
 
-  val nodeSelected = node.children.map(_.array_id).map(_.map(_.U === arrayReg).map(_.asUInt | allReg).reduce(Cat(_,_)).orR)
-  dataOutSelected := Mux1H(nodeSelected,dataOut)
-
   node.children.zip(nodeSelected).zip(dataOut).foreach({
     case ((child:RAMBaseNode,selected),dout) => {
       child.bd.addr           := Mux(selected,addrReg(child.bd.params.addrWidth-1,0),0.U)
       child.bd.addr_rd        := Mux(selected,addrRdReg(child.bd.params.addrWidth-1,0),0.U)
-      child.bd.wdata          := Mux(selected,dataInReg(child.bd.params.dataWidth-1,0),0.U)
+      child.bd.wdata          := dataInReg(child.bd.params.dataWidth-1,0)
       child.bd.re             := Mux(selected,readEnReg,0.U)
       child.bd.we             := Mux(selected,wenReg,0.U)
-      child.bd.wmask          := Mux(selected,beReg(child.bd.params.maskWidth-1,0),0.U)
+      child.bd.wmask          := beReg(child.bd.params.maskWidth-1,0)
       child.bd.ack            := reqReg
-      dout             := child.bd.rdata
+      child.bd.selected       := selected
+      child.bd.array          := arrayReg
+      dout                    := Mux(selected,child.bd.rdata,0.U)
     }
     case ((child:PipelineBaseNode,selected),dout) => {
       child.bd.mbist_array   := Mux(selected,arrayReg(child.bd.params.arrayWidth-1,0),0.U)
       child.bd.mbist_req     := reqReg
       child.bd.mbist_all     := Mux(selected,allReg,0.U)
       child.bd.mbist_writeen := Mux(selected,wenReg,0.U)
-      child.bd.mbist_be      := Mux(selected,beReg(child.bd.params.maskWidth-1,0),0.U)
+      child.bd.mbist_be      := beReg(child.bd.params.maskWidth-1,0)
       child.bd.mbist_addr    := Mux(selected,addrReg(child.bd.params.addrWidth-1,0),0.U)
-      child.bd.mbist_indata  := Mux(selected,dataInReg(child.bd.params.dataWidth-1,0),0.U)
+      child.bd.mbist_indata  := dataInReg(child.bd.params.dataWidth-1,0)
       child.bd.mbist_readen  := Mux(selected,readEnReg,0.U)
       child.bd.mbist_addr_rd := Mux(selected,addrRdReg(child.bd.params.addrWidth-1,0),0.U)
-      dout             := child.bd.mbist_outdata
+      dout                   := Mux(selected,child.bd.mbist_outdata,0.U)
     }
   })
   MBIST.noDedup(this)
