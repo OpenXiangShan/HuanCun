@@ -142,6 +142,9 @@ class SubDirectory[T <: Data](
   val reqReg = RegEnable(io.read.bits, enable = io.read.fire())
   val reqValidReg = RegNext(io.read.fire(), false.B)
 
+  val hit_s1 = Wire(Bool())
+  val way_s1 = Wire(UInt(wayBits.W))
+
   val repl = ReplacementPolicy.fromString(replacement, ways)
   val repl_state = if(replacement == "random"){
     when(io.tag_w.fire()){
@@ -151,7 +154,7 @@ class SubDirectory[T <: Data](
   } else {
     val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
     val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
-    val next_state = repl.get_next_state(repl_state, io.resp.bits.way)
+    val next_state = repl.get_next_state(repl_state, way_s1)
     replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
     repl_state
   }
@@ -165,14 +168,30 @@ class SubDirectory[T <: Data](
   val replaceWay = repl.get_replace_way(repl_state)
   val (inv, invalidWay) = invalid_way_sel(metas, replaceWay)
   val chosenWay = Mux(inv, invalidWay, replaceWay)
-  val meta = metas(io.resp.bits.way)
-  val tag_decode = tagCode.decode(eccRead(io.resp.bits.way) ## tagRead(io.resp.bits.way))
-  val tag = tagRead(io.resp.bits.way)
-  io.resp.bits.hit := Cat(hitVec).orR()
-  io.resp.bits.way := Mux(reqReg.wayMode, reqReg.way, Mux(io.resp.bits.hit, hitWay, chosenWay))
-  io.resp.bits.dir := meta
-  io.resp.bits.tag := tag
-  io.resp.bits.error := io.resp.bits.hit && tag_decode.error
+
+  /* stage 0: io.read.fire
+     stage 1: generate hit/way, io.resp.valid = TRUE (will latch into MSHR)
+     stage 2: output latched hit/way, output dir/tag
+  */
+  hit_s1 := Cat(hitVec).orR()
+  way_s1 := Mux(reqReg.wayMode, reqReg.way, Mux(hit_s1, hitWay, chosenWay))
+
+  val hit_s2 = RegEnable(hit_s1, false.B, reqValidReg)
+  val way_s2 = RegEnable(way_s1, 0.U, reqValidReg)
+  val metaAll_s2 = RegEnable(metas, reqValidReg)
+  val tagAll_s2 = RegEnable(tagRead, reqValidReg)
+  val meta_s2 = metaAll_s2(way_s2)
+  val tag_s2 = tagAll_s2(way_s2)
+
+  val errorAll_s1 = VecInit(eccRead.zip(tagRead).map{x => tagCode.decode(x._1 ## x._2).error})
+  val errorAll_s2 = RegEnable(errorAll_s1, reqValidReg)
+  val error_s2 = errorAll_s2(way_s2)
+
+  io.resp.bits.hit := hit_s2
+  io.resp.bits.way := way_s2
+  io.resp.bits.dir := meta_s2
+  io.resp.bits.tag := tag_s2
+  io.resp.bits.error := io.resp.bits.hit && error_s2
 
   metaArray.io.w(
     !resetFinish || dir_wen,

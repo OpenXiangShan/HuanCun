@@ -123,7 +123,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val mshrAlloc = Module(new MSHRAlloc)
   val a_req_buffer = Module(new RequestBuffer(entries = 4))
   val probeHelperOpt = if(cacheParams.inclusive) None else {
-    Some(Module(new ProbeHelper(enqDelay = if(cacheParams.dirReg) 1 else  2)))
+    Some(Module(new ProbeHelper(enqDelay = if(cacheParams.dirReg) 2 else 1)))
   }
 
   val a_req = Wire(DecoupledIO(new MSHRRequest()))
@@ -526,7 +526,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
   c_mshr.io.resps.sink_c.valid := false.B
 
-  // Directory read results to MSHRs
+  // Directory read results to MSHRs (deprecated)
   def regFn[T <: Data](x: Valid[T]): Valid[T] = {
     if (cacheParams.dirReg) {
       val v = RegNext(x.valid, false.B)
@@ -539,7 +539,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   val is_ctrl_dir_res = directory.io.result.bits.idOH(1, 0) === "b11".U
-  val dirReg = regFn(directory.io.result)
+  val dirReg = directory.io.result
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
       val dirResultMatch = !is_ctrl_dir_res && directory.io.result.valid && directory.io.result.bits.idOH(i)
@@ -547,7 +547,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io.dirResult.valid := RegNext(dirResultMatch, false.B)
   }
   probeHelperOpt.foreach(h => {
-    h.io.dirResult := dirReg
+    h.io.dirResult.bits := dirReg.bits
+    h.io.dirResult.valid := RegNext(dirReg.valid, false.B)
   })
 
   // Provide MSHR info for sinkC, sinkD
