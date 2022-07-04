@@ -57,7 +57,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.resp.bits.last := last
   io.resp.bits.opcode := io.d.bits.opcode
   io.resp.bits.param := io.d.bits.param
-  io.resp.bits.source := Mux(io.d.valid, io.d.bits.source, RegEnable(io.d.bits.source, io.d.valid))
+  io.resp.bits.source := io.d.bits.source
   io.resp.bits.sink := io.d.bits.sink
   io.resp.bits.denied := io.d.bits.denied
   io.resp.bits.dirty := io.d.bits.echo.lift(DirtyKey).getOrElse(false.B)
