@@ -251,10 +251,11 @@ class Directory(parentName:String = "Unknown")(implicit p: Parameters)
     }
   }
   req.ready := Cat(rports.map(_.ready)).andR()
-  val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
-  val sourceIdReg = RegEnable(req.bits.source, req.fire())
-  val setReg = RegEnable(req.bits.set, req.fire())
-  val replacerInfoReg = RegEnable(req.bits.replacerInfo, req.fire())
+  val reqValidReg = RegNext(req.fire(), false.B)
+  val reqIdOHReg = RegEnable(req.bits.idOH, req.fire()) // generate idOH in advance to index MSHRs
+  val sourceIdReg = RegEnable(RegEnable(req.bits.source, req.fire()), reqValidReg)
+  val setReg = RegEnable(RegEnable(req.bits.set, req.fire()), reqValidReg)
+  val replacerInfoReg = RegEnable(RegEnable(req.bits.replacerInfo, req.fire()), reqValidReg)
   val resp = io.result
   val clientResp = clientDir.io.resp
   val selfResp = selfDir.io.resp

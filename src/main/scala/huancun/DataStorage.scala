@@ -273,12 +273,13 @@ class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) exten
   })
 
   for (i <- 0 until outNum) {
-    val sel_r = RegNextN(io.sel(i), sramLatency - 2)
-    val odata = Mux1H(sel_r, io.in)
-    val oerrs = Mux1H(sel_r, io.err_in)
     val en = RegNextN(io.en(i), sramLatency - 2)
-    io.out(i) := RegNext(RegEnable(odata, en))
-    io.err_out(i) := RegNext(RegEnable(oerrs.orR(), false.B, en), false.B)
+    val sel_r = RegNextN(io.sel(i), sramLatency - 1)
+    val odata = RegEnable(io.in, en)
+    val oerrs = RegEnable(io.err_in, en)
+
+    io.out(i) := RegEnable(Mux1H(sel_r, odata), RegNext(en, false.B))
+    io.err_out(i) := RegEnable(Mux1H(sel_r, oerrs).orR(), false.B, RegNext(en, false.B))
   }
 
 }
