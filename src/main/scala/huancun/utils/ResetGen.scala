@@ -109,3 +109,21 @@ object ResetGen {
     resetReg.tail
   }
 }
+
+class ClockSync3 extends Module {
+  val d = IO(Input(Bool()))
+  val q = IO(Output(Bool()))
+
+  val pipe_reg = RegInit(0.U(4.W))
+  pipe_reg := Cat(pipe_reg(2, 0), d)
+
+  q := pipe_reg(2) && !pipe_reg(3)
+}
+
+object ClockSync3 {
+  def apply(d: Bool): Bool = {
+    val sync3 = Module(new ClockSync3)
+    sync3.d := d
+    sync3.q
+  }
+}
