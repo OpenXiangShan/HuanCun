@@ -1405,6 +1405,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     iam := OHToUInt(getClientBitOH(io.alloc.bits.source))
   }
 
+  // Latched control signals for timing
+  val cache_alias_latch = RegNext(cache_alias, false.B)
+  val preferCache_latch = RegNext(preferCache, false.B)
+  val transmit_from_other_client_latch = RegNext(transmit_from_other_client, false.B)
+
   // Status
   io.status.valid := req_valid
   io.status.bits.set := req.set
@@ -1412,7 +1417,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.reload := false.B // TODO
   io.status.bits.way := self_meta.way
   io.status.bits.will_grant_data := req.fromA && od.opcode(0) && io.tasks.source_d.bits.useBypass
-  io.status.bits.will_save_data := req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
+  io.status.bits.will_save_data := req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
   io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)
   io.status.bits.blockB := true.B
   // B nest A
@@ -1441,7 +1446,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val a_c_through = req.fromA && (
       nest_c_tag_match && !self_meta.hit && !nest_c_way_match ||
-      !nest_c_tag_match && nest_c_way_match && (cache_alias || (preferCache && !acquirePermMiss) || Hold(self_meta.hit, false) || transmit_from_other_client) ||
+      !nest_c_tag_match && nest_c_way_match && (cache_alias_latch || (preferCache_latch && !acquirePermMiss) || Hold(self_meta.hit, false) || transmit_from_other_client_latch) ||
       nest_c_tag_match && nest_c_way_match && !self_meta.hit && a_do_release
     )
 
@@ -1458,5 +1463,5 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     io_b_status.set === req.set && io_b_status.tag =/= req.tag &&
     io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData &&
-    req.fromA && (preferCache || self_meta.hit) && !acquirePermMiss
+    req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
 }
