@@ -476,8 +476,8 @@ object SRAMTemplate {
   )
 
   private val uhdTable = Seq(
-    (2048,   64,  1),
-    (2048,   32,  1)
+    (3072,   64,  1),
+    (3072,   32,  1)
   )
   def isRF(depth:Int,width:Int,mask:Int):Boolean = {
     RfTable.contains((depth,width,mask))
