@@ -266,8 +266,8 @@ class DataSel(inNum: Int, outNum: Int, width: Int, eccBits: Int)(implicit p: Par
     val en = RegNextN(io.en(i), sramLatency - 2)
     val sel_r = RegNextN(io.sel(i), sramLatency - 1)
     val odata = RegEnable(io.in, en)
-    val oeccs = RegEnable(io.err_in, en)
-    val err = oerrs.zip(odata).map{
+    val oeccs = RegEnable(io.ecc_in, en)
+    val err = oeccs.zip(odata).map{
       case (e, d) => dataCode.decode(e ## d).error
     }
 
