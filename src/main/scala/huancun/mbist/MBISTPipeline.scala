@@ -224,7 +224,7 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
     SRAMTemplate.restartIndexing(isSRAM)
   }
 
-  val PWR_MGNT = if(MBIST.isMaxLevel(level)) Some(SRAMTemplate.getAndClear(isSRAM,isRepair)) else None
+  val PWR_MGNT = if(MBIST.isMaxLevel(level)) Some(SRAMTemplate.getAndClearPWRMGNT(isSRAM,isRepair)) else None
   val io = IO(new Bundle() {
     val mbist = if(MBIST.isMaxLevel(level)) Some(new MBISTBus(bd.params)) else None
   })
@@ -254,7 +254,9 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   val readEnReg       =   RegEnable(bd.mbist_readen,0.U,activated)
   val addrRdReg       =   RegEnable(bd.mbist_addr_rd,0.U,activated)
 
-  val nodeSelected    =   node.children.map(_.array_id).map(ids => {ParallelOR(ids.map(_.U === arrayReg)) | allReg(0).asBool})
+  val nodeSelected    =   node.children.map(_.array_id).map(ids => ids.map(_.U === arrayReg | allReg(0).asBool))
+
+
   val dataOut         =   Wire(Vec(node.children.length,UInt(node.bd.params.dataWidth.W)))
   val pipelineDataOut =   RegEnable(ParallelOR(node.children.zip(dataOut).filter(_._1.isInstanceOf[PipelineBaseNode]).map(_._2) :+ 0.U),activated)
   val sramDataOut     =   ParallelOR(node.children.zip(dataOut).filter(_._1.isInstanceOf[RAMBaseNode]).map(_._2) :+ 0.U)
@@ -283,7 +285,8 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   node.children.foreach(_.bd.OUTPUT_RESET := node.bd.OUTPUT_RESET)
 
   node.children.zip(nodeSelected).zip(dataOut).foreach({
-    case ((child:RAMBaseNode,selected),dout) => {
+    case ((child:RAMBaseNode,selectedVec),dout) => {
+      val selected = ParallelOR(selectedVec)
       child.bd.addr           := Mux(selected,addrReg(child.bd.params.addrWidth-1,0),0.U)
       child.bd.addr_rd        := Mux(selected,addrRdReg(child.bd.params.addrWidth-1,0),0.U)
       child.bd.wdata          := dataInReg(child.bd.params.dataWidth-1,0)
@@ -291,11 +294,12 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
       child.bd.we             := Mux(selected,wenReg,0.U)
       child.bd.wmask          := beReg(child.bd.params.maskWidth-1,0)
       child.bd.ack            := reqReg
-      child.bd.selected       := selected
+      child.bd.selectedOH     := Mux(reqReg(0).asBool,selectedVec.map(_.asUInt).reverse.reduce(Cat(_,_)),~0.U(child.bd.selectedOH.getWidth.W))
       child.bd.array          := arrayReg
       dout                    := Mux(selected,child.bd.rdata,0.U)
     }
-    case ((child:PipelineBaseNode,selected),dout) => {
+    case ((child:PipelineBaseNode,selectedVec),dout) => {
+      val selected = ParallelOR(selectedVec)
       child.bd.mbist_array   := Mux(selected,arrayReg(child.bd.params.arrayWidth-1,0),0.U)
       child.bd.mbist_req     := reqReg
       child.bd.mbist_all     := Mux(selected,allReg,0.U)

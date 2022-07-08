@@ -126,10 +126,10 @@ class RAM2MBIST(val params: RAM2MBISTParams) extends MBISTCommonBundle(params.sr
   val re, we = Input(Bool())
   val rdata = Output(UInt(params.dataWidth.W))
   val ack = Input(Bool())
-  val selected = Input(Bool())
+  val selectedOH = Input(UInt(params.nodeNum.W))
   val array = Input(UInt(params.arrayWidth.W))
   override def sink_elms: Seq[String] =  super.sink_elms ++ Seq(
-    "addr", "addr_rd", "wdata", "wmask", "re", "we","ack","selected","array"
+    "addr", "addr_rd", "wdata", "wmask", "re", "we","ack","selectedOH","array"
   )
   override def source_elms: Seq[String] = Seq("rdata")
 }
