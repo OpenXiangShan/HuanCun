@@ -490,8 +490,8 @@ object SRAMTemplate {
   )
 
   private val uhdTable = Seq(
-    (2048,   64,  1),
-    (2048,   32,  1)
+    (3072,   64,  1),
+    (3072,   32,  1)
   )
   def isRF(depth:Int,width:Int,mask:Int):Boolean = {
     RfTable.contains((depth,width,mask))
@@ -511,10 +511,11 @@ object SRAMTemplate {
 
 }
 
+// WARNING: this SRAMTemplate assumes the SRAM lib itself supports holdRead.
 class SRAMTemplate[T <: Data] (
                                 gen: T, set: Int, way: Int = 1, singlePort: Boolean = false,
                                 shouldReset: Boolean = false, extraReset: Boolean = false,
-                                holdRead: Boolean = false, bypassWrite: Boolean = false,
+                                bypassWrite: Boolean = false,
                                 // multi-cycle path
                                 clk_div_by_2: Boolean = false,
                                 // mbist support
@@ -682,21 +683,7 @@ class SRAMTemplate[T <: Data] (
     })
   }
 
-  // hold read data for SRAMs
-  val holdData = Wire(mem_rdata.cloneType)
-  holdData := DontCare
-  val rdata = (
-    if(clk_div_by_2){
-      // DelayTwoCycle(mem_rdata, realRen)
-      // Now we assume rdata will not change during two cycles
-      mem_rdata
-    } else if (holdRead) {
-      val (rdata,hdata) = HoldUnlessExpose(mem_rdata, RegNext(toSRAMRen))
-      holdData := hdata
-      rdata
-    } else {
-      mem_rdata
-    })
+  val rdata = mem_rdata
 
   if(clk_div_by_2){
     CustomAnnotations.annotateClkDivBy2(this)
@@ -710,9 +697,8 @@ class SRAMTemplate[T <: Data] (
   io.w.req.ready := true.B
 
   /*************************************mbist rdata output**************************************************/
-  val isHold = (!clk_div_by_2) && holdRead
   val nodeSelected = myArrayIds.map(_.U === mbistArray)
-  val rdataInUIntHold = if(isHold) holdData.reverse.reduce(Cat(_,_)) else RegEnable(rdata.reverse.reduce(Cat(_,_)),0.U,(mbistSelected & RegNext(toSRAMRen, 0.U))(0).asBool)
+  val rdataInUIntHold = RegEnable(rdata.reverse.reduce(Cat(_,_)),0.U,(mbistSelected & RegNext(toSRAMRen, 0.U))(0).asBool)
   val rdataFitToNodes = Seq.tabulate(myNodeNum)(idx => {
     rdataInUIntHold(idx * myDataWidth + myDataWidth - 1, idx * myDataWidth)
   })
@@ -724,7 +710,7 @@ class FoldedSRAMTemplate[T <: Data]
 (
   gen: T, set: Int, width: Int = 4, way: Int = 1,
   shouldReset: Boolean = false, extraReset: Boolean = false,
-  holdRead: Boolean = false, singlePort: Boolean = false, bypassWrite: Boolean = false,
+  singlePort: Boolean = false, bypassWrite: Boolean = false,
   parentName:String
 ) extends Module {
   val io = IO(new Bundle {
@@ -742,7 +728,7 @@ class FoldedSRAMTemplate[T <: Data]
   val nRows = set / width
 
   val array = Module(new SRAMTemplate(gen, set=nRows, way=width*way,
-    shouldReset=shouldReset, extraReset=extraReset, holdRead=holdRead, singlePort=singlePort,parentName = parentName))
+    shouldReset=shouldReset, extraReset=extraReset, singlePort=singlePort,parentName = parentName))
   if (array.extra_reset.isDefined) {
     array.extra_reset.get := extra_reset.get
   }
@@ -751,7 +737,7 @@ class FoldedSRAMTemplate[T <: Data]
   io.w.req.ready := array.io.w.req.ready
 
   val raddr = io.r.req.bits.setIdx >> log2Ceil(width)
-  val ridx = RegNext(if (width != 1) io.r.req.bits.setIdx(log2Ceil(width)-1, 0) else 0.U(1.W))
+  val ridx = if (width != 1) RegEnable(io.r.req.bits.setIdx(log2Ceil(width)-1, 0), io.r.req.valid) else 0.U(1.W)
   val ren  = io.r.req.valid
 
   array.io.r.req.valid := ren
@@ -760,9 +746,7 @@ class FoldedSRAMTemplate[T <: Data]
   val rdata = array.io.r.resp.data
   for (w <- 0 until way) {
     val wayData = VecInit(rdata.indices.filter(_ % way == w).map(rdata(_)))
-    val holdRidx = HoldUnless(ridx, RegNext(io.r.req.valid))
-    val realRidx = if (holdRead) holdRidx else ridx
-    io.r.resp.data(w) := Mux1H(UIntToOH(realRidx, width), wayData)
+    io.r.resp.data(w) := Mux1H(UIntToOH(ridx, width), wayData)
   }
 
   val wen = io.w.req.valid
