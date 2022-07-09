@@ -51,6 +51,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val req_valid = RegInit(false.B)
   val iam = Reg(UInt(log2Up(clientBits).W)) // Which client does this req come from?
   val meta_reg = Reg(new DirResult)
+  val clients_meta_reg = WireInit(0.U.asTypeOf(io.dirResult.bits.clients.states))
   val meta = Wire(new DirResult)
   val meta_valid = RegInit(false.B)
 
@@ -68,6 +69,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   meta := Mux(io.dirResult.valid, io.dirResult.bits, meta_reg)
   val self_meta = meta.self
   val clients_meta = meta.clients.states
+  clients_meta_reg := meta_reg.clients.states
   dontTouch(self_meta)
   dontTouch(clients_meta)
 
@@ -257,15 +259,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         state := Mux(
           iam === i.U,
           Mux(isToN(req.param), INVALID, Mux(isToB(req.param), BRANCH, self_meta.clientStates(i))),
-          clients_meta(i).state
+          clients_meta_reg(i).state
         )
     }
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
         m.state := Mux(
           iam === i.U,
-          Mux(isToN(req.param), INVALID, Mux(isToB(req.param), BRANCH, clients_meta(i).state)),
-          clients_meta(i).state
+          Mux(isToN(req.param), INVALID, Mux(isToB(req.param), BRANCH, clients_meta_reg(i).state)),
+          clients_meta_reg(i).state
         )
     }
   }
@@ -296,7 +298,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
-        m.state := Mux(m.hit, shrink_next_state(client_probeack_param_vec(i)), clients_meta(i).state)
+        m.state := Mux(m.hit, shrink_next_state(client_probeack_param_vec(i)), clients_meta_reg(i).state)
     }
   }
 
@@ -362,13 +364,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             Mux(req_needT || req_promoteT, TIP, BRANCH),
             Mux(
               req.opcode === Get,
-              Mux(clients_meta(i).hit, BRANCH, INVALID),
-              Mux(clients_meta(i).hit, clients_meta(i).state, INVALID)
+              Mux(clients_meta_reg(i).hit, BRANCH, INVALID),
+              Mux(clients_meta_reg(i).hit, clients_meta_reg(i).state, INVALID)
             )
           )
         }.otherwise {
           val cond = if(cacheParams.name == "L2") {
-            Mux(a_probe_clients(i), perm_after_probe, clients_meta(i).state)
+            Mux(a_probe_clients(i), perm_after_probe, clients_meta_reg(i).state)
           } else {
             perm_after_probe
           }
@@ -377,12 +379,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             Mux(
               req.param =/= NtoB || req_promoteT || req_put,
               INVALID,
-              Mux(clients_meta(i).hit && a_do_probe, cond, INVALID)
+              Mux(clients_meta_reg(i).hit && a_do_probe, cond, INVALID)
             ),
             Mux(
               req.opcode === Get,
-              Mux(clients_meta(i).hit && a_do_probe, perm_after_probe, INVALID), // Get
-              Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID), clients_meta(i).state)
+              Mux(clients_meta_reg(i).hit && a_do_probe, perm_after_probe, INVALID), // Get
+              Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID), clients_meta_reg(i).state)
             )
           )
         }
@@ -394,12 +396,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           m.state := Mux(
             req_acquire,
             Mux(req_needT || req_promoteT, TIP, BRANCH),
-            clients_meta(i).state
+            clients_meta_reg(i).state
           )
-          m.alias.foreach(_ := Mux(req_acquire, req.alias.get, clients_meta(i).alias.get))
+          m.alias.foreach(_ := Mux(req_acquire, req.alias.get, clients_meta_reg(i).alias.get))
         }.otherwise {
           val cond = if(cacheParams.name == "L2") {
-            Mux(a_probe_clients(i), perm_after_probe, clients_meta(i).state)
+            Mux(a_probe_clients(i), perm_after_probe, clients_meta_reg(i).state)
           } else {
             perm_after_probe
           }
@@ -407,18 +409,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             req_acquire || req_put,
             Mux(
               req.param =/= NtoB || req_promoteT || req_put,
-              Mux(clients_meta(i).hit && a_do_probe, INVALID, clients_meta(i).state),
+              Mux(clients_meta_reg(i).hit && a_do_probe, INVALID, clients_meta_reg(i).state),
               // NtoB
-              Mux(clients_meta(i).hit && a_do_probe, cond, clients_meta(i).state)
+              Mux(clients_meta_reg(i).hit && a_do_probe, cond, clients_meta_reg(i).state)
             ),
-            Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID), clients_meta(i).state)
+            Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID), clients_meta_reg(i).state)
           )
-          m.alias.foreach(_ := clients_meta(i).alias.get)
+          m.alias.foreach(_ := clients_meta_reg(i).alias.get)
         }
 
         when (req.opcode === Get) {
-          m.state := Mux(clients_meta(i).hit && a_do_probe, perm_after_probe, clients_meta(i).state)
-          m.alias.foreach(_ := clients_meta(i).alias.get)
+          m.state := Mux(clients_meta_reg(i).hit && a_do_probe, perm_after_probe, clients_meta_reg(i).state)
+          m.alias.foreach(_ := clients_meta_reg(i).alias.get)
         }
     }
   }
