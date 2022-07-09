@@ -41,7 +41,12 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val (first, last, _, beat) = edge.count(io.d)
   val cache = io.save_data_in_bs
   val needData = io.d.bits.opcode(0)
-  val w_safe = !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(io.set, io.way))
+
+  val source_latch = RegEnable(io.d.bits.source, io.d.valid)
+  val new_source = io.d.bits.source =/= source_latch
+  val indexed_set = RegEnable(io.set, io.d.valid)
+  val indexed_way = RegEnable(io.way, io.d.valid)
+  val w_safe = !new_source && !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(indexed_set, indexed_way))
 
   assert(!io.d.valid || !needData || io.d.bits.size === log2Up(blockBytes).U, "SinkD must receive aligned message when needData")
 
@@ -73,7 +78,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.bs_waddr.bits.noop := !io.d.valid
   io.bs_wdata.data := io.d.bits.data
   io.bs_wdata.corrupt := false.B
-  io.bypass_write.valid := io.d.valid && bypass_ready && (!cache || io.bs_waddr.ready)
+  io.bypass_write.valid := io.d.valid && bypass_ready && (!cache || io.bs_waddr.ready && (w_safe || !first))
   io.bypass_write.beat := beat
   io.bypass_write.data := io.bs_wdata
 }
