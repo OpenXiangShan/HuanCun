@@ -159,7 +159,7 @@ class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends
   }
 
   val outData = Wire(Vec(nrBanks, UInt((8 * bankBytes).W)))
-  val error = Wire(Vec(nrBanks, Bool()))
+  val eccData = Wire(Vec(nrStacks, Vec(stackSize, UInt(eccBits.W))))
   val bank_en = Wire(Vec(nrBanks, Bool()))
   val sel_req = Wire(Vec(nrBanks, new DSRequest))
   dontTouch(bank_en)
@@ -194,10 +194,11 @@ class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends
     // Ecc
     outData(i) := bankedData(i).io.r.resp.data(0)
   }
+  require(eccBits > 0, "SRAM ECC must be enabled for now")
   if (eccBits > 0) {
-    for (((banks, err), eccArray) <-
+    for (((banks, ecc), eccArray) <-
            bankedData.grouped(stackSize).toList
-             .zip(error.grouped(stackSize).toList)
+             .zip(eccData)
              .zip(dataEccArray)
          ) {
       eccArray.io.w.req.valid := banks.head.io.w.req.valid
@@ -210,28 +211,22 @@ class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends
       )
       eccArray.io.r.req.valid := banks.head.io.r.req.valid
       eccArray.io.r.req.bits.apply(setIdx = banks.head.io.r.req.bits.setIdx)
-      val eccInfo = eccArray.io.r.resp.data(0).asTypeOf(Vec(stackSize, UInt(eccBits.W)))
-      for(i <- 0 until stackSize){
-        err(i) := dataCode.decode(
-          eccInfo(i) ## banks(i).io.r.resp.data(0)
-        ).error
-      }
+      ecc := eccArray.io.r.resp.data(0).asTypeOf(Vec(stackSize, UInt(eccBits.W)))
     }
   } else {
-    error.foreach(_ := false.B)
   }
 
   val dataSelModules = Array.fill(stackSize) {
-    Module(new DataSel(nrStacks, 2, bankBytes * 8))
+    Module(new DataSel(nrStacks, 2, bankBytes * 8, eccBits))
   }
   val data_grps = outData.grouped(stackSize).toList.transpose
-  val err_grps = error.grouped(stackSize).toList.transpose
+  val ecc_grps = eccData.toList.transpose
   val d_sel = sourceD_rreq.bankEn.asBools().grouped(stackSize).toList.transpose
   val c_sel = sourceC_req.bankEn.asBools().grouped(stackSize).toList.transpose
   for (i <- 0 until stackSize) {
     val dataSel = dataSelModules(i)
     dataSel.io.in := VecInit(data_grps(i))
-    dataSel.io.err_in := VecInit(err_grps(i))
+    dataSel.io.ecc_in := VecInit(ecc_grps(i))
     dataSel.io.sel(0) := Cat(d_sel(i).reverse)
     dataSel.io.sel(1) := Cat(c_sel(i).reverse)
     dataSel.io.en(0) := io.sourceD_raddr.fire()
@@ -261,10 +256,10 @@ class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends
 
 }
 
-class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) extends HuanCunModule {
+class DataSel(inNum: Int, outNum: Int, width: Int, eccBits: Int)(implicit p: Parameters) extends HuanCunModule {
 
   val io = IO(new Bundle() {
-    val err_in = Input(Vec(inNum, Bool()))
+    val ecc_in = Input(Vec(inNum, UInt(eccBits.W)))
     val in = Input(Vec(inNum, UInt(width.W)))
     val sel = Input(Vec(outNum, UInt(inNum.W))) // one-hot sel mask
     val en = Input(Vec(outNum, Bool()))
@@ -272,14 +267,19 @@ class DataSel(inNum: Int, outNum: Int, width: Int)(implicit p: Parameters) exten
     val err_out = Output(Vec(outNum, Bool()))
   })
 
+  def dataCode: Code = Code.fromString(p(HCCacheParamsKey).dataECC)
+
   for (i <- 0 until outNum) {
     val en = RegNextN(io.en(i), sramLatency - 2)
     val sel_r = RegNextN(io.sel(i), sramLatency - 1)
     val odata = RegEnable(io.in, en)
-    val oerrs = RegEnable(io.err_in, en)
+    val oeccs = RegEnable(io.ecc_in, en)
+    val err = oeccs.zip(odata).map{
+      case (e, d) => dataCode.decode(e ## d).error
+    }
 
     io.out(i) := RegEnable(Mux1H(sel_r, odata), RegNext(en, false.B))
-    io.err_out(i) := RegEnable(Mux1H(sel_r, oerrs).orR(), false.B, RegNext(en, false.B))
+    io.err_out(i) := RegEnable(Mux1H(sel_r, err).orR(), false.B, RegNext(en, false.B))
   }
 
 }
