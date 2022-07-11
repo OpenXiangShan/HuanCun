@@ -18,6 +18,14 @@ class MbitsExtraInterface(val isSRAM:Boolean) extends Bundle{
   val PWR_MGNT_IN = Input(UInt((if(isSRAM) 5 else 4).W))
 }
 
+class BISRInputInterface extends Bundle {
+  val shift_en = Input(Bool())
+  val clock = Input(Bool())
+  val reset = Input(Bool())
+  val scan_in = Input(Bool())
+  val scan_out = Output(Bool())
+}
+
 class MbitsExtraFullInterface extends Bundle{
   val ext_in = Input(UInt(9.W))
   val ext_out = Output(UInt(1.W))
@@ -78,7 +86,7 @@ class MbitsStandardInterface(val params:MBISTBusParams) extends Bundle{
   val outdata = Output(UInt(params.dataWidth.W))
 }
 
-class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,isSRAM:Boolean,pipelineNum:Int) extends Module{
+class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,isSRAM:Boolean,pipelineNum:Int,isRepair:Boolean = false) extends Module{
   require(params.nonEmpty)
   require(params.length == pipelineNum,s"Error @ ${name}:Params Number and pipelineNum must be the same!")
   val myMbistBusParams = MBIST.inferMBITSBusParamsFromParams(params)
@@ -93,6 +101,9 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
   val uhdusplr_fuse = IO(new MbitsFuseInterface(true))
   val hduspsr_fuse = IO(new MbitsFuseInterface(true))
   val extra = IO(Vec(pipelineNum,new MbitsExtraInterface(isSRAM)))
+  val bisr = if(isRepair) Some(IO(new BISRInputInterface)) else None
+  val scan_in_toPip = if(isRepair) Some(IO(Output(UInt(1.W)))) else None
+  val scan_out_fromPip = if(isRepair) Some(IO(Input(UInt(1.W)))) else None
 
   val gate = mbist.all | mbist.req
   val arrayReg = RegEnable(mbist.array,gate)
@@ -109,6 +120,7 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
   mbist.outdata := RegEnable(ParallelMux(hit zip outDataVec),gate)
   val ackVec = toPipeline.map(_.mbist_ack)
   mbist.ack := RegNext(ParallelMux(hit zip ackVec),0.U)
+
 
   toPipeline.zip(extra).foreach({
     case(toPipeline,extra) =>
@@ -153,7 +165,20 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
         toPipeline.WRAPPER_RD_CLK_EN := extra.WRAPPER_RD_CLK_EN
         toPipeline.WRAPPER_WR_CLK_EN := extra.WRAPPER_WR_CLK_EN
         toPipeline.WRAPPER_CLK_EN := DontCare
-    }
+      }
+
+      if(isRepair){
+        toPipeline.bisr_shift_en := bisr.get.shift_en
+        toPipeline.bisr_clock := bisr.get.clock
+        toPipeline.bisr_reset := bisr.get.reset
+        scan_in_toPip.get := bisr.get.scan_in
+        bisr.get.scan_out := scan_out_fromPip.get
+      }
+      else{
+        toPipeline.bisr_shift_en := DontCare
+        toPipeline.bisr_clock := DontCare
+        toPipeline.bisr_reset := DontCare
+      }
   })
 }
 
@@ -225,9 +250,22 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   }
 
   val PWR_MGNT = if(MBIST.isMaxLevel(level)) Some(SRAMTemplate.getAndClearPWRMGNT(isSRAM,isRepair)) else None
+
   val io = IO(new Bundle() {
     val mbist = if(MBIST.isMaxLevel(level)) Some(new MBISTBus(bd.params)) else None
+    val scan_in = if(MBIST.isMaxLevel(level) && isRepair) Some(Input(UInt(1.W))) else None
+    val scan_out = if(MBIST.isMaxLevel(level) && isRepair) Some(Output(UInt(1.W))) else None
   })
+  if(MBIST.isMaxLevel(level) && isRepair){
+    val BISR_SCAN = SRAMTemplate.getAndClearBisr()
+    val scan_in = Wire(UInt(1.W))
+    val scan_out = Wire(UInt(1.W))
+    scan_out := DontCare
+    BoringUtils.addSource(scan_in,BISR_SCAN._1)
+    BoringUtils.addSink(scan_out,BISR_SCAN._2)
+    io.scan_out.get := scan_out
+    scan_in := io.scan_in.get
+  }
 
   if(io.mbist.isDefined) {
     io.mbist.get <> bd
@@ -244,7 +282,6 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   val reqReg          =   RegNext(bd.mbist_req,0.U)
   val allReg          =   RegEnable(bd.mbist_all,0.U,activated)
   bd.mbist_ack        :=  reqReg & pipelineNodesAck
-  dontTouch(bd.mbist_ack)
 
   val wenReg          =   RegEnable(bd.mbist_writeen,0.U,activated)
   val beReg           =   RegEnable(bd.mbist_be,0.U,activated)
@@ -283,6 +320,9 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   node.children.foreach(_.bd.WRAPPER_CLK_EN := node.bd.WRAPPER_CLK_EN)
   node.children.foreach(_.bd.PWR_MGNT_IN := node.bd.PWR_MGNT_IN)
   node.children.foreach(_.bd.OUTPUT_RESET := node.bd.OUTPUT_RESET)
+  node.children.foreach(_.bd.bisr_shift_en := node.bd.bisr_shift_en)
+  node.children.foreach(_.bd.bisr_clock := node.bd.bisr_clock)
+  node.children.foreach(_.bd.bisr_reset := node.bd.bisr_reset)
 
   node.children.zip(nodeSelected).zip(dataOut).foreach({
     case ((child:RAMBaseNode,selectedVec),dout) => {

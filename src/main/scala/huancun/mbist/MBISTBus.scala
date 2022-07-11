@@ -43,6 +43,10 @@ abstract class MBISTCommonBundle(val sramType:Int) extends Bundle with MBISTBund
   val OUTPUT_RESET = Input(Bool())
   val PWR_MGNT_IN = Input(UInt((if(isRF) 4 else 5).W))
 
+  val bisr_shift_en = Input(Bool())
+  val bisr_clock = Input(Bool())
+  val bisr_reset = Input(Bool())
+
   val typeSpecificSignal = if(isRF)
     Seq("WRAPPER_RD_CLK_EN","WRAPPER_WR_CLK_EN")
   else
@@ -55,7 +59,8 @@ abstract class MBISTCommonBundle(val sramType:Int) extends Bundle with MBISTBund
       "uhdusplr_trim_fuse","uhdusplr_sleep_fuse",
       "hduspsr_trim_fuse","hduspsr_sleep_fuse",
       "bypsel","wdis_b","rdis_b","init_en","init_val","clkungate",
-      "IP_RESET_B","OUTPUT_RESET", "PWR_MGNT_IN"
+      "IP_RESET_B","OUTPUT_RESET", "PWR_MGNT_IN",
+      "bisr_shift_en","bisr_clock","bisr_reset"
   ) ++ typeSpecificSignal
 }
 

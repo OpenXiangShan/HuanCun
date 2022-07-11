@@ -423,6 +423,7 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     val hduspsr_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = true))) else None
     val bisr = if (cacheParams.level == 3) Some(IO(Vec(sliceMbistPipelines.length,new BISRInputInterface))) else None
     val mbist_jtag = if (cacheParams.level == 3) Some(IO(Vec(sliceMbistPipelines.length,new JTAGInterface))) else None
+    val bisr_mem_chain_select = if (cacheParams.level == 3) Some(IO(Input(UInt(1.W)))) else None
 
     if (cacheParams.level == 3){
       val dirPipeline = sliceMbistPipelines.map(_._1.get)
@@ -436,8 +437,11 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
             Seq(dirPl.node.array_id,bankPl.node.array_id),
             intfName,
             true,
-            2
+            2,
+            true
           ))
+          bankPl.io.scan_in.get := intf.scan_in_toPip.get
+          intf.scan_out_fromPip.get := bankPl.io.scan_out.get
           intf.toPipeline(0) <> dirPl.io.mbist.get
           intf.toPipeline(1) <> bankPl.io.mbist.get
           intf.extra(0) := DontCare
@@ -480,6 +484,8 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
           ctrl.io.hduspsr_in := hduspsr_in.get
           ctrl.io.xsx_fscan_in<> xsx_ultiscan.get
           ctrl.io.xsl2_fscan_in <> xsl2_ultiscan.get
+          ctrl.io.L3_bisr.get <> intf.bisr.get
+          ctrl.io.bisr_mem_chain_select.get := bisr_mem_chain_select.get
           ctrl
       })
       mbistControllers.zip(bisr.get).zip(mbist_jtag.get).foreach({

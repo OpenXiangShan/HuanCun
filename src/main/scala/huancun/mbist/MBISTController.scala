@@ -26,14 +26,6 @@ class FSCANInputInterface extends Bundle {
   val init_val = Input(Bool())
 }
 
-class BISRInputInterface extends Bundle {
-  val shift_en = Input(Bool())
-  val clock = Input(Bool())
-  val reset = Input(Bool())
-  val scan_in = Input(Bool())
-  val scan_out = Output(Bool())
-}
-
 object MBISTController{
   def connectRepair(ports:List[RepairBundle],nodes:Seq[RepairNode]) = {
     val newNodes = nodes.map({
@@ -78,6 +70,8 @@ class MBISTController
     val fscan_clkungate = Input(Bool())
     val clock = Input(Clock())
     val bisr = if(repairNodes.isDefined) Some(new BISRInputInterface) else None
+    val bisr_mem_chain_select = if(repairNodes.isDefined) Some(Input(UInt(1.W))) else None
+    val L3_bisr = if(repairNodes.isDefined) Some(Flipped(new BISRInputInterface)) else None
   })
   dontTouch(io)
 

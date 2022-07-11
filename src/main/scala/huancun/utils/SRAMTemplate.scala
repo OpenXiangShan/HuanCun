@@ -54,7 +54,7 @@ object ReadAndHold {
   def apply[T <: Data](x: SyncReadMem[T], addr: UInt, en: Bool): T = HoldUnless(x.read(addr, en), RegNext(en))
 }
 
-class SRAMMbistIO(sramType:Int,selectedLen:Int) extends Bundle {
+class SRAMMbistIO(sramType:Int,selectedLen:Int,hasRepair:Boolean) extends Bundle {
   val hd2prf_trim_fuse = Input(UInt(if(sramType == SramType.hd2prf.id) 11.W else 0.W))
   val hd2prf_sleep_fuse = Input(UInt(if(sramType == SramType.hd2prf.id) 2.W else 0.W))
   val hsuspsr_trim_fuse = Input(UInt(if(sramType == SramType.hsuspsr.id) 20.W else 0.W))
@@ -81,12 +81,19 @@ class SRAMMbistIO(sramType:Int,selectedLen:Int) extends Bundle {
 
   val PWR_MGNT_IN = Input(UInt((if(sramType != SramType.hd2prf.id) 6 else 5).W))
   val PWR_MGNT_OUT = Output(UInt(1.W))
+
+  val bisr_shift_en = Input(UInt((if(hasRepair) 1 else 0).W))
+  val bisr_clock = Input(UInt((if(hasRepair) 1 else 0).W))
+  val bisr_reset = Input(UInt((if(hasRepair) 1 else 0).W))
+  val bisr_scan_in = Input(UInt((if(hasRepair) 1 else 0).W))
+  val bisr_scan_out = Output(UInt((if(hasRepair) 1 else 0).W))
 }
 
 abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None,sramType:Int,hasRepair:Boolean,selectedLen:Int) extends RawModule {
-  val mbist = if (hasMbist) Some(IO(new SRAMMbistIO(sramType,selectedLen))) else None
+  val mbist = if (hasMbist) Some(IO(new SRAMMbistIO(sramType,selectedLen,hasRepair))) else None
   if (mbist.isDefined) {
     mbist.get.PWR_MGNT_OUT := DontCare
+    mbist.get.bisr_scan_out := DontCare
     dontTouch(mbist.get)
   }
   val repair = if (hasMbist && hasRepair) Some(IO(new RepairBundle)) else None
@@ -332,7 +339,7 @@ object SRAMTemplate {
   var rfRepairSerialSignals = Seq[String]()
   var rfNonRepairSerialSignals = Seq[String]()
 
-  var repairCtrlSerialSignals = Seq[String]()
+  var bisrSerialSignals = Seq[String]()
 
   private val domainName = Seq(
     "_L3_slice0_", "_L3_slice1_", "_L3_slice2_", "_L3_slice3_",
@@ -422,12 +429,12 @@ object SRAMTemplate {
     }
   }
 
-  def addSinkRPRCTRLSignal(signal:UInt,signalName:String):Unit = {
-    repairCtrlSerialSignals = doAddSink(repairCtrlSerialSignals,signal,signalName)
+  def addSinkBisrSignal(signal:UInt,signalName:String):Unit = {
+    bisrSerialSignals = doAddSink(bisrSerialSignals,signal,signalName)
   }
 
-  def addSourceRPRCTRLSignal(signal:UInt,signalName:String):Unit = {
-    repairCtrlSerialSignals = doAddSource(repairCtrlSerialSignals,signal,signalName)
+  def addSourceBisrSignal(signal:UInt,signalName:String):Unit = {
+    bisrSerialSignals = doAddSource(bisrSerialSignals,signal,signalName)
   }
 
   def getAndClearPWRMGNT(isSRAM:Boolean,hasRepair:Boolean):(String,String) = {
@@ -455,9 +462,9 @@ object SRAMTemplate {
     }
   }
 
-  def getAndClearRPRCTRL():(String,String) = {
-    val res = (repairCtrlSerialSignals.head,repairCtrlSerialSignals.last)
-    repairCtrlSerialSignals = Seq()
+  def getAndClearBisr():(String,String) = {
+    val res = (bisrSerialSignals.head,bisrSerialSignals.last)
+    bisrSerialSignals = Seq()
     res
   }
 
@@ -490,8 +497,8 @@ object SRAMTemplate {
   )
 
   private val uhdTable = Seq(
-    (3072,   64,  1),
-    (3072,   32,  1)
+    (2048,   64,  1),
+    (2048,   32,  1)
   )
   def isRF(depth:Int,width:Int,mask:Int):Boolean = {
     RfTable.contains((depth,width,mask))
@@ -550,12 +557,12 @@ class SRAMTemplate[T <: Data] (
   val myDataWidth = if (isNto1) mbistDataWidthNto1 else mbistDataWidth1toN
   val myMaskWidth = if (isNto1) maskWidthNto1 else maskWidth1toN
   val myArrayIds = Seq.tabulate(myNodeNum)(idx => SRAMTemplate.getID(!isRF) + idx)
+  val (array,vname) = SRAMArray(clock, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist,sramType = myRamType,hasRepair = hasRepair,selectedLen = myNodeNum)
   val myNodeParam = RAM2MBISTParams(set, myDataWidth,myMaskWidth,implementSinglePort,vname,parentName,myRamType,myNodeNum,myArrayIds.max)
   val sram_prefix = "sram_" + uniqueId + "_"
   val myMbistBundle = Wire(new RAM2MBIST(myNodeParam))
   dontTouch(myMbistBundle)
   myMbistBundle := DontCare
-  val (array,vname) = SRAMArray(clock, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist,sramType = myRamType,hasRepair = hasRepair,selectedLen = myNodeNum)
   if (hasMbist) {
     MBIST.addRamNode(myMbistBundle,sram_prefix,myArrayIds, !isRF,hasRepair)
     MBIST.noDedup(this)
@@ -567,8 +574,20 @@ class SRAMTemplate[T <: Data] (
     PWR_MGNT_IN0.get := DontCare
     dontTouch(PWR_MGNT_IN0.get)
     dontTouch(PWR_MGNT_OUT.get)
-    SRAMTemplate.addSinkPWRMGNTSignal(PWR_MGNT_IN0.get, s"sink_${uniqueId}", !isRF, hasRepair)
-    SRAMTemplate.addSourcePWRMGNTSignal(PWR_MGNT_OUT.get, s"source_${uniqueId}", !isRF, hasRepair)
+    SRAMTemplate.addSinkPWRMGNTSignal(PWR_MGNT_IN0.get, s"sink_PWR_MGNT_${uniqueId}", !isRF, hasRepair)
+    SRAMTemplate.addSourcePWRMGNTSignal(PWR_MGNT_OUT.get, s"source_PWR_MGNT_${uniqueId}", !isRF, hasRepair)
+  }
+  val bisr_scan_in = if(hasMbist && hasRepair) Some(Wire(UInt(1.W))) else None
+  val bisr_scan_out = if(hasMbist && hasRepair) Some(Wire(UInt(1.W))) else None
+  if(hasRepair && hasMbist){
+    bisr_scan_in.get := DontCare
+    dontTouch(bisr_scan_in.get)
+    dontTouch(bisr_scan_out.get)
+    SRAMTemplate.addSinkBisrSignal(bisr_scan_in.get, s"sink_bisr_scan_${uniqueId}")
+    SRAMTemplate.addSourceBisrSignal(bisr_scan_out.get, s"source_bisr_scan_${uniqueId}")
+  }
+
+  if(hasMbist){
     val addId = if (isNto1) mbistNodeNumNto1 else mbistNodeNum1toN
     uniqueId += addId
     SRAMTemplate.increaseID(addId, !isRF)
@@ -612,6 +631,11 @@ class SRAMTemplate[T <: Data] (
     array.mbist.get.init_val := myMbistBundle.init_val
     array.mbist.get.clkungate := myMbistBundle.clkungate
 
+    array.mbist.get.bisr_clock := myMbistBundle.bisr_clock
+    array.mbist.get.bisr_reset := myMbistBundle.bisr_reset
+    array.mbist.get.bisr_shift_en := myMbistBundle.bisr_shift_en
+    array.mbist.get.bisr_scan_in := DontCare
+
     array.mbist.get.PWR_MGNT_IN := Cat(myMbistBundle.PWR_MGNT_IN,PWR_MGNT_IN0.get)
     PWR_MGNT_OUT.get := array.mbist.get.PWR_MGNT_OUT
 
@@ -621,6 +645,8 @@ class SRAMTemplate[T <: Data] (
       array.repair.get <> bd
       bd := DontCare
       dontTouch(bd)
+      array.mbist.get.bisr_scan_in := bisr_scan_in.get
+      bisr_scan_out.get := array.mbist.get.bisr_scan_out
     }
   }
   val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
