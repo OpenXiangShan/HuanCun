@@ -479,11 +479,17 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
         bc.ready := out.ready && !block_bc
         arbiter.io.out.ready := out.ready && !block_abc
       } else {
-        out.valid := c.valid || bc.valid || arbiter.io.out.valid
-        out.bits := Mux(c.valid, c.bits, Mux(bc.valid, bc.bits, arbiter.io.out.bits))
-        c.ready := out.ready
-        bc.ready := out.ready && !c.valid
-        arbiter.io.out.ready := out.ready && !c.valid && !bc.valid
+        val bc_bits_latch = RegEnable(bc.bits, bc.valid)
+        val bc_valid_latch = RegNext(bc.valid)
+        val c_bits_latch = RegEnable(c.bits, c.valid)
+        val c_valid_latch = RegNext(c.valid)
+        val bc_real_valid = bc.valid && bc_valid_latch
+        val c_real_valid = c.valid && c_valid_latch
+        out.valid := c_real_valid || bc_real_valid || arbiter.io.out.valid
+        out.bits := Mux(c_real_valid, c_bits_latch, Mux(bc_real_valid, bc_bits_latch, arbiter.io.out.bits))
+        c.ready := out.ready && c_valid_latch
+        bc.ready := out.ready && bc_valid_latch && !c_real_valid
+        arbiter.io.out.ready := out.ready && !c_real_valid && !bc_real_valid
       }
     } else {
       val arbiter = Module(new FastArbiter[T](chiselTypeOf(out.bits), in.size))
