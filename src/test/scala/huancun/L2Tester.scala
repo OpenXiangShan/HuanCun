@@ -16,7 +16,7 @@ abstract class L2Tester extends AnyFlatSpec with ChiselScalatestTester with Matc
     case HCCacheParamsKey => HCCacheParameters(
       prefetch = Some(BOPParameters()),// None,
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2")),
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2")),
       sramClkDivBy2 = true
     )
   })

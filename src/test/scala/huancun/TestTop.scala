@@ -104,7 +104,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
     case HCCacheParamsKey => HCCacheParameters(
       name = s"L2_$i",
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2")),
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2")),
       prefetch = Some(huancun.prefetch.BOPParameters())
     )
   }))).node)
@@ -114,7 +114,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       name = "L3",
       level = 3,
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L3")),
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L3")),
       echoField = Seq(DirtyField()),
       simulation = true
     )
@@ -150,7 +150,7 @@ object TestTop_L2 extends App {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2", aliasBitsOpt = Some(2))),
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2", aliasBitsOpt = Some(2))),
       echoField = Seq(DirtyField())
     )
   })
@@ -165,7 +165,7 @@ object TestTop_L2L3 extends App {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, name = "L2", aliasBitsOpt = Some(2))),
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2", aliasBitsOpt = Some(2))),
       echoField = Seq(DirtyField())
     )
   })
