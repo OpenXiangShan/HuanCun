@@ -264,7 +264,7 @@ object SRAMArray {
     val repair = if(hasRepair) "_repair" else ""
     val numPort = if (singlePort) 1 else 2
     val maskWidth = width / maskSegments
-    val sramName = Some(s"sram_array_${sram_index}_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix$repair")
+    val sramName = Some(s"sram_array_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix$repair")
     val array = if (singlePort) {
       Module(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName,sramType,hasRepair,selectedLen))
     } else {
