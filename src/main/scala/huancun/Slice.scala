@@ -418,13 +418,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     Pipeline.pipeTo(directory.io.dirWReq),
     add_ctrl(ms.map(_.io.tasks.dir_write), ctrl.map(_.io.s_dir_w))
   )
-  arbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"), latch=true)
-  arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"), latch=true)
-  arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"), latch=true)
-  arbTasks(sourceD.io.task, ms.map(_.io.tasks.source_d), Some("sourceD"), latch=true)
-  arbTasks(sourceE.io.task, ms.map(_.io.tasks.source_e), Some("sourceE"), latch=true)
-  arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"), latch=true)
-  arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"), latch=true)
+  latchArbTasks(sourceA.io.task, ms.map(_.io.tasks.source_a), Some("sourceA"))
+  latchArbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"))
+  latchArbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"))
+  latchArbTasks(sourceD.io.task, ms.map(_.io.tasks.source_d), Some("sourceD"))
+  arbTasks(sourceE.io.task, ms.map(_.io.tasks.source_e), Some("sourceE"))  // SourceE is not latched to avoid deadlock
+  latchArbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"))
+  latchArbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"))
   arbTasks(
     Pipeline.pipeTo(directory.io.tagWReq),
     add_ctrl(ms.map(_.io.tasks.tag_write), ctrl.map(_.io.s_tag_w)),
@@ -452,6 +452,34 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       assert(false)
   }
 
+  def latchArbTasks[T <: Bundle](
+    out:    DecoupledIO[T],
+    in:     Seq[DecoupledIO[T]],
+    name:   Option[String] = None
+  ) = {
+    require(in.size == mshrsAll)
+    val abc = in.init.init
+    val bc = in.init.last
+    val c = in.last
+    val arbiter = Module(new LatchFastArbiter[T](chiselTypeOf(out.bits), abc.size))
+    if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
+    for ((arb, req) <- arbiter.io.in.zip(abc)) {
+      arb <> req
+    }
+    val bc_bits_latch = RegEnable(bc.bits, bc.valid)
+    val bc_valid_latch = RegNext(bc.valid)
+    val c_bits_latch = RegEnable(c.bits, c.valid)
+    val c_valid_latch = RegNext(c.valid)
+    val bc_real_valid = bc.valid && bc_valid_latch
+    val c_real_valid = c.valid && c_valid_latch
+    out.valid := c_real_valid || bc_real_valid || arbiter.io.out.valid
+    out.bits := Mux(c_real_valid, c_bits_latch, Mux(bc_real_valid, bc_bits_latch, arbiter.io.out.bits))
+    c.ready := out.ready && c_valid_latch
+    bc.ready := out.ready && bc_valid_latch && !c_real_valid
+    arbiter.io.out.ready := out.ready && !c_real_valid && !bc_real_valid
+    arbiter.ctrl_io.cancelVec := VecInit(abc_mshr.map(!_.io.enable))
+  }
+
   def arbTasks[T <: Bundle](
     out:    DecoupledIO[T],
     in:     Seq[DecoupledIO[T]],
@@ -464,8 +492,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       val abc = in.init.init
       val bc = in.init.last
       val c = in.last
-      val arbiter = Module(if (latch) new LatchFastArbiter[T](chiselTypeOf(out.bits), abc.size) 
-                           else new FastArbiter[T](chiselTypeOf(out.bits), abc.size))
+      val arbiter = Module(new FastArbiter[T](chiselTypeOf(out.bits), abc.size))
       if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
       for ((arb, req) <- arbiter.io.in.zip(abc)) {
         arb <> req
@@ -479,17 +506,11 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
         bc.ready := out.ready && !block_bc
         arbiter.io.out.ready := out.ready && !block_abc
       } else {
-        val bc_bits_latch = RegEnable(bc.bits, bc.valid)
-        val bc_valid_latch = RegNext(bc.valid)
-        val c_bits_latch = RegEnable(c.bits, c.valid)
-        val c_valid_latch = RegNext(c.valid)
-        val bc_real_valid = bc.valid && bc_valid_latch
-        val c_real_valid = c.valid && c_valid_latch
-        out.valid := c_real_valid || bc_real_valid || arbiter.io.out.valid
-        out.bits := Mux(c_real_valid, c_bits_latch, Mux(bc_real_valid, bc_bits_latch, arbiter.io.out.bits))
-        c.ready := out.ready && c_valid_latch
-        bc.ready := out.ready && bc_valid_latch && !c_real_valid
-        arbiter.io.out.ready := out.ready && !c_real_valid && !bc_real_valid
+        out.valid := c.valid || bc.valid || arbiter.io.out.valid
+        out.bits := Mux(c.valid, c.bits, Mux(bc.valid, bc.bits, arbiter.io.out.bits))
+        c.ready := out.ready
+        bc.ready := out.ready && !c.valid
+        arbiter.io.out.ready := out.ready && !c.valid && !bc.valid
       }
     } else {
       val arbiter = Module(new FastArbiter[T](chiselTypeOf(out.bits), in.size))
