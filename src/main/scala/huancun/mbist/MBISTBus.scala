@@ -111,14 +111,17 @@ case class RAM2MBISTParams
   hierarchyName:String,
   sramType:Int,
   nodeNum:Int,
-  maxArrayId:Int
+  maxArrayId:Int,
+  bitWrite:Boolean,
+  foundry:String,
+  sramInst:String
 ) {
   val isRF = sramType == SramType.hd2prf.id
   val addrWidth = log2Up(set + 1)
   val arrayWidth = log2Up(maxArrayId + 1)
   def getAllNodesParams():Seq[RAM2MBISTParams] = {
     val res = Seq.tabulate(nodeNum)(idx => {
-      RAM2MBISTParams(set,dataWidth,maskWidth,singlePort,vname,hierarchyName + s"node${idx}", sramType, nodeNum, maxArrayId)
+      RAM2MBISTParams(set,dataWidth,maskWidth,singlePort,vname,hierarchyName + s"node${idx}", sramType, nodeNum, maxArrayId, bitWrite, foundry, sramInst)
     })
     res
   }

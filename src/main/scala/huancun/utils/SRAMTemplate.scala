@@ -519,16 +519,20 @@ object SRAMTemplate {
 }
 
 // WARNING: this SRAMTemplate assumes the SRAM lib itself supports holdRead.
-class SRAMTemplate[T <: Data] (
-                                gen: T, set: Int, way: Int = 1, singlePort: Boolean = false,
-                                shouldReset: Boolean = false, extraReset: Boolean = false,
-                                bypassWrite: Boolean = false,
-                                // multi-cycle path
-                                clk_div_by_2: Boolean = false,
-                                // mbist support
-                                hasMbist: Boolean = true, maxMbistDataWidth: Int = 256,
-                                hasRepair:Boolean = false, parentName:String = s"Unknown"
-                              ) extends Module {
+class SRAMTemplate[T <: Data]
+(
+  gen: T, set: Int, way: Int = 1, singlePort: Boolean = false,
+  shouldReset: Boolean = false, extraReset: Boolean = false,
+  bypassWrite: Boolean = false,
+  // multi-cycle path
+  clk_div_by_2: Boolean = false,
+  // mbist support
+  hasMbist: Boolean = true, maxMbistDataWidth: Int = 256,
+  hasRepair:Boolean = false, parentName:String = s"Unknown",
+  bitWrite:Boolean = false,
+  foundry:String = "smic14",
+  sramInst:String = "sacrls0s4STANDARD"
+  ) extends Module {
 
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
@@ -558,7 +562,7 @@ class SRAMTemplate[T <: Data] (
   val myMaskWidth = if (isNto1) maskWidthNto1 else maskWidth1toN
   val myArrayIds = Seq.tabulate(myNodeNum)(idx => SRAMTemplate.getID(!isRF) + idx)
   val (array,vname) = SRAMArray(clock, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist,sramType = myRamType,hasRepair = hasRepair,selectedLen = myNodeNum)
-  val myNodeParam = RAM2MBISTParams(set, myDataWidth,myMaskWidth,implementSinglePort,vname,parentName,myRamType,myNodeNum,myArrayIds.max)
+  val myNodeParam = RAM2MBISTParams(set, myDataWidth,myMaskWidth,implementSinglePort,vname,parentName,myRamType,myNodeNum,myArrayIds.max,bitWrite,foundry,sramInst)
   val sram_prefix = "sram_" + uniqueId + "_"
   val myMbistBundle = Wire(new RAM2MBIST(myNodeParam))
   dontTouch(myMbistBundle)

@@ -431,7 +431,7 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
 
       val mbistInterfaces = bankPipeline.indices.zip(dirPipeline).zip(bankPipeline).map({
         case((idx,dirPl),bankPl) => {
-          val intfName = f"MBIST_SRAM_L3_Slice_${idx}_intf"
+          val intfName = f"MBIST_SRAM_L3_Slice_intf"
           val intf = Module(new MBISTInterface(
             Seq(dirPl.io.mbist.get.params,bankPl.io.mbist.get.params),
             Seq(dirPl.node.array_id,bankPl.node.array_id),
@@ -440,6 +440,8 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
             2,
             true
           ))
+          dirPl.genCSV(intf.info)
+          bankPl.genCSV(intf.info)
           bankPl.io.scan_in.get := intf.scan_in_toPip.get
           intf.scan_out_fromPip.get := bankPl.io.scan_out.get
           intf.toPipeline(0) <> dirPl.io.mbist.get

@@ -86,6 +86,17 @@ class MbitsStandardInterface(val params:MBISTBusParams) extends Bundle{
   val outdata = Output(UInt(params.dataWidth.W))
 }
 
+case class InterfaceInfo
+(
+  name: String,
+  addrWidth: Int,
+  dataWidth: Int,
+  arrayWidth: Int,
+  beWidth: Int
+){
+  override def toString = s"$name,$addrWidth,$dataWidth,$arrayWidth,$beWidth"
+}
+
 class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,isSRAM:Boolean,pipelineNum:Int,isRepair:Boolean = false) extends Module{
   require(params.nonEmpty)
   require(params.length == pipelineNum,s"Error @ ${name}:Params Number and pipelineNum must be the same!")
@@ -104,6 +115,8 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
   val bisr = if(isRepair) Some(IO(new BISRInputInterface)) else None
   val scan_in_toPip = if(isRepair) Some(IO(Output(UInt(1.W)))) else None
   val scan_out_fromPip = if(isRepair) Some(IO(Input(UInt(1.W)))) else None
+
+  val info = InterfaceInfo(name, myMbistBusParams.addrWidth, myMbistBusParams.dataWidth, myMbistBusParams.arrayWidth, myMbistBusParams.maskWidth)
 
   val gate = mbist.all | mbist.req
   val arrayReg = RegEnable(mbist.array,gate)
@@ -184,7 +197,13 @@ class MBISTInterface(params:Seq[MBISTBusParams],ids:Seq[Seq[Int]],name:String,is
 
 object MBISTPipeline {
   private var uniqueId = 0
-  protected[mbist] def generateCSV(node:PipelineBaseNode,infoName:String,isSRAM:Boolean): Unit ={
+  protected[mbist] def generateCSV
+  (
+    intfInfo:InterfaceInfo,
+    node:PipelineBaseNode,
+    infoName:String,
+    isSRAM: Boolean,
+  ): Unit ={
     val file = new File(f"build/$infoName.csv")
     if(!file.exists()){
       try{
@@ -196,22 +215,24 @@ object MBISTPipeline {
     }
 
     val fileHandle = new PrintWriter(f"build/$infoName.csv")
-    val heads = if(isSRAM) {
-      "\"SRAM Name\",\"SRAM Type\",\"SRAM array\",\"data width\",\"addr width\",\"be width\",\"single port\",\"pipeline depth\""
+    val intfHeads = "\"INTF Name\", \"INTF Addr\", \"INTF Data\", \"INTF Array\", \"INTF Be\"\n"
+    fileHandle.print(intfHeads)
+    fileHandle.print(intfInfo.toString + '\n')
+    val sramHeads = if(isSRAM) {
+      "\"SRAM Name\",\"SRAM Type\",\"SRAM array\",\"pipeline depth\",\"bitWrite\",\"foundry\",\"SRAM Inst\"\n"
     } else {
-      "\"RF Name\",\"RF Type\",\"SRAM array\",\"data width\",\"addr width\",\"be width\",\"single port\",\"pipeline depth\""
+      "\"RF Name\",\"RF Type\",\"SRAM array\",\"pipeline depth\",\"bitWrite\",\"foundry\",\"SRAM Inst\"\n"
     }
-    fileHandle.println(heads)
+    fileHandle.print(sramHeads)
     node.ramParamsBelongToThis.zip(node.array_id).zip(node.array_depth).foreach({
       case ((p,id),depth) =>
         fileHandle.print(p.hierarchyName + ",")
-        fileHandle.print(p.vname + ",")
+        fileHandle.print(p.vname + ".v,")
         fileHandle.print(id.toString + ",")
-        fileHandle.print(p.dataWidth.toString + ",")
-        fileHandle.print(p.addrWidth.toString + ",")
-        fileHandle.print(p.maskWidth.toString + ",")
-        fileHandle.print((if(p.singlePort) "true" else "false")  + ",")
-        fileHandle.print((depth * 2 + 2).toString)
+        fileHandle.print((depth * 2 + 2).toString + ",")
+        fileHandle.print(if(p.bitWrite) "true," else "false,")
+        fileHandle.print(p.foundry + ",")
+        fileHandle.print(p.sramInst)
         fileHandle.print("\n")
     })
     fileHandle.close()
@@ -243,8 +264,11 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
   val node = MBIST.addController(prefix, level,isSRAM,isRepair)
   val bd = node.bd
 
+  def genCSV(intf:InterfaceInfo):Unit = {
+    generateCSV(intf,node,infoName,isSRAM)
+  }
+
   if(MBIST.isMaxLevel(level)) {
-    generateCSV(node,infoName,isSRAM)
     //Within every mbist domain, sram arrays are indexed from 0
     SRAMTemplate.restartIndexing(isSRAM)
   }
