@@ -970,6 +970,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.tag := req.tag
   oa.set := req.set
   oa.off := req.off
+  oa.mask := req.mask
   // full overwrite, we can always acquire perm, no need to acquire block
   val acquire_perm_NtoT = req.opcode === AcquirePerm && req.param === NtoT
 
@@ -1349,7 +1350,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       sink := io.resps.sink_d.bits.sink
       w_grantfirst := true.B
       w_grantlast := w_grantlast || io.resps.sink_d.bits.last
-      w_grant := req.off === 0.U || io.resps.sink_d.bits.last
+      w_grant := req.off === 0.U || io.resps.sink_d.bits.last  // if req.off != 0, w_grant indicates all beats are acked
       bad_grant := io.resps.sink_d.bits.denied
       gotT := io.resps.sink_d.bits.param === toT
       gotDirty := io.resps.sink_d.bits.dirty
@@ -1452,7 +1453,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       nest_c_tag_match && nest_c_way_match && !self_meta.hit && a_do_release
     )
 
-  // TODO: fix this
   val b_c_through = req.fromB && (nest_c_tag_match && !self_meta.hit || nest_c_way_match && self_meta.hit =/= nest_c_tag_match)
 
   io_c_status.releaseThrough := req_valid &&
