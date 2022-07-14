@@ -639,6 +639,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     mshrReq.bits.tag := tag
     mshrReq.bits.set := set
     mshrReq.bits.off := off
+    mshrReq.bits.mask := Fill(edgeOut.manager.beatBytes, 1.U(1.W))
     mshrReq.bits.channel := "b001".U
     mshrReq.bits.needHint.foreach(_ := false.B)
     mshrReq.bits.isPrefetch.foreach(_ := true.B)

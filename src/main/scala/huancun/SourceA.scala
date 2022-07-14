@@ -49,10 +49,10 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
 
   a_acquire.bits.opcode := io.task.bits.opcode
   a_acquire.bits.param := io.task.bits.param
-  a_acquire.bits.size := offsetBits.U
+  a_acquire.bits.size := io.task.bits.size
   a_acquire.bits.source := io.task.bits.source
   a_acquire.bits.address := Cat(io.task.bits.tag, io.task.bits.set, 0.U(offsetBits.W))
-  a_acquire.bits.mask := Fill(edgeOut.manager.beatBytes, 1.U(1.W))
+  a_acquire.bits.mask := io.task.bits.mask
   a_acquire.bits.data := DontCare
   a_acquire.bits.corrupt := false.B
   a_acquire.bits.user.lift(PreferCacheKey).foreach(_ := false.B)
