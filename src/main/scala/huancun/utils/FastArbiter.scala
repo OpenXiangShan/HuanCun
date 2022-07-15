@@ -3,7 +3,7 @@ package huancun.utils
 import chisel3._
 import chisel3.util._
 
-abstract class FastArbiterBase[T <: Data](val gen: T, val n: Int) extends Module {
+abstract class FastArbiterBase[T <: Data](val gen: T, val n: Int) extends MultiIOModule {
   val io = IO(new ArbiterIO[T](gen, n))
 
   def maskToOH(seq: Seq[Bool]) = {
