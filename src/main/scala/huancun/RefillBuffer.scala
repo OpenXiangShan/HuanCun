@@ -49,7 +49,7 @@ class RefillBuffer(implicit p: Parameters) extends HuanCunModule {
   }
 
   when(r.valid && r.ready && rlast){ // last beat
-    assert(valids(r.id).asUInt().andR(), "[%d] attempt to invalidate a invalid entry", r.id)
+    // assert(valids(r.id).asUInt().andR(), "[%d] attempt to invalidate a invalid entry", r.id)
     valids(r.id).foreach(_ := false.B)
   }
 

@@ -1350,7 +1350,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       sink := io.resps.sink_d.bits.sink
       w_grantfirst := true.B
       w_grantlast := w_grantlast || io.resps.sink_d.bits.last
-      w_grant := req.off === 0.U || io.resps.sink_d.bits.last  // if req.off != 0, w_grant indicates all beats are acked
+      w_grant := (req.off === 0.U && req.size === log2Ceil(blockBytes).U) || io.resps.sink_d.bits.last  // if req.off != 0, w_grant indicates all beats are acked
       bad_grant := io.resps.sink_d.bits.denied
       gotT := io.resps.sink_d.bits.param === toT
       gotDirty := io.resps.sink_d.bits.dirty
