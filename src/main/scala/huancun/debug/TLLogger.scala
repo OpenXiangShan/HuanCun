@@ -62,7 +62,10 @@ class TLLogWriter(prefix: String) extends BlackBox(Map("prefix" -> StringParam(p
       |    input string prefix
       |);
       |
-      |module TLLogWriter(
+      |module TLLogWriter #(
+      |    parameter string prefix
+      |)
+      |(
       |    input [7:0] channel,
       |    input [7:0] opcode,
       |    input [7:0] param,
@@ -80,7 +83,6 @@ class TLLogWriter(prefix: String) extends BlackBox(Map("prefix" -> StringParam(p
       |    input clock,
       |    input reset
       |);
-      |    parameter string prefix;
       |
       |    always @(posedge clock) begin
       |        if(wen && !reset) begin
