@@ -3,6 +3,7 @@ package huancun.utils
 import chisel3._
 import chisel3.util._
 import huancun.mbist.MBISTPipeline.placePipelines
+import freechips.rocketchip.util.Pow2ClockDivider
 
 class SRAMWrapper[T <: Data]
 (
@@ -31,6 +32,10 @@ class SRAMWrapper[T <: Data]
     val sram = Module(new SRAMTemplate[T](
       gen, innerSet, 1, singlePort = true, clk_div_by_2 = clk_div_by_2, hasRepair = hasRepair, parentName = parentName + s"bank${i}_"
     ))
+    val clock_div2 = Module(new Pow2ClockDivider(1)).io.clock_out
+    if (clk_div_by_2) {
+      sram.clock := clock_div2
+    }
     sram.io.r.req.valid := io.r.req.valid && ren
     sram.io.r.req.bits.apply(r_setIdx)
     sram.io.w.req.valid := io.w.req.valid && wen
