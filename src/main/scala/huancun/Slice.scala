@@ -123,7 +123,7 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
   val mshrAlloc = Module(new MSHRAlloc)
   val a_req_buffer = Module(new RequestBuffer(entries = 4))
   val probeHelperOpt = if(cacheParams.inclusive) None else {
-    Some(Module(new ProbeHelper(enqDelay = if(cacheParams.dirReg) 2 else 1)))
+    Some(Module(new ProbeHelper(enqDelay = if (cacheParams.sramClkDivBy2) 3 else (if(cacheParams.dirReg) 2 else 1))))
   }
 
   val a_req = Wire(DecoupledIO(new MSHRRequest()))
