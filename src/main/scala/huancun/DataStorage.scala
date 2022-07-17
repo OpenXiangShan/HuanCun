@@ -157,13 +157,15 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val sel_req = Wire(Vec(nrBanks, new DSRequest))
   dontTouch(bank_en)
   dontTouch(sel_req)
+
+  val cycleCnt = Counter(true.B, 2)
   // mark accessed banks as busy
   if (cacheParams.sramClkDivBy2) {
     bank_en.grouped(stackSize).toList
       .map(banks => Cat(banks).orR())
       .zip(stackRdy)
       .foreach {
-        case (accessed, rdy) => rdy := !accessed
+        case (accessed, rdy) => rdy := !accessed && cycleCnt._1(0)
       }
   }
 
