@@ -3,7 +3,7 @@ package huancun.utils
 import chisel3._
 import chisel3.util._
 
-abstract class FastArbiterBase[T <: Data](val gen: T, val n: Int) extends Module {
+abstract class FastArbiterBase[T <: Data](val gen: T, val n: Int) extends MultiIOModule {
   val io = IO(new ArbiterIO[T](gen, n))
 
   def maskToOH(seq: Seq[Bool]) = {
@@ -50,10 +50,6 @@ class FastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen, n) 
 
 class LatchFastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen, n) {
 
-  val ctrl_io = IO(new Bundle {
-    val cancelVec = Input(Vec(n, Bool()))
-  })
-
   val out_valid_reg = RegInit(false.B)
   val out_bits_reg = RegInit(0.U.asTypeOf(io.out.bits))
   val chosen_reg = RegInit(0.U(n.W))
@@ -88,8 +84,7 @@ class LatchFastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen
     case (rdy, grant) => rdy := grant && out_valid_reg && io.out.ready
   }
 
-  // io.out.valid := out_valid_reg && valids(OHToUInt(chosen_reg))
-  io.out.valid := out_valid_reg && !ctrl_io.cancelVec(OHToUInt(chosen_reg))
+  io.out.valid := out_valid_reg && valids(OHToUInt(chosen_reg))
   io.out.bits <> out_bits_reg
   io.chosen := OHToUInt(chosen_reg)
 }

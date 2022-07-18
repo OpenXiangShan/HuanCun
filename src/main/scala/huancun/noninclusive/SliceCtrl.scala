@@ -220,6 +220,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.cmo_req.bits.set := cmo_set
   io.cmo_req.bits.tag := cmo_tag
   io.cmo_req.bits.off := 0.U  // DontCare
+  io.cmo_req.bits.mask := 0.U  // DontCare
   io.cmo_req.bits.bufIdx := 0.U  // DontCare
   io.cmo_req.bits.needHint.foreach(_ := false.B)
   io.cmo_req.bits.isPrefetch.foreach(_ := false.B)

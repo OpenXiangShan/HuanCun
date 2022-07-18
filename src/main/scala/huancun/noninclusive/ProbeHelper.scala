@@ -7,7 +7,7 @@ import freechips.rocketchip.tilelink.{TLMessages, TLPermissions}
 import huancun.{HuanCunModule, MSHRRequest, MetaData}
 import huancun.utils.XSPerfAccumulate
 
-class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
+class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
   extends HuanCunModule with HasClientInfo
 {
   val io = IO(new Bundle() {
@@ -38,6 +38,7 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   req.tag := tgt_tag
   req.set := tgt_set
   req.off := 0.U
+  req.mask := DontCare
   req.bufIdx := DontCare
   req.needHint.foreach(_ := false.B)
   req.isPrefetch.foreach(_ := false.B)

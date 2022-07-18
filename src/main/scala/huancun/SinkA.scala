@@ -83,6 +83,7 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
   allocInfo.set := set
   allocInfo.tag := tag
   allocInfo.off := offset
+  allocInfo.mask := a.bits.mask
   allocInfo.bufIdx := insertIdx
   allocInfo.needHint.foreach(_ := a.bits.user.lift(PrefetchKey).getOrElse(false.B))
   allocInfo.isPrefetch.foreach(_ := a.bits.opcode === TLMessages.Hint)
