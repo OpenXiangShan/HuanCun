@@ -25,7 +25,6 @@ import chisel3.util._
 import chisel3.util.random.LFSR
 import freechips.rocketchip.tilelink.TLMessages
 import huancun.mbist.MBISTPipeline.placePipelines
-import freechips.rocketchip.util.Pow2ClockDivider
 import huancun.utils._
 
 trait BaseDirResult extends HuanCunBundle {
@@ -132,9 +131,6 @@ class SubDirectory[T <: Data]
       io.tag_w.bits.set,
       UIntToOH(io.tag_w.bits.way)
     )
-    if (clk_div_by_2) {
-      eccArray.clock := clock_div2
-    }
     eccRead := eccArray.io.r(io.read.fire(), io.read.bits.set).resp.data
   } else {
     eccRead.foreach(_ := 0.U)
@@ -148,18 +144,8 @@ class SubDirectory[T <: Data]
   )
   tagRead := tagArray.io.r(io.read.fire(), io.read.bits.set).resp.data
 
-  if (clk_div_by_2) {
-    metaArray.clock := clock_div2
-    tagArray.clock := clock_div2
-  }
-
   val reqReg = RegEnable(io.read.bits, enable = io.read.fire())
-  val reqValidReg = RegInit(false.B)
-  if (clk_div_by_2) {
-    reqValidReg := RegNext(io.read.fire())
-  } else {
-    reqValidReg := io.read.fire()
-  }
+  val reqValidReg = RegNext(io.read.fire(), false.B)
 
   val hit_s1 = Wire(Bool())
   val way_s1 = Wire(UInt(wayBits.W))
