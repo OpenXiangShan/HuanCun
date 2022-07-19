@@ -43,7 +43,11 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val needData = io.d.bits.opcode(0)
 
   val source_latch = RegEnable(io.d.bits.source, io.d.valid)
-  val new_source = io.d.bits.source =/= source_latch
+  val first_resp = RegInit(true.B)
+  when (io.d.valid) {
+    first_resp := false.B
+  }
+  val new_source = first_resp || io.d.bits.source =/= source_latch
   val indexed_set = RegEnable(io.set, io.d.valid)
   val indexed_way = RegEnable(io.way, io.d.valid)
   val w_safe = !new_source && !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(indexed_set, indexed_way))
