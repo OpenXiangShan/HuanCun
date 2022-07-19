@@ -186,7 +186,6 @@ class SubDirectory[T <: Data](
   val chosenWay = Mux(inv, invalidWay, replaceWay)
 
   /* stage 0: io.read.fire
-     stage #: wait for sram
      stage 1: generate hit/way, io.resp.valid = TRUE (will latch into MSHR)
      stage 2: output latched hit/way, output dir/tag
   */
@@ -217,11 +216,10 @@ class SubDirectory[T <: Data](
     Mux(resetFinish, UIntToOH(io.dir_w.bits.way), Fill(ways, true.B))
   )
 
-  val cycleCnt = Counter(true.B, 2)
-  when(resetIdx === 0.U && !cycleCnt._1(0)) {
+  when(resetIdx === 0.U) {
     resetFinish := true.B
   }
-  when(!resetFinish && !cycleCnt._1(0)) {
+  when(!resetFinish) {
     resetIdx := resetIdx - 1.U
   }
 
