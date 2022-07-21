@@ -728,9 +728,10 @@ class SRAMTemplate[T <: Data]
 
   /*************************************mbist rdata output**************************************************/
   val nodeSelected = myArrayIds.map(_.U === mbistArray)
-  val rdataInUIntHold = RegEnable(rdata.reverse.reduce(Cat(_,_)),0.U,(mbistSelected & RegNext(toSRAMRen, 0.U))(0).asBool)
+  val rdataInUIntHold = RegEnable(rdata.asUInt, 0.U, mbistSelected(0) && RegNext(toSRAMRen, false.B))
   val rdataFitToNodes = Seq.tabulate(myNodeNum)(idx => {
-    rdataInUIntHold(idx * myDataWidth + myDataWidth - 1, idx * myDataWidth)
+    val highIdx = Seq(idx * myDataWidth + myDataWidth - 1, rdata.getWidth - 1).min
+    rdataInUIntHold(highIdx, idx * myDataWidth)
   })
   myMbistBundle.rdata := ParallelMux(nodeSelected zip rdataFitToNodes)
   /*********************************************************************************************************/
