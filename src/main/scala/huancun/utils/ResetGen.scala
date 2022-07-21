@@ -18,6 +18,7 @@ package huancun.utils
 
 import chisel3._
 import chisel3.util._
+import freechips.rocketchip.util.AsyncResetSynchronizerShiftReg
 
 abstract class ResetGen extends Module {
   val o_reset = IO(Output(AsyncReset()))
@@ -110,20 +111,21 @@ object ResetGen {
   }
 }
 
-class ClockSync3 extends Module {
+class PulseClockSync3 extends Module {
   val d = IO(Input(Bool()))
-  val q = IO(Output(Bool()))
+  val pulse = IO(Output(Bool()))
 
-  val pipe_reg = RegInit(0.U(4.W))
-  pipe_reg := Cat(pipe_reg(2, 0), d)
+  val q = AsyncResetSynchronizerShiftReg(d, 3)
 
-  q := pipe_reg(2) && !pipe_reg(3)
+  val q_prev = RegNext(q)
+
+  pulse := q && !q_prev
 }
 
-object ClockSync3 {
+object PulseClockSync3 {
   def apply(d: Bool): Bool = {
-    val sync3 = Module(new ClockSync3)
+    val sync3 = Module(new PulseClockSync3)
     sync3.d := d
-    sync3.q
+    sync3.pulse
   }
 }
