@@ -471,7 +471,7 @@ object SRAMTemplate {
   //(depth,width,mask)
   private val RfTable = Seq(
     (128,   232,  8),
-    (128,   4096, 8),
+    (128,   1024, 2),
     (128,   256,  8),
     (256,   24,   2),
     (2048,  4,    2),
