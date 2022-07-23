@@ -233,7 +233,7 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc, Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
-      val dfx_scan = Input(new DFTResetGen)
+      val dfx_reset = Input(new DFTResetGen)
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -315,7 +315,7 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     val slicesWithItsMBISTPipeline = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
-        val rst = ResetGen(2, Some(io.dfx_scan))
+        val rst = ResetGen(2, Some(io.dfx_reset))
         val slice = withReset(rst) {
           Module(new Slice(parentName + s"slice${i}_")(p.alterPartial {
             case EdgeInKey => edgeIn
