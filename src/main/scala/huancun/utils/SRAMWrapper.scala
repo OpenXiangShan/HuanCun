@@ -27,7 +27,7 @@ class SRAMWrapper[T <: Data]
     val ren = if(n == 1) true.B else i.U === r_sel
     val wen = if(n == 1) true.B else i.U === w_sel
     val sram = Module(new SRAMTemplate[T](
-      gen, innerSet, 1, singlePort = true, clk_div_by_2 = false
+      gen, innerSet, 1, singlePort = true, input_clk_div_by_2 = clk_div_by_2
     ))
     val clock_div2 = Module(new Pow2ClockDivider(1)).io.clock_out
     if (clk_div_by_2) {

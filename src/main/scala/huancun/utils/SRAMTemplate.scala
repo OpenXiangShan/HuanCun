@@ -102,13 +102,13 @@ class SRAMTemplate[T <: Data]
   gen: T, set: Int, way: Int = 1,
   shouldReset: Boolean = false, holdRead: Boolean = false,
   singlePort: Boolean = false, bypassWrite: Boolean = false,
-  clk_div_by_2: Boolean = false
+  clk_div_by_2: Boolean = false, input_clk_div_by_2: Boolean = false
 ) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
   })
-
+  override def desiredName: String = if (input_clk_div_by_2) s"ClkDiv2SRAMTemplate" else super.desiredName
   val wordType = UInt(gen.getWidth.W)
   val array = SyncReadMem(set, Vec(way, wordType))
   val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
