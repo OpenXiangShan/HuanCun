@@ -100,11 +100,11 @@ class SubDirectory[T <: Data](
     }))
   })
 
+  val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true))
+  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
   val clock_div2 = Module(new Pow2ClockDivider(1)).io.clock_out
-  val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
 
   val tag_wen = io.tag_w.valid
   val dir_wen = io.dir_w.valid
@@ -120,9 +120,9 @@ class SubDirectory[T <: Data](
   println(s"Tag ECC bits:$eccBits")
   val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true))
+  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
   if(eccBits > 0){
-    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true))
+    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
     eccArray.io.w(
       io.tag_w.fire(),
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
