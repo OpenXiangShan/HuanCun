@@ -419,7 +419,7 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     val xsl2_ultiscan = if (cacheParams.level == 3) Some(IO(new FSCANInputInterface)) else None
     val hd2prf_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = false))) else None
     val hsuspsr_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = true))) else None
-    val uhdusplr_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = false))) else None
+    val uhdusplr_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = true))) else None
     val hduspsr_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = true))) else None
     val bisr = if (cacheParams.level == 3) Some(IO(Vec(sliceMbistPipelines.length,new BISRInputInterface))) else None
     val mbist_jtag = if (cacheParams.level == 3) Some(IO(Vec(sliceMbistPipelines.length,new JTAGInterface))) else None
