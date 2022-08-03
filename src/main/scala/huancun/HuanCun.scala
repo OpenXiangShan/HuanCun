@@ -26,7 +26,7 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.prefetch._
-import huancun.utils.{FastArbiter, Pipeline}
+import huancun.utils.{FastArbiter, Pipeline, ResetGen}
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -305,8 +305,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
         val rst = if(cacheParams.level == 3 && !cacheParams.simulation) {
-          RegNext(RegNext(reset.asBool))
-        } else reset.asBool
+          ResetGen()
+        } else reset
         val slice = withReset(rst){ Module(new Slice()(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut
