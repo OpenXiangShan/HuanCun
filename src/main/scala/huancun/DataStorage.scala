@@ -172,7 +172,7 @@ class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends
       .map(banks => Cat(banks).orR())
       .zip(stackRdy)
       .foreach {
-        case (accessed, rdy) => rdy := !accessed && cycleCnt._1(0)
+        case (accessed, rdy) => rdy := !accessed && !cycleCnt._1(0)
       }
   }
 
@@ -183,16 +183,18 @@ class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends
     sel_req(i) := selectedReq
     // Write
     val wen = en && selectedReq.wen
-    bankedData(i).io.w.req.valid := wen
+    val wen_latch = RegNext(wen, false.B)
+    bankedData(i).io.w.req.valid := wen_latch
     bankedData(i).io.w.req.bits.apply(
-      setIdx = selectedReq.index,
-      data = selectedReq.data(i),
+      setIdx = RegNext(selectedReq.index),
+      data = RegNext(selectedReq.data(i)),
       waymask = 1.U
     )
     // Read
     val ren = en && !selectedReq.wen
-    bankedData(i).io.r.req.valid := ren
-    bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
+    val ren_latch = RegNext(ren, false.B)
+    bankedData(i).io.r.req.valid := ren_latch
+    bankedData(i).io.r.req.bits.apply(setIdx = RegNext(selectedReq.index))
     // Ecc
     outData(i) := bankedData(i).io.r.resp.data(0)
   }
