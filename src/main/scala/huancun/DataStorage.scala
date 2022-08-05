@@ -181,20 +181,35 @@ class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends
     val selectedReq = PriorityMux(reqs.map(_.bankSel(i)), reqs)
     bank_en(i) := en
     sel_req(i) := selectedReq
-    // Write
-    val wen = en && selectedReq.wen
-    val wen_latch = RegNext(wen, false.B)
-    bankedData(i).io.w.req.valid := wen_latch
-    bankedData(i).io.w.req.bits.apply(
-      setIdx = RegNext(selectedReq.index),
-      data = RegNext(selectedReq.data(i)),
-      waymask = 1.U
-    )
-    // Read
-    val ren = en && !selectedReq.wen
-    val ren_latch = RegNext(ren, false.B)
-    bankedData(i).io.r.req.valid := ren_latch
-    bankedData(i).io.r.req.bits.apply(setIdx = RegNext(selectedReq.index))
+    if (cacheParams.sramClkDivBy2) {
+      // Write
+      val wen = en && selectedReq.wen
+      val wen_latch = RegNext(wen, false.B)
+      bankedData(i).io.w.req.valid := wen_latch
+      bankedData(i).io.w.req.bits.apply(
+        setIdx = RegNext(selectedReq.index),
+        data = RegNext(selectedReq.data(i)),
+        waymask = 1.U
+      )
+      // Read
+      val ren = en && !selectedReq.wen
+      val ren_latch = RegNext(ren, false.B)
+      bankedData(i).io.r.req.valid := ren_latch
+      bankedData(i).io.r.req.bits.apply(setIdx = RegNext(selectedReq.index))
+    } else {
+      // Write
+      val wen = en && selectedReq.wen
+      bankedData(i).io.w.req.valid := wen
+      bankedData(i).io.w.req.bits.apply(
+        setIdx = selectedReq.index,
+        data = selectedReq.data(i),
+        waymask = 1.U
+      )
+      // Read
+      val ren = en && !selectedReq.wen
+      bankedData(i).io.r.req.valid := ren
+      bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
+    }
     // Ecc
     outData(i) := bankedData(i).io.r.resp.data(0)
   }
