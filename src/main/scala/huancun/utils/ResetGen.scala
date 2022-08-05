@@ -19,7 +19,7 @@ package huancun.utils
 import chisel3._
 import chisel3.util._
 
-class ResetGen(SYNC_NUM: Int = 2) extends Module {
+class ResetGen(SYNC_NUM: Int = 2) extends MultiIOModule {
   val o_reset = IO(Output(AsyncReset()))
 
   val pipe_reset = RegInit(((1L << SYNC_NUM) - 1).U(SYNC_NUM.W))
