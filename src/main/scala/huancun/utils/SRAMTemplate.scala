@@ -200,14 +200,17 @@ class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
     val R0_en = R0.en
     val R0_en_REG = RegNext(R0_en)
     val R0_addr_REG = RegEnable(R0.addr, R0_en)
-    // To align with the real memory model, R0.data should be width'x when R0 and W0 have conflicts.
-    val RW0_conflict = RegEnable(W0.en && R0.addr === W0.addr, R0.en)
     // RW0_conflict_data will be replaced by width'x in Verilog by scripts.
-    val RW0_conflict_data = Wire(UInt(width.W))
-    RW0_conflict_data := ((1L << width) - 1).U
+    val RW0_conflict_data = Wire(UInt((width / maskSegments).W))
+    RW0_conflict_data := ((1L << (width / maskSegments)) - 1).U
     // DontTouch RW0_conflict_data to force Chisel not to optimize it out.
     dontTouch(RW0_conflict_data)
-    val R0_data = Mux(RW0_conflict, RW0_conflict_data, VecInit(ram.map(_.read(R0_addr_REG))).asUInt)
+    val R0_data = VecInit((0 until maskSegments).map(i => {
+      // To align with the real memory model, R0.data should be width'x when R0 and W0 have conflicts.
+      val wmask = if (W0.mask.isDefined) W0.mask.get(i) else true.B
+      val RW0_conflict = RegEnable(W0.en && wmask && R0.addr === W0.addr, R0.en)
+      Mux(RW0_conflict, RW0_conflict_data, ram(i).read(R0_addr_REG))
+    })).asUInt
     // The read data naturally holds when not enabled.
     R0.data := HoldUnless(R0_data, R0_en_REG)
   }
