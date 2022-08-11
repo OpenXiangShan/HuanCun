@@ -87,13 +87,15 @@ class Table[T <: Record](val tableName: String, val hw: T) extends HasTableUtils
          |  char * site
          |) {
          |  if(!dump) return;
-         |  char sql[512];
+         |  char * format = "INSERT INTO $tableName(${cols.map(_.toUpperCase).mkString(",")}, STAMP, SITE) " \\
+         |                  "VALUES(${cols.map(_ => "%ld").mkString(", ")}, %ld, '%s');";
+         |  char * sql = (char *)malloc(${cols.size + 1} * sizeof(uint64_t) + (strlen(format)+strlen(site)) * sizeof(char));
          |  sprintf(sql,
-         |    "INSERT INTO $tableName(${cols.map(_.toUpperCase).mkString(",")}, STAMP, SITE) " \\
-         |    "VALUES(${cols.map(_ => "%ld").mkString(", ")}, %ld, '%s');",
+         |    format,
          |    ${cols.mkString(",")}, stamp, site
          |  );
          |  rc = sqlite3_exec(mem_db, sql, callback, 0, &zErrMsg);
+         |  free(sql);
          |  if(rc != SQLITE_OK) {
          |    printf("SQL error: %s\\n", zErrMsg);
          |    exit(0);
