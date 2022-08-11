@@ -134,15 +134,17 @@ class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
     // read: rdata will keep stable until the next read enable.
     val RW0_ren = RW0.en && !RW0.wmode
     val RW0_ren_REG = RegNext(RW0_ren)
-    val RW0_addr_REG = RegEnable(RW0.addr, RW0_ren)
-    RW0.rdata := HoldUnless(VecInit(ram.map(_.read(RW0_addr_REG))).asUInt, RW0_ren_REG)
+    val RW0_raddr_REG = RegEnable(RW0.addr, RW0_ren)
+    RW0.rdata := HoldUnless(VecInit(ram.map(_.read(RW0_raddr_REG))).asUInt, RW0_ren_REG)
     // write with mask
     val RW0_wen = RW0.en && RW0.wmode
-    val wdata = RW0.wdata.asTypeOf(Vec(maskSegments, UInt((width / maskSegments).W)))
+    val RW0_wen_REG = RegNext(RW0_wen)
+    val RW0_waddr_REG = RegEnable(RW0.addr, RW0_wen)
+    val RW0_wdata_REG = RegEnable(RW0.wdata.asTypeOf(Vec(maskSegments, UInt((width / maskSegments).W))), RW0_wen)
     for (i <- 0 until maskSegments) {
-      val wmask = if (RW0.wmask.isDefined) RW0.wmask.get(i) else true.B
-      when (RW0_wen && wmask) {
-        ram(i)(RW0.addr) := wdata(i)
+      val RW0_wmask_REG = if (RW0.wmask.isDefined) RegEnable(RW0.wmask.get(i), RW0_wen) else true.B
+      when (RW0_wen_REG && RW0_wmask_REG) {
+        ram(i)(RW0_waddr_REG) := RW0_wdata_REG(i)
       }
     }
   }
@@ -217,12 +219,13 @@ class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
 
   // write with mask
   withClock(W0.clk) {
-    val W0_en = W0.en
-    val wdata = W0.data.asTypeOf(Vec(maskSegments, UInt((width / maskSegments).W)))
+    val W0_en_REG = RegNext(W0.en)
+    val W0_addr_REG = RegEnable(W0.addr, W0.en)
+    val W0_data_REG = RegEnable(W0.data.asTypeOf(Vec(maskSegments, UInt((width / maskSegments).W))), W0.en)
     for (i <- 0 until maskSegments) {
-      val wmask = if (W0.mask.isDefined) W0.mask.get(i) else true.B
-      when (W0_en && wmask) {
-        ram(i)(W0.addr) := wdata(i)
+      val W0_mask_REG = if (W0.mask.isDefined) RegEnable(W0.mask.get(i), W0.en) else true.B
+      when (W0_en_REG && W0_mask_REG) {
+        ram(i)(W0_addr_REG) := W0_data_REG(i)
       }
     }
   }
