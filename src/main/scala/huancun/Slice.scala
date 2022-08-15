@@ -112,7 +112,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   dataStorage.io.sourceD_wdata <> sourceD.io.bs_wdata
   dataStorage.io.sourceC_raddr <> ctrl_arb(sourceC.io.bs_raddr, ctrl.map(_.io.bs_r_addr))
   dataStorage.io.sinkC_waddr <> ctrl_arb(sinkC.io.bs_waddr, ctrl.map(_.io.bs_w_addr))
-  dataStorage.io.sinkC_wdata <> (if(ctrl.nonEmpty){
+  dataStorage.io.sinkC_wdata := (if(ctrl.nonEmpty){
     Mux(ctrl.get.io.bs_w_addr.valid,
       ctrl.get.io.bs_w_data,
       sinkC.io.bs_wdata
