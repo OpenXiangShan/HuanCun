@@ -1,8 +1,24 @@
+/** *************************************************************************************
+  * Copyright (c) 2020-2022 Institute of Computing Technology, Chinese Academy of Sciences
+  * Copyright (c) 2020-2022 Peng Cheng Laboratory
+  *
+  * XiangShan is licensed under Mulan PSL v2.
+  * You can use this software according to the terms and conditions of the Mulan PSL v2.
+  * You may obtain a copy of Mulan PSL v2 at:
+  *          http://license.coscl.org.cn/MulanPSL2
+  *
+  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+  *
+  * See the Mulan PSL v2 for more details.
+  * *************************************************************************************
+  */
+
 package huancun.mbist
 
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.BoringUtils
 import huancun.mbist.MBIST._
 import huancun.mbist.MBISTPipeline.{generateCSV, uniqueId}
 import huancun.utils.{ParallelMux, ParallelOR, SRAMTemplate}
@@ -45,14 +61,14 @@ class MbitsExtraFullInterface extends Bundle{
     }
   }
   def connectPWR_MGNT(head:String,last:String):Unit = {
-    
+
     val source = Wire(UInt(1.W))
     val sink = Wire(UInt(1.W))
     dontTouch(source)
     dontTouch(sink)
     sink := DontCare
-    BoringUtils.addSource(source,head)
-    BoringUtils.addSink(sink,last)
+    WiringUtils.addSource(source,head)
+    WiringUtils.addSink(sink,last)
     source := ext_in(0)
     ext_out := sink
   }
@@ -285,8 +301,8 @@ class MBISTPipeline(level: Int,infoName:String = s"MBISTPipeline_${uniqueId}",va
     val scan_in = Wire(UInt(1.W))
     val scan_out = Wire(UInt(1.W))
     scan_out := DontCare
-    BoringUtils.addSource(scan_in,BISR_SCAN._1)
-    BoringUtils.addSink(scan_out,BISR_SCAN._2)
+    WiringUtils.addSource(scan_in,BISR_SCAN._1)
+    WiringUtils.addSink(scan_out,BISR_SCAN._2)
     io.scan_out.get := scan_out
     scan_in := io.scan_in.get
   }

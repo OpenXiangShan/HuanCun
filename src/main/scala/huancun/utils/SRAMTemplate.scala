@@ -22,7 +22,6 @@ package huancun.utils
 
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.BoringUtils
 import freechips.rocketchip.tilelink.LFSR64
 import huancun.mbist._
 import huancun.utils.SRAMTemplate.uniqueId
@@ -416,15 +415,15 @@ object SRAMTemplate {
 
   def doAddSink(srcSeq:Seq[String],signal:UInt,signalName:String):Seq[String]= {
     if(srcSeq.isEmpty){
-      BoringUtils.addSink(signal,signalName)
+      WiringUtils.addSink(signal,signalName)
       Seq(signalName)
     }else{
-      BoringUtils.addSink(signal,srcSeq.last)
+      WiringUtils.addSink(signal,srcSeq.last)
       srcSeq.init
     }
   }
   def doAddSource(srcSeq:Seq[String],signal:UInt,signalName:String):Seq[String]= {
-    BoringUtils.addSource(signal,signalName)
+    WiringUtils.addSource(signal,signalName)
     srcSeq :+ signalName
   }
   def addSinkPWRMGNTSignal(signal:UInt,signalName:String,isSRAM:Boolean,hasRepair:Boolean):Unit = {
@@ -557,7 +556,7 @@ class SRAMTemplate[T <: Data]
 
   val isNto1 = gen.getWidth > maxMbistDataWidth
   val isRF = SRAMTemplate.isRF(set,gen.getWidth * way,way)
-//  val isRF = !singlePort
+  // val isRF = !singlePort
   val myRamType = SRAMTemplate.getSramType(set,gen.getWidth * way,way)
   val implementSinglePort = if(isRF) false else singlePort
 
