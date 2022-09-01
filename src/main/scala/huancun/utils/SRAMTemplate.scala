@@ -544,8 +544,8 @@ class SRAMTemplate[T <: Data]
   hasMbist: Boolean = true, maxMbistDataWidth: Int = 256,
   hasRepair:Boolean = false, parentName:String = s"Unknown",
   bitWrite:Boolean = false,
-  foundry:String = "smic14",
-  sramInst:String = "sacrls0s4STANDARD"
+  foundry:String = "UNKNOWN",
+  sramInst:String = "STANDARD"
   ) extends Module {
 
   val io = IO(new Bundle {
@@ -705,7 +705,12 @@ class SRAMTemplate[T <: Data]
   val raw_rdata = array.read(finalReadSetIdx, toSRAMRen).asTypeOf(Vec(way, wordType))
 
   // bypass for dual-port SRAMs
-  require(!bypassWrite || bypassWrite && !implementSinglePort)
+  if (!bypassWrite && !singlePort) {
+    println(s"ERROR: 2-port SRAM $parentName does not enable bypassWrite. Please check it!!!\n")
+    assert(!(ren && wen && io.r.req.bits.setIdx === io.w.req.bits.setIdx))
+  }
+  // force bypass write for implemented dual-port SRAMs
+  val implementBypassWrite = !implementSinglePort && bypassWrite
   def need_bypass(wen: Bool, waddr: UInt, wmask: UInt, ren: Bool, raddr: UInt, isDoingMbist:Bool) : UInt = {
     val need_check = RegNext(ren && wen)
     val waddr_reg = RegNext(waddr)
@@ -717,7 +722,7 @@ class SRAMTemplate[T <: Data]
     )
     bypass.asTypeOf(UInt(way.W))
   }
-  val bypass_wdata = if (bypassWrite) VecInit(RegNext(io.w.req.bits.data).map(_.asTypeOf(wordType)))
+  val bypass_wdata = if (implementBypassWrite) VecInit(RegNext(io.w.req.bits.data).map(_.asTypeOf(wordType)))
   else VecInit((0 until way).map(_ => LFSR64().asTypeOf(wordType)))
   val bypass_mask = need_bypass(io.w.req.valid, io.w.req.bits.setIdx, io.w.req.bits.waymask.getOrElse("b1".U), io.r.req.valid, io.r.req.bits.setIdx,mbistFuncSel)
   val mem_rdata = {
