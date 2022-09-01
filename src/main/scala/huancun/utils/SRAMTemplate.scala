@@ -710,7 +710,7 @@ class SRAMTemplate[T <: Data]
     assert(!(ren && wen && io.r.req.bits.setIdx === io.w.req.bits.setIdx))
   }
   // force bypass write for implemented dual-port SRAMs
-  val implementBypassWrite = !implementSinglePort && bypassWrite
+  val implementBypassWrite = !implementSinglePort && (bypassWrite || singlePort)
   def need_bypass(wen: Bool, waddr: UInt, wmask: UInt, ren: Bool, raddr: UInt, isDoingMbist:Bool) : UInt = {
     val need_check = RegNext(ren && wen)
     val waddr_reg = RegNext(waddr)
