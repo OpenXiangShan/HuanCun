@@ -139,6 +139,7 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
     mshrAlloc.io.b_req <> b_arb.io.out
   }
   if(prefetchOpt.nonEmpty){
+    io.prefetch.get.recv_addr := DontCare
     val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
     alloc_A_arb.io.in(0) <> a_req
     alloc_A_arb.io.in(1) <> pftReqToMSHRReq(io.prefetch.get.req)

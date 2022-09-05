@@ -228,6 +228,12 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
   val rst_nodes = ctrl_unit.map(_.core_reset_nodes)
   val intnode = ctrl_unit.map(_.intnode)
 
+  val pf_recv_node: Option[BundleBridgeSink[Valid[UInt]]] = prefetchOpt match {
+    case Some(_: PrefetchReceiverParams) =>
+      Some(BundleBridgeSink(Some(() => ValidIO(UInt(64.W)))))
+    case _ => None
+  }
+
   lazy val module = new LazyModuleImp(this) {
     val banks = node.in.size
     val io = IO(new Bundle {
@@ -288,10 +294,14 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
     prefetchOpt.foreach {
-      case _ =>
+      _ =>
         arbTasks(prefetcher.get.io.train, prefetchTrains.get, Some("prefetch_train"))
         prefetcher.get.io.req.ready := Cat(prefetchReqsReady).orR
         arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
+    }
+    pf_recv_node match {
+      case Some(x) => prefetcher.get.io.recv_addr := x.in.head._1
+      case None => prefetcher.foreach(_.io.recv_addr := DontCare)
     }
 
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
