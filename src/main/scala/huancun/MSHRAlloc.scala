@@ -119,9 +119,8 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   request.valid := io.c_req.valid || io.b_req.valid || io.a_req.valid
   request.bits := Mux(io.c_req.valid,
-    io.c_req.bits,
-    Mux(io.b_req.valid, io.b_req.bits, io.a_req.bits)
-  )
+                      io.c_req.bits,
+                      Mux(io.b_req.valid, io.b_req.bits, io.a_req.bits))
 
   /* Provide signals for outer components*/
   io.c_req.ready := dirRead.ready && can_accept_c
@@ -132,13 +131,11 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   mshrSelector.io.idle := abc_mshr_status.map(s => !s.valid)
   val selectedMSHROH = mshrSelector.io.out.bits
   for ((mshr, i) <- abc_mshr_alloc.zipWithIndex) {
-    mshr.valid := (
-      mshrFree && dirRead.ready && (
-        io.c_req.valid && !conflict_c ||
-        io.b_req.valid && !conflict_b && !io.c_req.valid ||
-        io.a_req.valid && !conflict_a && !io.b_req.valid && !io.c_req.valid
-      )
-    ) && selectedMSHROH(i)
+    mshr.valid := (mshrFree && dirRead.ready && 
+                   (io.c_req.valid && !conflict_c ||
+                    io.b_req.valid && !conflict_b && !io.c_req.valid ||
+                    io.a_req.valid && !conflict_a && !io.b_req.valid && !io.c_req.valid)) && 
+                  selectedMSHROH(i)
     mshr.bits := request.bits
   }
 
@@ -164,7 +161,9 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   dirRead.bits.idOH := Cat(
     nestC_valid || tmpC_valid,
     nestB_valid || tmpB_valid,
-    Mux(nestC_valid || tmpC_valid || nestB_valid || tmpB_valid, 0.U(mshrs.W), selectedMSHROH)
+    Mux(nestC_valid || tmpC_valid || nestB_valid || tmpB_valid, 
+        0.U(mshrs.W), 
+        selectedMSHROH)
   )
   dirRead.bits.replacerInfo.channel := request.bits.channel
   dirRead.bits.replacerInfo.opcode := request.bits.opcode
@@ -187,23 +186,23 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
       }.elsewhen(cnt =/= 0.U) {
         cnt := 0.U
       }
-      val cntEnable =
-        !io.status(i).valid && cnt =/= 0.U && cntStart && cnt < 5000.U // Ignore huge cnt during L3 dir reset
+      val cntEnable = !io.status(i).valid && cnt =/= 0.U && cntStart && cnt < 5000.U // Ignore huge cnt during L3 dir reset
+      
       XSPerfHistogram(cacheParams, "mshr_latency_" + Integer.toString(i, 10), cnt, cntEnable, 0, 300, 10)
       XSPerfMax(cacheParams, "mshr_latency", cnt, cntEnable)
     }
   }
 
-  val pretch_block_vec = VecInit(io.status.map(s =>
+  val prefetch_block_vec = VecInit(io.status.map(s =>
     s.valid && s.bits.is_prefetch &&
-      (s.bits.set(block_granularity - 1, 0) === io.a_req.bits.set(block_granularity - 1, 0))
+    (s.bits.set(block_granularity - 1, 0) === io.a_req.bits.set(block_granularity - 1, 0))
   ))
 
   XSPerfAccumulate(cacheParams, "nrWorkingABCmshr", PopCount(io.status.init.init.map(_.valid)))
   XSPerfAccumulate(cacheParams, "nrWorkingBmshr", io.status.take(mshrs+1).last.valid)
   XSPerfAccumulate(cacheParams, "nrWorkingCmshr", io.status.last.valid)
   XSPerfAccumulate(cacheParams, "conflictA", io.a_req.valid && conflict_a)
-  XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && Cat(pretch_block_vec).orR())
+  XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && Cat(prefetch_block_vec).orR())
   XSPerfAccumulate(cacheParams, "conflictB", io.b_req.valid && conflict_b)
   XSPerfAccumulate(cacheParams, "conflictC", io.c_req.valid && conflict_c)
   //val perfinfo = IO(new Bundle(){
@@ -215,7 +214,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     ("nrWorkingBmshr      ", io.status.take(mshrs+1).last.valid         ),
     ("nrWorkingCmshr      ", io.status.last.valid                       ),
     ("conflictA           ", io.a_req.valid && conflict_a               ),
-    ("conflictByPrefetch  ", io.a_req.valid && Cat(pretch_block_vec).orR),
+    ("conflictByPrefetch  ", io.a_req.valid && Cat(prefetch_block_vec).orR),
     ("conflictB           ", io.b_req.valid && conflict_b               ),
     ("conflictC           ", io.c_req.valid && conflict_c               ),
   )
