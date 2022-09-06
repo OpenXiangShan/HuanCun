@@ -13,7 +13,12 @@ case class BOPParameters(
   scoreBits:      Int = 5,
   roundMax:       Int = 50,
   badScore:       Int = 1,
-  offsetList: Seq[Int] = Seq(1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16 /*,  18,  20,  24,  25,  27,  30,  32,  36,
+  offsetList: Seq[Int] = Seq(
+    -32, -30, -27, -25, -24, -20, -18, -16, -15,
+    -12, -10,  -9,  -8,  -6,  -5,  -4,  -3,  -2,  -1,
+      1,   2,   3,   4,   5,   6,   8,   9,  10,
+     12,  15,  16,  18,  20,  24,  25,  27,  30//,
+    /*32,  36,
      40,  45,  48,  50,  54,  60,  64,  72,  75,  80,
      81,  90,  96, 100, 108, 120, 125, 128, 135, 144,
     150, 160, 162, 180, 192, 200, 216, 225, 240, 243,
@@ -40,23 +45,31 @@ trait HasBOPParams extends HasHuanCunParameters {
   val inflightEntries = bopParams.inflightEntries
 
   val scores = offsetList.length
-  val offsetWidth = log2Up(offsetList(scores - 1)) + 1
+  val offsetWidth = log2Up(-offsetList(0)) + 1 // -32 <= offset <= 31
   val roundBits = log2Up(roundMax)
   val scoreMax = (1 << scoreBits) - 1
   val scoreTableIdxBits = log2Up(scores)
   // val prefetchIdWidth = log2Up(inflightEntries)
+
+  def signedExtend(x: UInt, width: Int): UInt = {
+    if (x.getWidth >= width) {
+      x
+    } else {
+      Cat(Fill(width - x.getWidth, x.head(1)), x)
+    }
+  }
 }
 
 abstract class BOPBundle(implicit val p: Parameters) extends Bundle with HasBOPParams
 abstract class BOPModule(implicit val p: Parameters) extends Module with HasBOPParams
 
 class ScoreTableEntry(implicit p: Parameters) extends BOPBundle {
-  val offset = UInt(offsetWidth.W)
+  // val offset = UInt(offsetWidth.W)
   val score = UInt(scoreBits.W)
 
-  def apply(offset: UInt, score: UInt) = {
+  def apply(score: UInt) = {
     val entry = Wire(this)
-    entry.offset := offset
+    // entry.offset := offset
     entry.score := score
     entry
   }
@@ -114,7 +127,7 @@ class RecentRequestTable(parentName:String = "Unknown")(implicit p: Parameters) 
   rrTable.io.w.req.bits.data(0).valid := true.B
   rrTable.io.w.req.bits.data(0).tag := tag(wAddr)
 
-  val rAddr = io.r.req.bits.addr - (io.r.req.bits.testOffset << offsetBits)
+  val rAddr = io.r.req.bits.addr - signedExtend((io.r.req.bits.testOffset << offsetBits), fullAddressBits)
   val rData = Wire(rrTableEntry())
   rrTable.io.r.req.valid := io.r.req.fire()
   rrTable.io.r.req.bits.setIdx := idx(rAddr)
@@ -139,17 +152,20 @@ class OffsetScoreTable(implicit p: Parameters) extends BOPModule {
 
   val prefetchOffset = RegInit(2.U(offsetWidth.W))
   // score table
-  val st = RegInit(VecInit(offsetList.map(off => (new ScoreTableEntry).apply(off.U, 0.U))))
+  // val st = RegInit(VecInit(offsetList.map(off => (new ScoreTableEntry).apply(off.U, 0.U))))
+  val st = RegInit(VecInit(Seq.fill(scores)((new ScoreTableEntry).apply(0.U))))
+  val offList = WireInit(VecInit(offsetList.map(off => off.S(offsetWidth.W).asUInt())))
   val ptr = RegInit(0.U(scoreTableIdxBits.W))
   val round = RegInit(0.U(roundBits.W))
 
-  val bestOffset = RegInit((new ScoreTableEntry).apply(2.U, 0.U)) // the entry with the highest score while traversing
-  val testOffset = WireInit(st(ptr).offset)
-  def winner(e1: ScoreTableEntry, e2: ScoreTableEntry): ScoreTableEntry = {
-    val w = Wire(new ScoreTableEntry)
-    w := Mux(e1.score > e2.score, e1, e2)
-    w
-  }
+  val bestOffset = RegInit(2.U(offsetWidth.W)) // the entry with the highest score while traversing
+  val bestScore = RegInit(badScore.U(scoreBits.W))
+  val testOffset = offList(ptr)
+  // def winner(e1: ScoreTableEntry, e2: ScoreTableEntry): ScoreTableEntry = {
+  //   val w = Wire(new ScoreTableEntry)
+  //   w := Mux(e1.score > e2.score, e1, e2)
+  //   w
+  // }
 
   val s_idle :: s_learn :: Nil = Enum(2)
   val state = RegInit(s_idle)
@@ -161,8 +177,8 @@ class OffsetScoreTable(implicit p: Parameters) extends BOPModule {
     st.foreach(_.score := 0.U)
     ptr := 0.U
     round := 0.U
-    bestOffset.score := badScore.U
-    prefetchOffset := bestOffset.offset
+    bestScore := badScore.U
+    prefetchOffset := bestOffset
     state := s_learn
   }
 
@@ -187,12 +203,14 @@ class OffsetScoreTable(implicit p: Parameters) extends BOPModule {
     }
 
     when(io.test.resp.fire() && io.test.resp.bits.hit) {
-      val oldEntry = st(io.test.resp.bits.ptr)
-      val oldScore = oldEntry.score
+      val oldScore = st(io.test.resp.bits.ptr).score
       val newScore = oldScore + 1.U
-      val offset = oldEntry.offset
+      val offset = offList(io.test.resp.bits.ptr)
       st(io.test.resp.bits.ptr).score := newScore
-      bestOffset := winner((new ScoreTableEntry).apply(offset, newScore), bestOffset)
+      // bestOffset := winner((new ScoreTableEntry).apply(offset, newScore), bestOffset)
+      val renewOffset = newScore > bestScore
+      bestOffset := Mux(renewOffset, offset, bestOffset)
+      bestScore := Mux(renewOffset, newScore, bestScore)
       // (1) one of the score equals SCOREMAX
       when(newScore >= scoreMax.U) {
         state := s_idle
@@ -222,11 +240,11 @@ class BestOffsetPrefetch(parentName:String = "Unknown")(implicit p: Parameters) 
 
   val prefetchOffset = scoreTable.io.prefetchOffset
   val oldAddr = io.train.bits.addr
-  val newAddr = oldAddr + (prefetchOffset << offsetBits)
+  val newAddr = oldAddr + signedExtend((prefetchOffset << offsetBits), fullAddressBits)
 
   rrTable.io.r <> scoreTable.io.test
   rrTable.io.w.valid := io.resp.valid
-  rrTable.io.w.bits := Cat(Cat(io.resp.bits.tag, io.resp.bits.set) - prefetchOffset, 0.U(offsetBits.W))
+  rrTable.io.w.bits := Cat(Cat(io.resp.bits.tag, io.resp.bits.set) - signedExtend(prefetchOffset, setBits + fullTagBits), 0.U(offsetBits.W))
   scoreTable.io.req.valid := io.train.valid
   scoreTable.io.req.bits := oldAddr
 
