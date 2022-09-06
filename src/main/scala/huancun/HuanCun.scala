@@ -224,9 +224,9 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   val rst_nodes = ctrl_unit.map(_.core_reset_nodes)
   val intnode = ctrl_unit.map(_.intnode)
 
-  val pf_recv_node: Option[BundleBridgeSink[Valid[UInt]]] = prefetchOpt match {
+  val pf_recv_node: Option[BundleBridgeSink[PrefetchRecv]] = prefetchOpt match {
     case Some(_: PrefetchReceiverParams) =>
-      Some(BundleBridgeSink(Some(() => ValidIO(UInt(64.W)))))
+      Some(BundleBridgeSink(Some(() => new PrefetchRecv)))
     case _ => None
   }
 
@@ -290,7 +290,9 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
     }
     pf_recv_node match {
-      case Some(x) => prefetcher.get.io.recv_addr := x.in.head._1
+      case Some(x) =>
+        prefetcher.get.io.recv_addr := x.in.head._1.addr
+        prefetcher.get.io_l2_pf_en := x.in.head._1.l2_pf_en
       case None => prefetcher.foreach(_.io.recv_addr := DontCare)
     }
 
