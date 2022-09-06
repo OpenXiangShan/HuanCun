@@ -681,10 +681,8 @@ class SRAMTemplate[T <: Data]
 
   val toSRAMRen = if (implementSinglePort) (finalRen && !finalWen) else finalRen
 
-  //  val raw_rdata = array.read(io.r.req.bits.setIdx, realRen).asTypeOf(Vec(way, wordType))
-  //  when (wen) { array.write(setIdx, wdata.asUInt, waymask) }
-  when (finalWen) { array.write(finalWriteSetIdx, finalWriteData.asUInt, finalWmask) }
   val raw_rdata = array.read(finalReadSetIdx, toSRAMRen).asTypeOf(Vec(way, wordType))
+  when (finalWen) { array.write(finalWriteSetIdx, finalWriteData.asUInt, finalWmask) }
 
   // bypass for dual-port SRAMs
   if (!bypassWrite && !singlePort) {
