@@ -28,29 +28,19 @@ import huancun.utils.SRAMTemplate.uniqueId
 
 import scala.collection.mutable.ListBuffer
 import scala.math.sqrt
+
 object SramType extends Enumeration {
   val hd2prf = Value(0,"hd2prf")
   val hsuspsr = Value(1,"hsuspsr")
   val uhdusplr = Value(2,"uhdusplr")
   val hduspsr = Value(3,"hduspsr")
 }
+
 object HoldUnless {
   def apply[T <: Data](x: T, en: Bool, init: Option[T] = None): T = {
     val hold_data = if (init.isDefined) RegEnable(x, init.get, en) else RegEnable(x, en)
     Mux(en, x, hold_data)
   }
-}
-
-object HoldUnlessExpose {
-  def apply[T <: Data](x: T, en: Bool, init: Option[T] = None): (T,T) = {
-    val hold_data = if (init.isDefined) RegEnable(x, init.get, en) else RegEnable(x, en)
-    (Mux(en, x, hold_data),hold_data)
-  }
-}
-
-object ReadAndHold {
-  def apply[T <: Data](x: Mem[T], addr:         UInt, en: Bool): T = HoldUnless(x.read(addr), en)
-  def apply[T <: Data](x: SyncReadMem[T], addr: UInt, en: Bool): T = HoldUnless(x.read(addr, en), RegNext(en))
 }
 
 class SRAMMbistIO(sramType:Int,selectedLen:Int,hasRepair:Boolean) extends Bundle {
@@ -132,18 +122,15 @@ class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
   withClock(RW0.clk) {
     // read: rdata will keep stable until the next read enable.
     val RW0_ren = RW0.en && !RW0.wmode
-    val RW0_ren_REG = RegNext(RW0_ren)
-    val RW0_raddr_REG = RegEnable(RW0.addr, RW0_ren)
-    RW0.rdata := HoldUnless(VecInit(ram.map(_.read(RW0_raddr_REG))).asUInt, RW0_ren_REG)
+    val RW0_rdata = WireInit(VecInit(ram.map(_.read(RW0.addr))))
+    RW0.rdata := RegEnable(RW0_rdata.asUInt, RW0_ren)
     // write with mask
     val RW0_wen = RW0.en && RW0.wmode
-    val RW0_wen_REG = RegNext(RW0_wen)
-    val RW0_waddr_REG = RegEnable(RW0.addr, RW0_wen)
-    val RW0_wdata_REG = RegEnable(RW0.wdata.asTypeOf(Vec(maskSegments, UInt((width / maskSegments).W))), RW0_wen)
+    val RW0_wdata = RW0.wdata.asTypeOf(Vec(maskSegments, UInt((width / maskSegments).W)))
     for (i <- 0 until maskSegments) {
-      val RW0_wmask_REG = if (RW0.wmask.isDefined) RegEnable(RW0.wmask.get(i), RW0_wen) else true.B
-      when (RW0_wen_REG && RW0_wmask_REG) {
-        ram(i)(RW0_waddr_REG) := RW0_wdata_REG(i)
+      val RW0_wmask = if (RW0.wmask.isDefined) RW0.wmask.get(i) else true.B
+      when (RW0_wen && RW0_wmask) {
+        ram(i)(RW0.addr) := RW0_wdata(i)
       }
     }
   }
@@ -198,9 +185,6 @@ class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
 
   // read: rdata will keep stable until the next read enable.
   withClock(R0.clk) {
-    val R0_en = R0.en
-    val R0_en_REG = RegNext(R0_en)
-    val R0_addr_REG = RegEnable(R0.addr, R0_en)
     // RW0_conflict_data will be replaced by width'x in Verilog by scripts.
     val RW0_conflict_data = Wire(UInt((width / maskSegments).W))
     RW0_conflict_data := ((1L << (width / maskSegments)) - 1).U
@@ -209,22 +193,20 @@ class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
     val R0_data = VecInit((0 until maskSegments).map(i => {
       // To align with the real memory model, R0.data should be width'x when R0 and W0 have conflicts.
       val wmask = if (W0.mask.isDefined) W0.mask.get(i) else true.B
-      val RW0_conflict = RegEnable(W0.en && wmask && R0.addr === W0.addr, R0.en)
-      Mux(RW0_conflict, RW0_conflict_data, ram(i).read(R0_addr_REG))
+      val RW0_conflict = W0.en && wmask && R0.addr === W0.addr
+      Mux(RW0_conflict, RW0_conflict_data, ram(i).read(R0.addr))
     })).asUInt
     // The read data naturally holds when not enabled.
-    R0.data := HoldUnless(R0_data, R0_en_REG)
+    R0.data := RegEnable(R0_data, R0.en)
   }
 
   // write with mask
   withClock(W0.clk) {
-    val W0_en_REG = RegNext(W0.en)
-    val W0_addr_REG = RegEnable(W0.addr, W0.en)
-    val W0_data_REG = RegEnable(W0.data.asTypeOf(Vec(maskSegments, UInt((width / maskSegments).W))), W0.en)
+    val W0_data = W0.data.asTypeOf(Vec(maskSegments, UInt((width / maskSegments).W)))
     for (i <- 0 until maskSegments) {
-      val W0_mask_REG = if (W0.mask.isDefined) RegEnable(W0.mask.get(i), W0.en) else true.B
-      when (W0_en_REG && W0_mask_REG) {
-        ram(i)(W0_addr_REG) := W0_data_REG(i)
+      val W0_mask = if (W0.mask.isDefined) W0.mask.get(i) else true.B
+      when (W0.en && W0_mask) {
+        ram(i)(W0.addr) := W0_data(i)
       }
     }
   }
