@@ -181,7 +181,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // Issue probe when the wanted block by a client is hit in other clients
   // QE: the origin logic need probe the issue-client, which is reasonable?
   val a_probe_clients = VecInit(clients_meta.zipWithIndex.map { case (m, i) =>
-    i.U =/= iam && (req_needT && m.hit && m.state =/= INVALID) || isT(m.state) })
+    i.U =/= iam && m.hit &&
+    ((req_needT && m.state =/= INVALID) || isT(m.state) || !self_meta.hit) })
 
   def probe_next_state(state: UInt, param: UInt): UInt = Mux(
     isT(state) && param === toT,

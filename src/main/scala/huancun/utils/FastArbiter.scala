@@ -30,8 +30,10 @@ class FastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen, n) 
        rrGrantMask  0011
    */
   val rrGrantMask = RegEnable(VecInit((0 until n) map { i =>
-    if(i == 0) false.B else chosenOH(i - 1, 0).orR()
-  }).asUInt(), 0.U(n.W), io.out.fire())
+                                if(i == 0) false.B else chosenOH(i - 1, 0).orR()
+                              }).asUInt(), 
+                              0.U(n.W), 
+                              io.out.fire())
   val rrSelOH = VecInit(maskToOH((rrGrantMask & pendingMask).asBools())).asUInt()
   val firstOneOH = VecInit(maskToOH(valids.asBools())).asUInt()
   val rrValid = (rrSelOH & valids).orR()
