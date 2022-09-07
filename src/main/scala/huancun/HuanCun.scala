@@ -33,6 +33,8 @@ trait HasHuanCunParameters {
   val cacheParams = p(HCCacheParamsKey)
   val prefetchOpt = cacheParams.prefetch
   val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
+  val aliasBitsOpt = if(cacheParams.clientCaches.isEmpty) None
+    else cacheParams.clientCaches.head.aliasBitsOpt
   val hasAliasBits = if(cacheParams.clientCaches.isEmpty) false
     else cacheParams.clientCaches.head.needResolveAlias
 
@@ -56,9 +58,6 @@ trait HasHuanCunParameters {
   val maxWays = math.max(clientMaxWays, cacheParams.ways)
 
   val stateBits = MetaData.stateBits
-
-  val aliasBitsOpt = if(cacheParams.clientCaches.isEmpty) None
-    else cacheParams.clientCaches.head.aliasBitsOpt
 
   val bufBlocks = mshrs / 2
   val bufIdxBits = log2Ceil(bufBlocks)
