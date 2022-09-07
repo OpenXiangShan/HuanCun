@@ -89,7 +89,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
         ),
         channelBytes = TLChannelBeatBytes(cacheParams.blockBytes),
         minLatency = 1,
-        echoFields = cacheParams.echoField,
+        echoFields = Seq(DirtyField()),
         requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField(), AliasField(2)),
         responseKeys = cacheParams.respKey
       )
@@ -102,10 +102,13 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
 
   val l2_nodes = (0 until 2) map( i => LazyModule(new HuanCun()(new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
-      name = s"L2_$i",
+      name = s"L2",
+      level = 2,
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2")),
-      prefetch = Some(huancun.prefetch.BOPParameters())
+      prefetch = Some(huancun.prefetch.BOPParameters()),
+      reqField = Seq(PreferCacheField()),
+      echoField = Seq(DirtyField())
     )
   }))).node)
 
