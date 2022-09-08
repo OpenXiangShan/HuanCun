@@ -32,7 +32,7 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
         channelBytes = TLChannelBeatBytes(cacheParams.blockBytes),
         minLatency = 1,
         echoFields = cacheParams.echoField,
-        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField(), AliasField(2)),
+        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField()),
         responseKeys = cacheParams.respKey
       )
     ))
@@ -150,7 +150,7 @@ object TestTop_L2 extends App {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2", aliasBitsOpt = Some(2))),
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2")),
       echoField = Seq(DirtyField())
     )
   })
