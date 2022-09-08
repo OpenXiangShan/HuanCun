@@ -193,11 +193,12 @@ class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
     val R0_data = VecInit((0 until maskSegments).map(i => {
       // To align with the real memory model, R0.data should be width'x when R0 and W0 have conflicts.
       val wmask = if (W0.mask.isDefined) W0.mask.get(i) else true.B
-      val RW0_conflict = W0.en && wmask && R0.addr === W0.addr
-      Mux(RW0_conflict, RW0_conflict_data, ram(i).read(R0.addr))
-    })).asUInt
+      val RW0_conflict_REG = RegEnable(W0.en && wmask && R0.addr === W0.addr, R0.en)
+      val data_REG = RegEnable(ram(i).read(R0.addr), R0.en)
     // The read data naturally holds when not enabled.
-    R0.data := RegEnable(R0_data, R0.en)
+      Mux(RW0_conflict_REG, RW0_conflict_data, data_REG)
+    })).asUInt
+    R0.data := R0_data
   }
 
   // write with mask
