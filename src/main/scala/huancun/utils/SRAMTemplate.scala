@@ -539,8 +539,7 @@ class SRAMTemplate[T <: Data]
   val extra_reset = if (extraReset) Some(IO(Input(Bool()))) else None
 
   val isNto1 = gen.getWidth > maxMbistDataWidth
-  val isRF = SRAMTemplate.isRF(set,gen.getWidth * way,way)
-  // val isRF = !singlePort
+  val isRF = if (true) SRAMTemplate.isRF(set,gen.getWidth * way,way) else !singlePort
   val myRamType = SRAMTemplate.getSramType(set,gen.getWidth * way,way)
   val implementSinglePort = if(isRF) false else singlePort
 
