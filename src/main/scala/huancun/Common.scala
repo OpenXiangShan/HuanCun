@@ -171,7 +171,7 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   // the mshr will be free at next cycle
   val will_free = Bool()
   // for debug usage now
-  val is_prefetch = Bool()
+  // val is_prefetch = Bool()
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {

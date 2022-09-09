@@ -586,7 +586,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   io.status.bits.way := meta.way
   io.status.bits.will_grant_data := false.B //req.fromA && od.opcode(0)
   io.status.bits.will_save_data := true.B
-  io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)
   io.status.bits.blockB := !meta_valid ||
     ((!w_releaseack || !w_rprobeacklast || !w_pprobeacklast) && !w_grantfirst)
   // B nest A

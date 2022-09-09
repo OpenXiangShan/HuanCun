@@ -193,16 +193,16 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
-  val prefetch_block_vec = VecInit(io.status.map(s =>
-    s.valid && s.bits.is_prefetch &&
-    (s.bits.set(block_granularity - 1, 0) === io.a_req.bits.set(block_granularity - 1, 0))
-  ))
+  // val prefetch_block_vec = VecInit(io.status.map(s =>
+  //   s.valid && s.bits.is_prefetch &&
+  //   (s.bits.set(block_granularity - 1, 0) === io.a_req.bits.set(block_granularity - 1, 0))
+  // ))   // log@gravel
 
   XSPerfAccumulate(cacheParams, "nrWorkingABCmshr", PopCount(io.status.init.init.map(_.valid)))
   XSPerfAccumulate(cacheParams, "nrWorkingBmshr", io.status.take(mshrs+1).last.valid)
   XSPerfAccumulate(cacheParams, "nrWorkingCmshr", io.status.last.valid)
   XSPerfAccumulate(cacheParams, "conflictA", io.a_req.valid && conflict_a)
-  XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && Cat(prefetch_block_vec).orR())
+  XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && false.B)
   XSPerfAccumulate(cacheParams, "conflictB", io.b_req.valid && conflict_b)
   XSPerfAccumulate(cacheParams, "conflictC", io.c_req.valid && conflict_c)
   //val perfinfo = IO(new Bundle(){
@@ -214,7 +214,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     ("nrWorkingBmshr      ", io.status.take(mshrs+1).last.valid         ),
     ("nrWorkingCmshr      ", io.status.last.valid                       ),
     ("conflictA           ", io.a_req.valid && conflict_a               ),
-    ("conflictByPrefetch  ", io.a_req.valid && Cat(prefetch_block_vec).orR),
+    ("conflictByPrefetch  ", io.a_req.valid && false.B                  ),
     ("conflictB           ", io.b_req.valid && conflict_b               ),
     ("conflictC           ", io.c_req.valid && conflict_c               ),
   )

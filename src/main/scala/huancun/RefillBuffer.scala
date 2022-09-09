@@ -6,18 +6,20 @@ import chisel3.util._
 
 class SourceDBufferRead(implicit p: Parameters) extends HuanCunBundle {
   val valid = Input(Bool())
+  val ready = Output(Bool())
+
   val beat = Input(UInt(beatBits.W))
   val id = Input(UInt(bufIdxBits.W))
-  val ready = Output(Bool())
   val buffer_data = Output(new DSData)
   val last = Input(Bool())
 }
 
 class SinkDBufferWrite(implicit p: Parameters) extends HuanCunBundle {
   val valid = Input(Bool())
+  val ready = Output(Bool())
+  
   val beat = Input(UInt(beatBits.W))
   val data = Input(new DSData)
-  val ready = Output(Bool())
   val id = Output(UInt(bufIdxBits.W))
 }
 
