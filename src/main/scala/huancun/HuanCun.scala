@@ -224,6 +224,12 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
   val rst_nodes = ctrl_unit.map(_.core_reset_nodes)
   val intnode = ctrl_unit.map(_.intnode)
 
+  val pf_recv_node: Option[BundleBridgeSink[PrefetchRecv]] = prefetchOpt match {
+    case Some(_: PrefetchReceiverParams) =>
+      Some(BundleBridgeSink(Some(() => new PrefetchRecv)))
+    case _ => None
+  }
+
   lazy val module = new LazyModuleImp(this) {
     val banks = node.in.size
     val io = IO(new Bundle {
@@ -240,7 +246,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val sizeStr = sizeBytesToStr(sizeBytes)
     val bankBits = if(banks == 1) 0 else log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
-    val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
+    val prefetch = "prefetch: " + cacheParams.prefetch
     println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) $prefetch ======")
     println(s"bankBits: ${bankBits}")
     println(s"sets:${cacheParams.sets} ways:${cacheParams.ways} blockBytes:${cacheParams.blockBytes}")
@@ -278,10 +284,17 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
     prefetchOpt.foreach {
-      case _ =>
+      _ =>
         arbTasks(prefetcher.get.io.train, prefetchTrains.get, Some("prefetch_train"))
         prefetcher.get.io.req.ready := Cat(prefetchReqsReady).orR
         arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
+    }
+    pf_recv_node match {
+      case Some(x) =>
+        prefetcher.get.io.recv_addr.valid := x.in.head._1.addr_valid
+        prefetcher.get.io.recv_addr.bits := x.in.head._1.addr
+        prefetcher.get.io_l2_pf_en := x.in.head._1.l2_pf_en
+      case None => prefetcher.foreach(_.io.recv_addr := DontCare)
     }
 
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
