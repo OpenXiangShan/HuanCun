@@ -27,7 +27,6 @@ import freechips.rocketchip.tilelink.TLPermissions._
 import freechips.rocketchip.tilelink._
 import huancun._
 import huancun.MetaData._
-import huancun.prefetch._
 
 class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWrite] {
   val io = IO(new BaseMSHRIO[DirResult, DirWrite, TagWrite] {
@@ -67,20 +66,17 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   val meta_no_client = !meta.clients.orR
   val req_promoteT = req_acquire && Mux(meta.hit, meta_no_client && meta.state === TIP, gotT)
   val req_realBtoT = meta.hit && (meta.clients & getClientBitOH(req.source)).orR
-  val prefetch_miss = hintMiss(meta.state, req.param)
   val probes_toN = RegInit(0.U(clientBits.W))
   val probes_done = RegInit(0.U(clientBits.W))
-  val probe_exclude =
-    Mux(
-      req.fromA && meta.hit && skipProbeN(req.opcode),
-      getClientBitOH(req.source),
-      0.U
-    ) // Client acquiring the block does not need to be probed
-  val probe_next_state = Mux(
-    isT(meta.state) && req.param === toT,
-    meta.state,
-    Mux(meta.state =/= INVALID && req.param =/= toN, BRANCH, INVALID)
-  )
+  val probe_exclude = Mux(req.fromA && meta.hit && skipProbeN(req.opcode),
+                          getClientBitOH(req.source),
+                          0.U) // Client acquiring the block does not need to be probed
+
+  val probe_next_state = Mux(isT(meta.state) && req.param === toT,
+                             meta.state,
+                             Mux(meta.state =/= INVALID && req.param =/= toN, 
+                                 BRANCH, 
+                                 INVALID))
   when(req.fromC) {
     // Release / ReleaseData
     new_meta.dirty := meta.dirty || req.opcode(0)
@@ -96,41 +92,28 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   }.otherwise {
     // Acquire / Intent / Put / Get / Atomics
     new_meta.dirty := meta.hit && meta.dirty || !req.opcode(2) // Put / Atomics
-    new_meta.state := Mux(
-      req_needT,
-      Mux(
-        req_acquire || req.opcode === Hint && meta.state === TRUNK,
-        TRUNK, // Acquire (NtoT/BtoT) / Intent (PrefetchWrite) on a TRUNK
-        TIP
-      ), // Intent (PrefetchWrite) on un-TRUNK / Put / Atomics
-      Mux(
-        !meta.hit, // The rest are Acquire (NtoB) / Intent (PrefetchRead) / Get
-        // If tag miss, new state depends on what L3 grants
-        Mux(gotT, Mux(req_acquire, TRUNK, TIP), BRANCH),
-        MuxLookup(
-          meta.state,
-          BRANCH,
-          Seq(
-            INVALID -> BRANCH,
-            BRANCH -> BRANCH,
-            TRUNK -> Mux(req.opcode === Hint, TRUNK, TIP),
-            TIP -> Mux(meta_no_client && req_acquire, TRUNK, TIP)
-          )
-        )
-      )
-    )
-    new_meta.clients := Mux(meta.hit, meta.clients & ~probes_toN, 0.U) | Mux(
-      req_acquire,
-      getClientBitOH(req.source),
-      0.U
-    )
+    new_meta.state := Mux(req_needT,
+                          Mux(req_acquire || req.opcode === Hint && meta.state === TRUNK,
+                              TRUNK, // Acquire (NtoT/BtoT) on a TRUNK
+                              TIP), // Put / Atomics
+                          Mux(!meta.hit, // The rest are Acquire (NtoB) / Intent (PrefetchRead) / Get
+                              // If tag miss, new state depends on what L3 grants
+                              Mux(gotT, Mux(req_acquire, TRUNK, TIP), BRANCH),
+                              MuxLookup(meta.state,
+                                        BRANCH,
+                                        Seq(INVALID -> BRANCH,
+                                            BRANCH -> BRANCH,
+                                            TRUNK -> Mux(req.opcode === Hint, TRUNK, TIP),
+                                            TIP -> Mux(meta_no_client && req_acquire, TRUNK, TIP)))))
+    
+    new_meta.clients := Mux(meta.hit, meta.clients & ~probes_toN, 0.U) | 
+                        Mux(req_acquire, getClientBitOH(req.source), 0.U)
     new_meta.hit := true.B
   }
   val new_dir = Wire(new DirectoryEntry)
   new_dir.dirty := new_meta.dirty
   new_dir.state := new_meta.state
   new_dir.clients := new_meta.clients
-  new_dir.prefetch.foreach(_ := prefetch_miss && req.opcode === Hint || meta.prefetch.get)
 
   val sink = Reg(UInt(edgeOut.bundle.sinkBits.W))
 
@@ -166,9 +149,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   val s_writebackdir = RegInit(true.B) // dir_write
   val s_transferput = RegInit(true.B) // writeput to source_a
   val s_writerelease = RegInit(true.B) // sink_c
-  val s_triggerprefetch =
-    prefetchOpt.map(_ => RegInit(true.B)) // trigger a prefetch training to prefetcher
-  val s_prefetchack = prefetchOpt.map(_ => RegInit(true.B)) // resp to prefetcher
 
   val w_rprobeackfirst = RegInit(true.B)
   val w_rprobeacklast = RegInit(true.B)
@@ -194,8 +174,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     s_writebackdir := true.B
     s_transferput := true.B
     s_writerelease := true.B
-    s_triggerprefetch.foreach(_ := true.B)
-    s_prefetchack.foreach(_ := true.B)
 
     w_rprobeackfirst := true.B
     w_rprobeacklast := true.B
@@ -220,8 +198,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
       s_execute := false.B
       when(
         !meta.dirty && req.opcode(0) || // from clean to dirty
-          (req.param === TtoB || req.param === TtoN) && meta.state === TRUNK || // from TRUNK to TIP
-          isToN(req.param)
+        (req.param === TtoB || req.param === TtoN) && meta.state === TRUNK || // from TRUNK to TIP
+        isToN(req.param)
       ) { // change clients
         s_writebackdir := false.B
       }
@@ -311,15 +289,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
       when(!meta.hit) {
         s_writebacktag := false.B
       }
-      // trigger a prefetch when req is from DCache, and miss / prefetched hit in L2
-      prefetchOpt.map(_ => {
-        when(req.opcode =/= Hint && getClientBitOH(req.source).orR && (!meta.hit || meta.prefetch.get)) {
-          s_triggerprefetch.map(_ := false.B)
-        }
-        when(req.opcode === Hint) {
-          s_prefetchack.map(_ := false.B)
-        }
-      })
     }
   }
 
@@ -336,7 +305,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
    *                   /     |     \
    *                  /      |      \
    *      s_grantack(E) s_execute(D) s_writeput
-   *                   or s_prefetchack
+   *                   
    *
    * The edges between s_* state regs from top to bottom indicate the scheduling priority.
    * For example, s_release > s_acquire and s_pprobe > s_acquire mean that before
@@ -357,8 +326,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   // io.tasks.sink_a.valid := !s_transferput && w_grant && w_pprobeack
   io.tasks.sink_a.valid := false.B
   io.tasks.sink_c.valid := !s_writerelease // && w_grant && w_pprobeack
-  io.tasks.prefetch_train.foreach(_.valid := !s_triggerprefetch.get)
-  io.tasks.prefetch_resp.foreach(_.valid := !s_prefetchack.get && w_grantfirst)
 
   val oa = io.tasks.source_a.bits
   val ob = io.tasks.source_b.bits
@@ -471,18 +438,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   io.tasks.tag_write.bits.way := meta.way
   io.tasks.tag_write.bits.tag := req.tag
 
-  io.tasks.prefetch_train.foreach { train =>
-    train.bits.tag := req.tag
-    train.bits.set := req.set
-    train.bits.needT := req_needT
-    train.bits.source := io.id
-  }
-
-  io.tasks.prefetch_resp.foreach { resp =>
-    resp.bits.tag := req.tag
-    resp.bits.set := req.set
-  }
-
   dontTouch(io.tasks)
   when(io.tasks.source_a.fire()) {
     s_acquire := true.B
@@ -511,14 +466,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   when(io.tasks.sink_c.fire()) {
     s_writerelease := true.B
   }
-  if (prefetchOpt.nonEmpty) {
-    when(io.tasks.prefetch_train.get.fire()) {
-      s_triggerprefetch.get := true.B
-    }
-    when(io.tasks.prefetch_resp.get.fire()) {
-      s_prefetchack.get := true.B
-    }
-  }
+
 
   // Monitor resps and mark the w_* state regs
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
@@ -563,9 +511,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
 
   // Release MSHR
   val no_schedule = s_execute && s_probeack && meta_valid && s_writebacktag && s_writebackdir && s_writerelease &&
-    s_triggerprefetch.getOrElse(true.B) &&
-    s_prefetchack.getOrElse(true.B) &&
-    s_grantack && s_transferput
+      s_grantack && s_transferput
+
   when(no_wait && no_schedule) { // TODO: remove s_writebackdir to improve perf
     req_valid := false.B
     meta_valid := false.B

@@ -32,7 +32,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
     val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
-    val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
+    // val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
