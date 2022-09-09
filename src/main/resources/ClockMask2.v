@@ -1,5 +1,5 @@
 module ClockMask2 (
-    output reg clk_out,
+    output clk_out,
     input clk_in
 );
 
