@@ -246,7 +246,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val sizeStr = sizeBytesToStr(sizeBytes)
     val bankBits = if(banks == 1) 0 else log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
-    val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
+    val prefetch = "prefetch: " + cacheParams.prefetch
     println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) $prefetch ======")
     println(s"bankBits: ${bankBits}")
     println(s"sets:${cacheParams.sets} ways:${cacheParams.ways} blockBytes:${cacheParams.blockBytes}")
@@ -291,7 +291,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
     pf_recv_node match {
       case Some(x) =>
-        prefetcher.get.io.recv_addr := x.in.head._1.addr
+        prefetcher.get.io.recv_addr.valid := x.in.head._1.addr_valid
+        prefetcher.get.io.recv_addr.bits := x.in.head._1.addr
         prefetcher.get.io_l2_pf_en := x.in.head._1.l2_pf_en
       case None => prefetcher.foreach(_.io.recv_addr := DontCare)
     }
