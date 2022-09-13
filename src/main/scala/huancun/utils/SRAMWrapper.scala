@@ -9,6 +9,7 @@ class ClockMask2 extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
     val clk_out = Output(Clock())
     val clk_in  = Input(Clock())
+    val reset = Input(Reset())
   })
 
   addResource("/ClockMask2.v")
@@ -43,6 +44,7 @@ class SRAMWrapper[T <: Data]
     ))
     val clkMasker = Module(new ClockMask2)
     clkMasker.io.clk_in := clock
+    clkMasker.io.reset := reset
     val masked_clock = clkMasker.io.clk_out
 
     if (clk_div_by_2) {
