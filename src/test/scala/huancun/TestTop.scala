@@ -32,7 +32,8 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
         channelBytes = TLChannelBeatBytes(cacheParams.blockBytes),
         minLatency = 1,
         echoFields = cacheParams.echoField,
-        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField()),
+        requestFields = Seq(PreferCacheField(), DirtyField()),
+        // requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField()),
         responseKeys = cacheParams.respKey
       )
     ))
@@ -65,6 +66,22 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
   }
 }
 
+object TestTop_L2 extends App {
+  val config = new Config((_, _, _) => {
+    case HCCacheParamsKey => HCCacheParameters(
+      inclusive = false,
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2")),
+      echoField = Seq(DirtyField())
+    )
+  })
+  val top = DisableMonitors(p => LazyModule(new TestTop_L2()(p)) )(config)
+
+  (new ChiselStage).execute(args, Seq(
+    ChiselGeneratorAnnotation(() => top.module)
+  ))
+}
+
+
 class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
 
   /* L1D   L1D
@@ -90,7 +107,8 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
         channelBytes = TLChannelBeatBytes(cacheParams.blockBytes),
         minLatency = 1,
         echoFields = cacheParams.echoField,
-        requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField(), AliasField(2)),
+        requestFields = Seq(PreferCacheField(), DirtyField()),
+        // requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField(), AliasField(2)),
         responseKeys = cacheParams.respKey
       )
     ))
@@ -144,21 +162,6 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
         node.makeIOs()(ValName(s"master_port_$i"))
     }
   }
-}
-
-object TestTop_L2 extends App {
-  val config = new Config((_, _, _) => {
-    case HCCacheParamsKey => HCCacheParameters(
-      inclusive = false,
-      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2")),
-      echoField = Seq(DirtyField())
-    )
-  })
-  val top = DisableMonitors(p => LazyModule(new TestTop_L2()(p)) )(config)
-
-  (new ChiselStage).execute(args, Seq(
-    ChiselGeneratorAnnotation(() => top.module)
-  ))
 }
 
 object TestTop_L2L3 extends App {
