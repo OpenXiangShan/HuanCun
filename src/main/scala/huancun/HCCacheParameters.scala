@@ -25,7 +25,6 @@ import chisel3.util.log2Ceil
 import freechips.rocketchip.diplomacy.BufferParams
 import freechips.rocketchip.tilelink.{TLBufferParams, TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, BundleKeyBase, ControlKey}
-import huancun.prefetch.PrefetchParameters
 
 case object HCCacheParamsKey extends Field[HCCacheParameters](HCCacheParameters())
 
@@ -45,25 +44,6 @@ case class CacheParameters
   val needResolveAlias = aliasBitsOpt.nonEmpty
 }
 
-case object PrefetchKey extends ControlKey[Bool](name = "needHint")
-
-case class PrefetchField() extends BundleField(PrefetchKey) {
-  override def data: Bool = Output(Bool())
-
-  override def default(x: Bool): Unit = {
-    x := false.B
-  }
-}
-
-case object AliasKey extends ControlKey[UInt]("alias")
-
-case class AliasField(width: Int) extends BundleField(AliasKey) {
-  override def data: UInt = Output(UInt(width.W))
-
-  override def default(x: UInt): Unit = {
-    x := 0.U(width.W)
-  }
-}
 
 // try to keep data in cache is true
 // now it only works for non-inclusive cache (ignored in inclusive cache)
@@ -112,7 +92,6 @@ case class HCCacheParameters
   enableDebug: Boolean = false,
   enablePerf: Boolean = false,
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
-  prefetch: Option[PrefetchParameters] = None,
   clientCaches: Seq[CacheParameters] = Nil,
   inclusive: Boolean = true,
   alwaysReleaseData: Boolean = false,
@@ -121,7 +100,7 @@ case class HCCacheParameters
   echoField: Seq[BundleFieldBase] = Nil,
   reqField: Seq[BundleFieldBase] = Nil, // master
   respKey: Seq[BundleKeyBase] = Nil,
-  reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey), // slave
+  reqKey: Seq[BundleKeyBase] = Seq(PreferCacheKey),
   respField: Seq[BundleFieldBase] = Nil,
   ctrl: Option[CacheCtrl] = None,
   sramClkDivBy2: Boolean = false,

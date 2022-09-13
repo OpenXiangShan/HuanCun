@@ -25,14 +25,12 @@ import chisel3.util._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.leftOR
 import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
-// import huancun.prefetch._
 import huancun.utils.{FastArbiter, LatchFastArbiter, Pipeline}
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
     val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
-    // val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
@@ -138,13 +136,6 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     b_arb.io.in(1) <> sinkB.io.alloc
     mshrAlloc.io.b_req <> b_arb.io.out
   }
-
-  // if(prefetchOpt.nonEmpty){
-  //   val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
-  //   alloc_A_arb.io.in(0) <> a_req
-  //   alloc_A_arb.io.in(1) <> pftReqToMSHRReq(io.prefetch.get.req)
-  //   a_req_buffer.io.in <> alloc_A_arb.io.out
-  // }    TODO@gravelcai: remove this
 
   a_req_buffer.io.in <> a_req
 

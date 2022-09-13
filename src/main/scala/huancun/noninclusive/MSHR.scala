@@ -144,7 +144,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
                                      case (meta, i) =>
                                        (req.opcode === Get || i.U =/= iam) && meta.hit
                                    }).asUInt.orR, l2Only = false) 
-                                  // && (!req.isPrefetch.getOrElse(false.B) || prefetch_need_data)  // always true
 
   val a_need_data = req.fromA && (req.opcode === Get || req_put || req.opcode === AcquireBlock || req.opcode === Hint)
 
@@ -333,7 +332,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
                            Mux(clients_meta_reg(i).hit && a_do_probe, cond, INVALID)),
                        Mux(req.opcode === Get,
                            Mux(clients_meta_reg(i).hit && a_do_probe, perm_after_probe, INVALID), // Get
-                           clients_meta_reg(i).state))  // log@gravelcai: remove prefetch option
+                           clients_meta_reg(i).state))
         }
     }
 
@@ -355,7 +354,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
                              Mux(clients_meta_reg(i).hit && a_do_probe, INVALID, clients_meta_reg(i).state),
                              // NtoB
                              Mux(clients_meta_reg(i).hit && a_do_probe, cond, clients_meta_reg(i).state)),
-                         clients_meta_reg(i).state) // log@gravelcai: remove prefetch option
+                         clients_meta_reg(i).state)
         }
 
         when (req.opcode === Get) {
@@ -951,7 +950,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
                                     Mux(req.fromCmoHelper,
                                         x_probe_clients,
                                         b_probe_clients)).asUInt,
-                                io.dirResult.valid) // log@gravelcai: remove prefetch option
+                                io.dirResult.valid)
 
   ob.clients := probe_clients
   ob.needData.foreach(_ :=

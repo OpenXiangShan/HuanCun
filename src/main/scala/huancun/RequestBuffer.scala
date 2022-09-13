@@ -55,16 +55,21 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
     s_conflict
   }
   val conflict = Cat(conflict_mask).orR()
-  // filter out duplicated prefetch requests
+
+  /*************************************************************************************
+  * TODO: original for filtering out duplicated prefetch requests, but now is useless. *
+
   val dup_mask = (0 until entries) map { i =>
     valids(i) && (Cat(buffer(i).tag, buffer(i).set) === Cat(io.in.bits.tag, io.in.bits.set))
   }
-  val dup = io.in.valid && io.in.bits.isPrefetch.getOrElse(false.B) && Cat(dup_mask).orR()
+  val dup = io.in.valid && Cat(dup_mask).orR()
+  *************************************************************************************/
+
   val req_deps = (0 until entries) map { i =>
     valids(i) && set_conflict(buffer(i).set, in_set)
   }
   val insert_idx = PriorityEncoder(~valids.asUInt())
-  val alloc = !full && io.in.valid && !(flow.B && no_ready_entry && io.out.ready) && !dup
+  val alloc = !full && io.in.valid && !(flow.B && no_ready_entry && io.out.ready)
   when(alloc){
     buffer(insert_idx) := io.in.bits
     valids(insert_idx) := true.B
@@ -91,7 +96,7 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
     }
   }
 
-  XSPerfAccumulate(cacheParams, "req_buffer_merge", dup && !full)
+  XSPerfAccumulate(cacheParams, "req_buffer_merge", false.B)
   if(flow){
     XSPerfAccumulate(cacheParams, "req_buffer_flow", no_ready_entry && io.in.fire())
   }
@@ -101,16 +106,16 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
     val update = PopCount(valids) === i.U
     XSPerfAccumulate(cacheParams, s"req_buffer_util_$i", update)
   }
-  XSPerfAccumulate(cacheParams, "recv_prefetch", io.in.fire() && io.in.bits.isPrefetch.getOrElse(false.B))
-  XSPerfAccumulate(cacheParams, "recv_normal", io.in.fire() && !io.in.bits.isPrefetch.getOrElse(false.B))
+  XSPerfAccumulate(cacheParams, "recv_prefetch", false.B)   // can be discarded
+  XSPerfAccumulate(cacheParams, "recv_normal", io.in.fire() && true.B)
   val perfinfo = IO(Output(Vec(numPCntHcReqb, (UInt(6.W)))))
   val perfEvents = Seq(
-    ("req_buffer_merge          ", dup && !full                                             ),
+    ("req_buffer_merge          ", false.B                                                  ),  // can be discarded
     ("req_buffer_flow           ", no_ready_entry && io.in.fire                             ),
     ("req_buffer_alloc          ", alloc                                                    ),
     ("req_buffer_full           ", full                                                     ),
-    ("recv_prefetch             ", io.in.fire() && io.in.bits.isPrefetch.getOrElse(false.B) ),
-    ("recv_normal               ", io.in.fire() && !io.in.bits.isPrefetch.getOrElse(false.B)),
+    ("recv_prefetch             ", false.B                                                  ),  // can be discarded
+    ("recv_normal               ", io.in.fire() && true.B),
   )
 
   for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {

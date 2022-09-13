@@ -48,7 +48,7 @@ class SourceB(implicit p: Parameters) extends HuanCunModule {
 
   /* Handle B channel */
   val taskLatch = Mux(!busy, io.task.bits, RegEnable(io.task.bits, io.task.fire))
-  val probe_alias = taskLatch.alias.map(alias_vec => Mux1H(chosenClient, alias_vec))
+  // val probe_alias = taskLatch.alias.map(alias_vec => Mux1H(chosenClient, alias_vec))
   io.b.valid := busy || io.task.valid
   io.b.bits.opcode := TLMessages.Probe
   io.b.bits.param := taskLatch.param
@@ -57,7 +57,7 @@ class SourceB(implicit p: Parameters) extends HuanCunModule {
   io.b.bits.address := Cat(taskLatch.tag, taskLatch.set, 0.U(offsetBits.W))
   io.b.bits.mask := ~0.U(beatBytes.W)
   io.b.bits.data := Cat(
-    probe_alias.getOrElse(0.U(clientBits.W)),
+    0.U(clientBits.W),
     taskLatch.needData.getOrElse(false.B).asUInt
   )
   io.b.bits.corrupt := 0.U

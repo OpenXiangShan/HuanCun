@@ -40,9 +40,9 @@ class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
   req.off := 0.U
   req.mask := DontCare
   req.bufIdx := DontCare
-  req.needHint.foreach(_ := false.B)
-  req.isPrefetch.foreach(_ := false.B)
-  req.alias.foreach(_ := 0.U)
+  // req.needHint.foreach(_ := false.B)
+  // req.isPrefetch.foreach(_ := false.B)
+  // req.alias.foreach(_ := 0.U)
   req.preferCache := true.B
   req.dirty := false.B // ignored
   req.needProbeAckData.foreach(_ := false.B)

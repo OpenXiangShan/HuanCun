@@ -182,7 +182,6 @@ class Directory(implicit p: Parameters)
       dir_init_fn = () => {
         val init = Wire(Vec(clientBits, new ClientDirEntry))
         init.foreach(_.state := MetaData.INVALID)
-        init.foreach(_.alias.foreach(_ := DontCare))  // TODO@gravelcai: remove this alias
         init
       },
       dir_hit_fn = dirs => Cat(dirs.map(_.state =/= MetaData.INVALID)).orR,

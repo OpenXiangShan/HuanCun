@@ -3,7 +3,6 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.prefetch._
 
 abstract class MSHRTasks[T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](implicit p: Parameters)
     extends HuanCunBundle {

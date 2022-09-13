@@ -37,7 +37,7 @@ abstract class BaseSinkC(implicit p: Parameters) extends HuanCunModule {
     // directly release inner data to next level
     val release = DecoupledIO(new TLBundleC(edgeOut.bundle))
   })
-  io.alloc.bits.isPrefetch.foreach(_ := false.B)
+  // io.alloc.bits.isPrefetch.foreach(_ := false.B)
 
   when (io.c.fire()) {
     assert(io.c.bits.opcode =/= 3.U) // opcode 3 is reserved for C channel

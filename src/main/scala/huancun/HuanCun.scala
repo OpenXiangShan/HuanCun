@@ -25,18 +25,11 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
-import huancun.prefetch._
 import huancun.utils.{FastArbiter, Pipeline, ResetGen}
 
 trait HasHuanCunParameters {
   val p: Parameters
   val cacheParams = p(HCCacheParamsKey)
-  val prefetchOpt = cacheParams.prefetch
-  val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
-  val aliasBitsOpt = if(cacheParams.clientCaches.isEmpty) None
-    else cacheParams.clientCaches.head.aliasBitsOpt
-  val hasAliasBits = if(cacheParams.clientCaches.isEmpty) false
-    else cacheParams.clientCaches.head.needResolveAlias
 
   val blockBytes = cacheParams.blockBytes
   val beatBytes = cacheParams.channelBytes.d.get
@@ -85,7 +78,7 @@ trait HasHuanCunParameters {
   lazy val sourceIdBits = edgeIn.bundle.sourceBits
   lazy val msgSizeBits = edgeIn.bundle.sizeBits
 
-  // width params with bank idx (used in prefetcher / ctrl unit)
+  // width params with bank idx (used in ctrl unit)
   lazy val fullAddressBits = edgeOut.bundle.addressBits
   lazy val fullTagBits = fullAddressBits - setBits - offsetBits
   // width params without bank idx (used in slice)
@@ -239,8 +232,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val sizeStr = sizeBytesToStr(sizeBytes)
     val bankBits = if(banks == 1) 0 else log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
-    val prefetch = "prefetch: " + cacheParams.prefetch.nonEmpty
-    println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) $prefetch ======")
+    println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) ======")
     println(s"bankBits: ${bankBits}")
     println(s"sets:${cacheParams.sets} ways:${cacheParams.ways} blockBytes:${cacheParams.blockBytes}")
     if(!cacheParams.inclusive){
@@ -271,16 +263,6 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         arb <> req
       }
       out <> arbiter.io.out
-    }
-    val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
-    val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
-    val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
-    val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
-    prefetchOpt.foreach {
-      case _ =>
-        arbTasks(prefetcher.get.io.train, prefetchTrains.get, Some("prefetch_train"))
-        prefetcher.get.io.req.ready := Cat(prefetchReqsReady).orR
-        arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
     }
 
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
@@ -317,31 +299,6 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         out.a.bits.address := restoreAddress(slice.io.out.a.bits.address, i)
         out.c.bits.address := restoreAddress(slice.io.out.c.bits.address, i)
 
-        slice.io.prefetch.zip(prefetcher).foreach {
-          case (s, p) =>
-            s.req.valid := p.io.req.valid && bank_eq(p.io.req.bits.set, i, bankBits)
-            s.req.bits := p.io.req.bits
-            prefetchReqsReady(i) := s.req.ready && bank_eq(p.io.req.bits.set, i, bankBits)
-            val train = Pipeline(s.train)
-            val resp = Pipeline(s.resp)
-            prefetchTrains.get(i) <> train
-            prefetchResps.get(i) <> resp
-            // restore to full address
-            if(bankBits != 0){
-              val train_full_addr = Cat(
-                train.bits.tag, train.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
-              )
-              val (train_tag, train_set, _) = s.parseFullAddress(train_full_addr)
-              val resp_full_addr = Cat(
-                resp.bits.tag, resp.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
-              )
-              val (resp_tag, resp_set, _) = s.parseFullAddress(resp_full_addr)
-              prefetchTrains.get(i).bits.tag := train_tag
-              prefetchTrains.get(i).bits.set := train_set
-              prefetchResps.get(i).bits.tag := resp_tag
-              prefetchResps.get(i).bits.set := resp_set
-            }
-        }
         io.perfEvents(i) := slice.perfinfo
         slice
     }

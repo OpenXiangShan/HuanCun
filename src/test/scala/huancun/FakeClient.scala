@@ -26,7 +26,8 @@ abstract class BaseFakeClient(name: String, nBanks: Int, probe: Boolean = true)(
       channelBytes = TLChannelBeatBytes(blockBytes),
       minLatency = 1,
       echoFields = cacheParams.echoField,
-      requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField()),
+      requestFields = Seq(PreferCacheField(), DirtyField()),
+      // requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField()),
       responseKeys = cacheParams.respKey
     )
   })
@@ -176,7 +177,7 @@ class MasterAgent
       io.a.bits.address.poke(a.address.U)
       io.a.bits.mask.poke(a.mask.U)
       io.a.bits.data.poke(a.data.U)
-      io.a.bits.user.lift(PrefetchKey).get.poke(true.B)
+      // io.a.bits.user.lift(PrefetchKey).get.poke(true.B)
     } else {
       io.a.valid.poke(false.B)
     }
