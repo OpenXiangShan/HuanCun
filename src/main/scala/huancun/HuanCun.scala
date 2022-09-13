@@ -304,7 +304,9 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
         prefetcher.get.io.recv_addr.valid := x.in.head._1.addr_valid
         prefetcher.get.io.recv_addr.bits := x.in.head._1.addr
         prefetcher.get.io_l2_pf_en := x.in.head._1.l2_pf_en
-      case None => prefetcher.foreach(_.io.recv_addr := DontCare)
+      case None =>
+        prefetcher.foreach(_.io.recv_addr := DontCare)
+        prefetcher.foreach(_.io_l2_pf_en := DontCare)
     }
 
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
