@@ -104,7 +104,11 @@ class SubDirectory[T <: Data](
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
   val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
-  val clock_div2 = Module(new Pow2ClockDivider(1)).io.clock_out
+
+  val clkMasker = Module(new ClockMask2)
+  clkMasker.io.clk_in := clock
+  clkMasker.io.reset := reset
+  val masked_clock = clkMasker.io.clk_out
 
   val tag_wen = io.tag_w.valid
   val dir_wen = io.dir_w.valid
@@ -130,7 +134,7 @@ class SubDirectory[T <: Data](
       UIntToOH(io.tag_w.bits.way)
     )
     if (clk_div_by_2) {
-      eccArray.clock := clock_div2 
+      eccArray.clock := masked_clock
     }
     eccRead := eccArray.io.r(io.read.fire(), io.read.bits.set).resp.data
   } else {
@@ -146,8 +150,8 @@ class SubDirectory[T <: Data](
   tagRead := tagArray.io.r(io.read.fire(), io.read.bits.set).resp.data
 
   if (clk_div_by_2) {
-    metaArray.clock := clock_div2
-    tagArray.clock := clock_div2
+    metaArray.clock := masked_clock
+    tagArray.clock := masked_clock
   }
 
   val reqReg = RegEnable(io.read.bits, enable = io.read.fire())
