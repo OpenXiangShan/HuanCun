@@ -19,9 +19,6 @@ abstract class MSHRTasks[T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](impli
   // direcotry & tag write
   val dir_write: DecoupledIO[T_DIR_W] // = DecoupledIO(new DirWrite)
   val tag_write: DecoupledIO[T_TAG_W] // = DecoupledIO(new TagWrite)
-  // prefetcher
-  val prefetch_train = prefetchOpt.map(_ => DecoupledIO(new PrefetchTrain))
-  val prefetch_resp = prefetchOpt.map(_ => DecoupledIO(new PrefetchResp))
 }
 
 class MSHRResps(implicit p: Parameters) extends HuanCunBundle {

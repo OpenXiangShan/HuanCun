@@ -13,7 +13,6 @@ trait HasClientInfo { this: HasHuanCunParameters =>
   // assume all clients have same params
   // TODO: check client params to ensure they are same
   val clientCacheParams = cacheParams.clientCaches.head
-  val aliasBits = aliasBitsOpt.getOrElse(0)
 
   val clientSets = clientCacheParams.sets
   val clientWays = clientCacheParams.ways
@@ -26,12 +25,10 @@ class SelfDirEntry(implicit p: Parameters) extends HuanCunBundle {
   val dirty = Bool()
   val state = UInt(stateBits.W)
   val clientStates = Vec(clientBits, UInt(stateBits.W))
-  val prefetch = if (hasPrefetchBit) Some(Bool()) else None // whether the block is prefetched
 }
 
 class ClientDirEntry(implicit p: Parameters) extends HuanCunBundle {
   val state = UInt(stateBits.W)
-  val alias = aliasBitsOpt.map(bits => UInt(bits.W))
 }
 
 class SelfDirResult(implicit p: Parameters) extends SelfDirEntry {
@@ -103,7 +100,7 @@ trait NonInclusiveCacheReplacerUpdate { this: HasUpdate =>
   override def doUpdate(info: ReplacerInfo): Bool = {
     val release_update = info.channel(2) && info.opcode === TLMessages.ReleaseData
     val prefetch_update = info.channel(0) && info.opcode === TLMessages.Hint
-    release_update | prefetch_update
+    release_update | prefetch_update    // TODO: remove prefetch
   }
 }
 
@@ -185,7 +182,7 @@ class Directory(implicit p: Parameters)
       dir_init_fn = () => {
         val init = Wire(Vec(clientBits, new ClientDirEntry))
         init.foreach(_.state := MetaData.INVALID)
-        init.foreach(_.alias.foreach(_ := DontCare))
+        init.foreach(_.alias.foreach(_ := DontCare))  // TODO@gravelcai: remove this alias
         init
       },
       dir_hit_fn = dirs => Cat(dirs.map(_.state =/= MetaData.INVALID)).orR,
@@ -273,7 +270,6 @@ class Directory(implicit p: Parameters)
   resp.bits.self.state := selfResp.bits.dir.state
   resp.bits.self.error := selfResp.bits.error
   resp.bits.self.clientStates := selfResp.bits.dir.clientStates
-  resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
   resp.bits.clients.way := clientResp.bits.way
   resp.bits.clients.tag := clientResp.bits.tag
   resp.bits.clients.error := Cat(resp.bits.clients.states.map(_.hit)).orR() && clientResp.bits.error
@@ -281,7 +277,6 @@ class Directory(implicit p: Parameters)
     case (s, dir) =>
       s.state := dir.state
       s.hit := clientResp.bits.hit && dir.state =/= INVALID
-      s.alias.foreach(_ := dir.alias.get)
   }
   resp.bits.clients.tag_match := clientResp.bits.hit
 

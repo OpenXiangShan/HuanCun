@@ -25,7 +25,7 @@ import chisel3.util._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.leftOR
 import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
-import huancun.prefetch._
+// import huancun.prefetch._
 import huancun.utils.{FastArbiter, LatchFastArbiter, Pipeline}
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
@@ -66,6 +66,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   io.in.d <> inBuf.d(sourceD.io.d)
   sinkE.io.e <> inBuf.e(io.in.e)
 
+
   // Outer channles
   val sourceA = Module(new SourceA(edgeOut))
   val sinkB = Module(new SinkB(edgeOut))
@@ -94,9 +95,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     else Module(new noninclusive.MSHR())
   }
   require(mshrsAll == mshrs + 2)
-  val ms_abc = ms.init.init
-  val ms_bc = ms.init.last
-  val ms_c = ms.last
+
 
   val dataStorage = Module(new DataStorage())
 
@@ -121,12 +120,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
 
   val mshrAlloc = Module(new MSHRAlloc)
+  val a_req = Wire(DecoupledIO(new MSHRRequest()))
   val a_req_buffer = Module(new RequestBuffer(entries = 4))
+  
   val probeHelperOpt = if(cacheParams.inclusive) None else {
     Some(Module(new ProbeHelper(enqDelay = if (cacheParams.sramClkDivBy2) 3 else (if(cacheParams.dirReg) 2 else 1))))
   }
 
-  val a_req = Wire(DecoupledIO(new MSHRRequest()))
   if(cacheParams.inclusive){
     a_req <> sinkA.io.alloc
     mshrAlloc.io.b_req <> sinkB.io.alloc
@@ -138,14 +138,16 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     b_arb.io.in(1) <> sinkB.io.alloc
     mshrAlloc.io.b_req <> b_arb.io.out
   }
-  if(prefetchOpt.nonEmpty){
-    val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
-    alloc_A_arb.io.in(0) <> a_req
-    alloc_A_arb.io.in(1) <> pftReqToMSHRReq(io.prefetch.get.req)
-    a_req_buffer.io.in <> alloc_A_arb.io.out
-  } else {
-    a_req_buffer.io.in <> a_req
-  }
+
+  // if(prefetchOpt.nonEmpty){
+  //   val alloc_A_arb = Module(new Arbiter(new MSHRRequest, 2))
+  //   alloc_A_arb.io.in(0) <> a_req
+  //   alloc_A_arb.io.in(1) <> pftReqToMSHRReq(io.prefetch.get.req)
+  //   a_req_buffer.io.in <> alloc_A_arb.io.out
+  // }    TODO@gravelcai: remove this
+
+  a_req_buffer.io.in <> a_req
+
   mshrAlloc.io.a_req <> a_req_buffer.io.out
   if(ctrl.nonEmpty) { // LLC
     val cmo_req = Pipeline(ctrl.get.io.cmo_req)
@@ -501,24 +503,6 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     }
   }
 
-  io.prefetch.foreach { pft =>
-
-    // connect abc mshrs to prefetcher
-    arbTasks(
-      pft.train,
-      abc_mshr.map(_.io.tasks.prefetch_train.get),
-      Some("prefetchTrain")
-    )
-    arbTasks(
-      pft.resp,
-      abc_mshr.map(_.io.tasks.prefetch_resp.get),
-      Some("prefetchResp")
-    )
-    for (mshr <- Seq(bc_mshr, c_mshr)) {
-      mshr.io.tasks.prefetch_train.foreach(_.ready := true.B)
-      mshr.io.tasks.prefetch_resp.foreach(_.ready := true.B)
-    }
-  }
 
   // Resps to MSHRs
   ms.zipWithIndex.foreach {
@@ -531,6 +515,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io.resps.sink_e.bits := sinkE.io.resp.bits
   }
   c_mshr.io.resps.sink_c.valid := false.B
+
 
   // Directory read results to MSHRs (deprecated)
   def regFn[T <: Data](x: Valid[T]): Valid[T] = {
@@ -556,6 +541,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     h.io.dirResult.bits := dirReg.bits
     h.io.dirResult.valid := RegNext(dirReg.valid, false.B)
   })
+
 
   // Provide MSHR info for sinkC, sinkD
   sinkC.io.way := Mux(
@@ -604,33 +590,6 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     io.ctl_resp <> DontCare
     io.ctl_req.ready := false.B
     io.ctl_resp.valid := false.B
-  }
-
-  def pftReqToMSHRReq(pftReq: DecoupledIO[PrefetchReq]): DecoupledIO[MSHRRequest] = {
-    val mshrReq = Wire(DecoupledIO(new MSHRRequest()))
-    val address = Cat(pftReq.bits.tag, pftReq.bits.set, 0.U(offsetBits.W))
-    val (tag, set, off) = parseAddress(address)
-    mshrReq.valid := pftReq.valid
-    mshrReq.bits.opcode := TLMessages.Hint
-    mshrReq.bits.param := Mux(pftReq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)
-    mshrReq.bits.size := log2Up(blockBytes).U
-    mshrReq.bits.source := pftReq.bits.source
-    mshrReq.bits.tag := tag
-    mshrReq.bits.set := set
-    mshrReq.bits.off := off
-    mshrReq.bits.mask := Fill(edgeOut.manager.beatBytes, 1.U(1.W))
-    mshrReq.bits.channel := "b001".U
-    mshrReq.bits.needHint.foreach(_ := false.B)
-    mshrReq.bits.isPrefetch.foreach(_ := true.B)
-    mshrReq.bits.alias.foreach(_ := DontCare)
-    mshrReq.bits.preferCache := true.B
-    mshrReq.bits.fromProbeHelper := false.B
-    mshrReq.bits.fromCmoHelper := false.B
-    mshrReq.bits.bufIdx := DontCare
-    mshrReq.bits.dirty := false.B
-    mshrReq.bits.needProbeAckData.foreach(_ := false.B)
-    pftReq.ready := mshrReq.ready
-    mshrReq
   }
 
   val perfinfo = IO(Output(Vec(numPCntHc, (UInt(6.W)))))
