@@ -108,10 +108,13 @@ class SubDirectory[T <: Data]
   val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, parentName = parentName + "metaArray_"))
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
 
-  val clkMasker = Module(new ClockMask2)
-  clkMasker.io.clk_in := clock
-  clkMasker.io.reset := reset
-  val masked_clock = clkMasker.io.clk_out
+  val clkGate = Module(new STD_CLKGT_func)
+  val clk_en = RegInit(true.B)
+  clk_en := ~clk_en
+  clkGate.io.TE := false.B
+  clkGate.io.E := clk_en
+  clkGate.io.CK := clock
+  val masked_clock = clkGate.io.Q
 
   val tag_wen = io.tag_w.valid
   val dir_wen = io.dir_w.valid

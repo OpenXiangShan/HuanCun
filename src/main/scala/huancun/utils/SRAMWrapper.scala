@@ -5,14 +5,15 @@ import chisel3.util._
 import huancun.mbist.MBISTPipeline.placePipelines
 import freechips.rocketchip.util.Pow2ClockDivider
 
-class ClockMask2 extends BlackBox with HasBlackBoxResource {
+class STD_CLKGT_func extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
-    val clk_out = Output(Clock())
-    val clk_in  = Input(Clock())
-    val reset = Input(Reset())
+    val TE = Input(Bool())
+    val E  = Input(Bool())
+    val CK = Input(Clock())
+    val Q  = Output(Clock())
   })
 
-  addResource("/ClockMask2.v")
+  addResource("/STD_CLKGT_func.v")
 }
 
 class SRAMWrapper[T <: Data]
@@ -42,10 +43,14 @@ class SRAMWrapper[T <: Data]
     val sram = Module(new SRAMTemplate[T](
       gen, innerSet, 1, singlePort = true, clk_div_by_2 = clk_div_by_2, hasRepair = hasRepair, parentName = parentName + s"bank${i}_"
     ))
-    val clkMasker = Module(new ClockMask2)
-    clkMasker.io.clk_in := clock
-    clkMasker.io.reset := reset
-    val masked_clock = clkMasker.io.clk_out
+
+    val clkGate = Module(new STD_CLKGT_func)
+    val clk_en = RegInit(true.B)
+    clk_en := ~clk_en
+    clkGate.io.TE := false.B
+    clkGate.io.E := clk_en
+    clkGate.io.CK := clock
+    val masked_clock = clkGate.io.Q
 
     if (clk_div_by_2) {
       sram.clock := masked_clock
