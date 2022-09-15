@@ -1102,7 +1102,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     replace_param
   )
   oc.source := io.id
-  oc.way := self_meta.way
+  oc.way := meta_reg.self.way
   oc.dirty := Mux(req.fromB, probe_dirty || self_meta.hit && self_meta.dirty, self_meta.dirty)
 
   od.sinkId := io.id
@@ -1138,7 +1138,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       MuxLookup(req.param, req.param, Seq(NtoB -> Mux(req_promoteT, toT, toB), BtoT -> toT, NtoT -> toT))
     )
   od.size := req.size
-  od.way := self_meta.way
+  od.way := meta_reg.self.way
   od.off := req.off
   od.denied := bad_grant || (meta_reg.self.error || meta_reg.clients.error)
   od.dirty := Mux(
@@ -1419,6 +1419,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.tag := req.tag
   io.status.bits.reload := false.B // TODO
   io.status.bits.way := self_meta.way
+  io.status.bits.way_reg := meta_reg.self.way  // used to ease timing issue
   io.status.bits.will_grant_data := req.fromA && od.opcode(0) && io.tasks.source_d.bits.useBypass
   io.status.bits.will_save_data := req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
   io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)

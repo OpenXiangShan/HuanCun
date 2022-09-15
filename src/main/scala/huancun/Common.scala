@@ -151,6 +151,7 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val set = UInt(setBits.W)
   val tag = UInt(tagBits.W)
   val way = UInt(wayBits.W)
+  val way_reg = UInt(wayBits.W)
   val reload = Bool()
   val blockB, blockC = Bool()
   val nestB, nestC = Bool()
