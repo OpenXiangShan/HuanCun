@@ -573,7 +573,7 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
   val sinkD_status = Mux1H(ms.map(_.io.status).zipWithIndex.map{
     case (s, i) => (i.U === sinkD.io.resp.bits.source) -> s
   })
-  sinkD.io.way := sinkD_status.bits.way
+  sinkD.io.way := sinkD_status.bits.way_reg
   sinkD.io.set := sinkD_status.bits.set
   sinkD.io.inner_grant := sinkD_status.bits.will_grant_data
   sinkD.io.save_data_in_bs := sinkD_status.bits.will_save_data
