@@ -214,7 +214,6 @@ class PutBufferBeatEntry(implicit p: Parameters) extends HuanCunBundle {
 }
 
 class PrefetchRecv extends Bundle {
-  val addr = UInt(64.W)
-  val addr_valid = Bool()
-  val l2_pf_en = Bool()
+  val addr = Flipped(ValidIO(UInt(64.W)))
+  val l2_pf_en = Input(Bool())
 }
