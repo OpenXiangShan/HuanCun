@@ -37,7 +37,6 @@ class PrefetchIO(implicit p: Parameters) extends PrefetchBundle {
   val train = Flipped(DecoupledIO(new PrefetchTrain))
   val req = DecoupledIO(new PrefetchReq)
   val resp = Flipped(DecoupledIO(new PrefetchResp))
-  val recv_addr = Flipped(ValidIO(UInt(64.W)))
 }
 
 class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
@@ -84,16 +83,6 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       val pft = Module(new BestOffsetPrefetch)
       val pftQueue = Module(new PrefetchQueue)
       val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
-      pft.io.train <> io.train
-      pft.io.resp <> io.resp
-      pftQueue.io.enq <> pft.io.req
-      pipe.io.in <> pftQueue.io.deq
-      io.req <> pipe.io.out
-    case receiver: PrefetchReceiverParams =>
-      val pft = Module(new PrefetchReceiver())
-      val pftQueue = Module(new PrefetchQueue)
-      val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
-      pft.io.recv_addr := io.recv_addr
       pft.io.train <> io.train
       pft.io.resp <> io.resp
       pftQueue.io.enq <> pft.io.req
