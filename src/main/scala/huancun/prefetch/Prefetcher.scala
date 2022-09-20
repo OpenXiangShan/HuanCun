@@ -12,6 +12,7 @@ class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val set = UInt(setBits.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
+  val isBOP = Bool()
 }
 
 class PrefetchResp(implicit p: Parameters) extends PrefetchBundle {

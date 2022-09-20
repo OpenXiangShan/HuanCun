@@ -42,6 +42,7 @@ class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
   req.bufIdx := DontCare
   req.needHint.foreach(_ := false.B)
   req.isPrefetch.foreach(_ := false.B)
+  req.isBop.foreach(_ := false.B)
   req.alias.foreach(_ := 0.U)
   req.preferCache := true.B
   req.dirty := false.B // ignored

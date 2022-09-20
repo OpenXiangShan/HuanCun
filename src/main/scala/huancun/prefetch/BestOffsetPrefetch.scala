@@ -262,6 +262,7 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
 
   io.req.valid := req_valid
   io.req.bits := req
+  io.req.bits.isBOP := true.B
   io.train.ready := scoreTable.io.req.ready && (!req_valid || io.req.ready)
   io.resp.ready := rrTable.io.w.ready
 }
