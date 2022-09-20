@@ -623,6 +623,7 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
     mshrReq.bits.channel := "b001".U
     mshrReq.bits.needHint.foreach(_ := false.B)
     mshrReq.bits.isPrefetch.foreach(_ := true.B)
+    mshrReq.bits.isBop.foreach(_ := pftReq.bits.isBOP)
     mshrReq.bits.alias.foreach(_ := DontCare)
     mshrReq.bits.preferCache := true.B
     mshrReq.bits.fromProbeHelper := false.B

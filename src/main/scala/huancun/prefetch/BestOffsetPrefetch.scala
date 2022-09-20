@@ -264,6 +264,7 @@ class BestOffsetPrefetch(parentName:String = "Unknown")(implicit p: Parameters) 
 
   io.req.valid := req_valid
   io.req.bits := req
+  io.req.bits.isBOP := true.B
   io.train.ready := scoreTable.io.req.ready && (!req_valid || io.req.ready)
   io.resp.ready := rrTable.io.w.ready
 }
