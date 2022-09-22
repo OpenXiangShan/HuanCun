@@ -110,11 +110,9 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
     val out = Wire(new DSRequest)
     val accessVec = Cat(
-      Seq
-        .tabulate(nrStacks) { i =>
-          !out.bankSum((i + 1) * stackSize - 1, i * stackSize).orR
-        }
-        .reverse
+      Seq.tabulate(nrStacks) { i =>
+        !out.bankSum((i + 1) * stackSize - 1, i * stackSize).orR
+      }.reverse
     )
     addr.ready := accessVec(stackIdx) && stackRdy(stackIdx)
 

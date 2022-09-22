@@ -34,14 +34,7 @@ class NestedWriteback(implicit p: Parameters) extends HuanCunBundle {
   val c_set_hit = Bool()
   val clients =
     if (!cacheParams.inclusive)
-      Some(
-        Vec(
-          clientBits,
-          new Bundle {
-            val isToN, isToB = Bool()
-          }
-        )
-      )
+      Some(Vec(clientBits, new Bundle { val isToN, isToB = Bool() }))
     else None
 }
 

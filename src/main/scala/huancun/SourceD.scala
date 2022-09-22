@@ -61,12 +61,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s4_ready = Wire(Bool())
 
   def needData(req: SourceDReq): Bool = {
-    req.fromA && (
-      req.opcode === TLMessages.GrantData ||
-        req.opcode === TLMessages.AccessAckData ||
-        req.opcode === TLMessages.AccessAck && !req.bypassPut
-      )
-  }
+    req.fromA && (req.opcode === TLMessages.GrantData ||
+									req.opcode === TLMessages.AccessAckData ||
+									req.opcode === TLMessages.AccessAck && !req.bypassPut) }
 
   // stage1
   val busy = RegInit(false.B)

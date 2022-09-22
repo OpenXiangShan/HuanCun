@@ -39,7 +39,6 @@ class SourceBReq(implicit p: Parameters) extends HuanCunBundle {
   val tag = UInt(tagBits.W)
   val param = UInt(3.W)
   val clients = UInt(clientBits.W)
-  // val alias = aliasBitsOpt.map(w => Vec(clientBits, UInt(w.W)))
   val needData = if (cacheParams.inclusive) None else Some(Bool())
 }
 class SinkCReq(implicit p: Parameters) extends InnerTask {
