@@ -115,7 +115,7 @@ class SubDirectory[T <: Data](
 
   val tag_wen = io.tag_w.valid
   val dir_wen = io.dir_w.valid
-  val replacer_wen = WireInit(false.B)
+  val replacer_wen = RegInit(false.B)
   io.tag_w.ready := true.B
   io.dir_w.ready := true.B
   io.read.ready := !tag_wen && !dir_wen && !replacer_wen && resetFinish
@@ -178,7 +178,7 @@ class SubDirectory[T <: Data](
     val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
     val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
     val next_state = repl.get_next_state(repl_state, way_s1)
-    replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
+    replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqReg.set), 1.U)
     repl_state
   }
 
@@ -266,7 +266,9 @@ abstract class SubDirectoryDoUpdate[T <: Data](
     ) with HasUpdate {
 
   val update = doUpdate(reqReg.replacerInfo)
-  when(reqValidReg && update){
+  when(reqValidReg && update) {
     replacer_wen := true.B
+  }.otherwise {
+    replacer_wen := false.B
   }
 }
