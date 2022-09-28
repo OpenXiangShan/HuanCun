@@ -221,7 +221,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     state === BRANCH && perm === toB
   }
 
-  def onXReq(): Unit = {
+  // param: 1.U -> Invalidata
+  //        2.U -> Clean
+  //        3.U -> Flush
+  def onXReq(): Unit = {    TODO@gravel
     new_self_meta.dirty := false.B
     new_self_meta.state := Mux(req.param === 1.U,
       Mux(self_meta.hit,

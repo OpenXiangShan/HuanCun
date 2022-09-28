@@ -145,6 +145,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val dirty = Bool()
   val fromProbeHelper = Bool()
   val fromCmoHelper = Bool()
+  val cmoIdx = UInt(cmoIdxBits.W)
   val needProbeAckData = if (cacheParams.inclusive) None else Some(Bool())
 }
 

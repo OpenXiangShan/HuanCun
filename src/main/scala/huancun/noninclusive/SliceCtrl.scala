@@ -212,7 +212,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
 
   io.cmo_req.bits.channel := 4.U
   io.cmo_req.bits.opcode := 0.U  // DontCare
-  io.cmo_req.bits.param := io.req.bits.cmd(1, 0)
+  io.cmo_req.bits.param := io.req.bits.cmd(5, 4)
   io.cmo_req.bits.size := log2Up(blockBytes).U
   io.cmo_req.bits.source := 0.U  // DontCare
   io.cmo_req.bits.set := io.req.bits.set
@@ -228,6 +228,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.cmo_req.bits.fromProbeHelper := false.B
   io.cmo_req.bits.fromCmoHelper := true.B
   io.cmo_req.bits.needProbeAckData.foreach(_ := false.B)
+  io.cmo_req.bits.cmoIdx := io.req.bits.cmoIdx
 
   io.cmo_req.valid := s_cmo
   when(io.cmo_req.fire()){
