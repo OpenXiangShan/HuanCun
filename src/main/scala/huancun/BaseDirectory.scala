@@ -102,6 +102,7 @@ class SubDirectory[T <: Data]
     }))
   })
 
+  val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
   val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, parentName = parentName + "metaArray_"))
@@ -162,7 +163,7 @@ class SubDirectory[T <: Data]
     repl_state
   }
   val(baseDirectoryMbistPipelineSram,baseDirectoryMbistPipelineRf,baseDirectoryMbistPipelineSramRepair,baseDirectoryMbistPipelineRfRepair) = placePipelines(level = 2,infoName = "BaseDirectory")
-  io.resp.valid := reqValidReg
+ 
   val metas = metaArray.io.r(io.read.fire(), io.read.bits.set).resp.data
   val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
   val metaValidVec = metas.map(dir_hit_fn)
@@ -190,11 +191,20 @@ class SubDirectory[T <: Data]
   val errorAll_s2 = RegEnable(errorAll_s1, reqValidReg)
   val error_s2 = errorAll_s2(way_s2)
 
-  io.resp.bits.hit := hit_s2
-  io.resp.bits.way := way_s2
-  io.resp.bits.dir := meta_s2
-  io.resp.bits.tag := tag_s2
-  io.resp.bits.error := io.resp.bits.hit && error_s2
+  val respBits = WireInit(0.U.asTypeOf(io.resp.bits))
+  respBits.hit := hit_s2
+  respBits.way := way_s2
+  respBits.dir := meta_s2
+  respBits.tag := tag_s2
+  respBits.error := respBits.hit && error_s2
+
+  if (clk_div_by_2) {
+    io.resp.valid := RegNext(reqValidReg, false.B) 
+    io.resp.bits := RegNext(respBits)
+  } else {
+    io.resp.bits := respBits
+    io.resp.valid := reqValidReg
+  }
 
   metaArray.io.w(
     !resetFinish || dir_wen,
