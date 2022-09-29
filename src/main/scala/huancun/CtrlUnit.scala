@@ -78,7 +78,10 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_dir = RegInit(0.U(64.W))
   val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
   val ctl_cmd = RegInit(0.U(64.W))
-  val ctl_busy = RegInit(VecInit(Seq.fill(cmoBufs)(false.B)))   // TODO@gravel
+  val ctl_ready = RegInit(true.B)   // there are ctl_cmos being idle.
+  val ctl_busy = RegInit(false.B)   // there are ctl_cmos being occupied.
+
+  val ctl_cmo = RegInit(false.B)    // TODO@gravel: support outstanding
 
   val ecc_code = RegInit(0.U(64.W)) // assume non-zero as ECC error
   // for data error: ecc_addr = {set, way, beat}
@@ -111,7 +114,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     ctl_data ++
     Seq(ctl_dir) ++
     Seq(ecc_code, ecc_addr) ++
-    ctl_busy
+    Seq(ctl_ready, ctl_busy)
   ).map(reg => RegField(64, reg, RegWriteFn(reg)))
 
   ctlnode.regmap(
@@ -136,7 +139,11 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
       regs = reset_regs
     )
   )
-  cmd_in_ready := req.ready && !(ctl_busy.asUInt().orR)
+
+  ctl_ready := !ctl_cmo
+  ctl_busy := ctl_cmo
+
+  cmd_in_ready := req.ready && ctl_ready
   when(resp.fire()){
     cmd_out_valid := true.B
   }
@@ -149,12 +156,10 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   req.bits.set := ctl_set
   req.bits.way := ctl_way
   req.bits.dir := ctl_dir
-  req.bits.cmoIdx := chosen
 
   when(req.fire()) {
-    if(ctl_cmd === CacheCMD.CMD_CMO_CLEAN || ctl_cmd === CacheCMD.CMD_CMO_FLUSH || ctl_cmd === CacheCMD.CMD_CMO_INV) {
-      val chosen = OHToUInt(FirstVal(ctl_busy))
-      ctl_busy(chosen) := true.B
+    when(req.bits.cmd === CacheCMD.CMD_CMO_CLEAN || req.bits.cmd === CacheCMD.CMD_CMO_FLUSH || req.bits.cmd === CacheCMD.CMD_CMO_INV) {
+      ctl_cmo := true.B
     }
   }
 
@@ -175,14 +180,14 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
       is(CacheCMD.CMD_R_C_DIR){
         ctl_dir := resp.bits.data(0)
       }
-      is(CacheCMD.CMD_CMO_CLEAN){   // TODO@gravel
-        ctl_busy(resp.bits.cmoIdx) := false.B
+      is(CacheCMD.CMD_CMO_CLEAN){
+        ctl_cmo := false.B
       }
       is(CacheCMD.CMD_CMO_FLUSH){
-        ctl_busy(resp.bits.cmoIdx) := false.B
+        ctl_cmo := false.B
       }
       is(CacheCMD.CMD_CMO_INV){
-        ctl_busy(resp.bits.cmoIdx) := false.B
+        ctl_cmo := false.B
       }
     }
   }
@@ -192,6 +197,12 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     ecc_addr := ecc.bits.addr
   }
   wrapper.intnode.out.head._1.head := ecc_code =/= 0.U
+
+  // find the first bit that is false
+  // def FirstVal(s: Seq[Bool]) = {
+  //     val onehot = (Cat(s).asUInt + 1.U) & ~(Cat(s).asUInt)
+  //     onehot
+  // }
 }
 
 class CtrlReq() extends Bundle {
@@ -201,13 +212,11 @@ class CtrlReq() extends Bundle {
   val tag = UInt(64.W)
   val way = UInt(64.W)
   val dir = UInt(64.W)
-  val cmoIdx = UInt(cmoIdxBits.W)    // TODO@gravel
 }
 
 class CtrlResp() extends Bundle {
   val cmd = UInt(8.W)
   val data = Vec(8, UInt(64.W))
-  val cmoIdx = UInt(cmoIdxBits.W)
 }
 
 class EccInfo() extends Bundle {
@@ -235,10 +244,4 @@ object CacheCMD {
   def CMD_CMO_INV = "b00010000".U
   def CMD_CMO_CLEAN = "b00100000".U
   def CMD_CMO_FLUSH = "b00110000".U
-}
-
-// find the first bit that is false
-def FirstVal(s: Seq[Bool]) = {
-    val onehot = (Cat(s).asUInt + 1.U) & ~(Cat(s).asUInt)
-    onehot
 }

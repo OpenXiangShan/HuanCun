@@ -94,9 +94,6 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     else Module(new noninclusive.MSHR())
   }
   require(mshrsAll == mshrs + 2)
-  val ms_abc = ms.init.init
-  val ms_bc = ms.init.last
-  val ms_c = ms.last
 
   val dataStorage = Module(new DataStorage())
 
@@ -599,7 +596,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   io.ctl_ecc.valid := RegNext(tag_err | data_err, false.B)
   if (ctrl.nonEmpty) {
     ctrl.get.io.req <> io.ctl_req
-    io.ctl_resp <> ctrl.get.io.resp
+    io.ctl_resp <> ctrl.get.io.resp_out
   } else {
     io.ctl_req <> DontCare
     io.ctl_resp <> DontCare
@@ -648,6 +645,18 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       perf_out := perf
       if(print_hcperfcounter){
         println(s"Huancun perf $i: $perf_name")
+      }
+    }
+  }
+
+  // CMO response
+  // TODO: Chose one mshr whose io_cmo_resp's valid high
+  // error: io_cmo_resp is not a member of BaseMSHR
+  if (ctrl.nonEmpty) {
+    ms.map { m =>
+      if(m.io_cmo_resp.valid) {
+        ctrl.get.io.resp_in.valid := m.io_cmo_resp.valid
+        ctrl.get.io.resp_in.bits := m.io_cmo_resp.bits
       }
     }
   }

@@ -47,6 +47,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val io_is_nestedProbeAckData = IO(Output(Bool()))
   val io_probeHelperFinish = IO(Output(Bool()))
 
+  val io_cmo_resp = IO(ValidIO(new CtrlResp))
+
   val req = Reg(new MSHRRequest)
   val req_valid = RegInit(false.B)
   val iam = Reg(UInt(log2Up(clientBits).W)) // Which client does this req come from?
@@ -224,7 +226,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // param: 1.U -> Invalidata
   //        2.U -> Clean
   //        3.U -> Flush
-  def onXReq(): Unit = {    TODO@gravel
+  def onXReq(): Unit = {    // TODO@gravel
     new_self_meta.dirty := false.B
     new_self_meta.state := Mux(req.param === 1.U,
       Mux(self_meta.hit,
@@ -1470,4 +1472,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData &&
     req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
+
+    
+  // CMO Resp
+  io_cmo_resp.valid := req_valid && will_be_free && req.fromCmoHelper
+  switch(req.param) {
+    is(1.U) { io_cmo_resp.bits.cmd := CacheCMD.CMD_CMO_INV }
+    is(2.U) { io_cmo_resp.bits.cmd := CacheCMD.CMD_CMO_CLEAN }
+    is(3.U) { io_cmo_resp.bits.cmd := CacheCMD.CMD_CMO_FLUSH }
+  }
+  io_cmo_resp.bits.data := 0.U  // DontCare
+
 }
