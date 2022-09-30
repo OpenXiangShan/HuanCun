@@ -102,6 +102,8 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
     XSPerfAccumulate(cacheParams, s"req_buffer_util_$i", update)
   }
   XSPerfAccumulate(cacheParams, "recv_prefetch", io.in.fire() && io.in.bits.isPrefetch.getOrElse(false.B))
+  XSPerfAccumulate(cacheParams, "recv_pf_bop", io.in.fire && io.in.bits.isPrefetch.getOrElse(false.B) && io.in.bits.isBop.getOrElse(false.B))
+  XSPerfAccumulate(cacheParams, "recv_pf_l1", io.in.fire && io.in.bits.isPrefetch.getOrElse(false.B) && !io.in.bits.isBop.getOrElse(false.B))
   XSPerfAccumulate(cacheParams, "recv_normal", io.in.fire() && !io.in.bits.isPrefetch.getOrElse(false.B))
   val perfinfo = IO(Output(Vec(numPCntHcReqb, (UInt(6.W)))))
   val perfEvents = Seq(

@@ -1,6 +1,6 @@
 package huancun.prefetch
 
-import huancun.utils.SRAMTemplate
+import huancun.utils.{ChiselDB, SRAMTemplate}
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
@@ -265,4 +265,12 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
   io.req.bits.isBOP := true.B
   io.train.ready := scoreTable.io.req.ready && (!req_valid || io.req.ready)
   io.resp.ready := rrTable.io.w.ready
+
+  val miss_trace = Wire(new L1MissTrace)
+  miss_trace.vaddr := 0.U
+  miss_trace.paddr := Cat(req.tag, req.set, 0.U(offsetBits.W))
+  miss_trace.source := 8.U
+  miss_trace.pc := 0.U
+  val table = ChiselDB.createTable("L1MissTrace", new L1MissTrace)
+  table.log(miss_trace, io.req.fire, "L2", clock, reset)
 }

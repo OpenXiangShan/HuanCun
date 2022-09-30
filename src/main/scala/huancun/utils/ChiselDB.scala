@@ -183,7 +183,7 @@ object ChiselDB {
 
   def createTable[T <: Record](tableName: String, hw: T): Table[T] = {
     table_map.get(tableName).map(old => {
-      require(old.getClass.equals(hw.getClass), s"table name conflict: $tableName")
+      require(old.hw.getClass.equals(hw.getClass), s"table name conflict: $tableName")
       old.asInstanceOf[Table[T]]
     }).getOrElse({
       val t = new Table[T](tableName, hw)
