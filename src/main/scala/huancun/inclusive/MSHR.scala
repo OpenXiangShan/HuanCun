@@ -570,7 +570,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     req_valid := false.B
     meta_valid := false.B
   }
-  io.status.bits.will_free := no_wait && no_schedule
+  val will_be_free = RegInit(false.B)
+  will_be_free := no_wait && no_schedule
+  io.status.bits.will_free := will_be_free
 
   // Alloc MSHR (alloc has higher priority than release)
   assert(RegNext(!req_valid || !io.alloc.valid, true.B)) // TODO: support fully-pipelined
@@ -600,4 +602,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
 
   io.ecc := DontCare
   io.ecc.valid := false.B
+
+  io.cmo_resp.valid := req_valid && will_be_free && req.fromCmoHelper
+  io.cmo_resp.bits.cmd := Mux(req.param === 1.U, 
+                              CacheCMD.CMD_CMO_INV,
+                              Mux(req.param === 2.U,
+                                  CacheCMD.CMD_CMO_CLEAN,
+                                  Mux(req.param === 3.U,
+                                      CacheCMD.CMD_CMO_FLUSH,
+                                      0.U)))
+                                      
+  io.cmo_resp.bits.data := 0.U  // DontCare
 }

@@ -10,7 +10,6 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
 
   val io = IO(new Bundle() {
     val req = Flipped(DecoupledIO(new CtrlReq))
-    val resp_out = DecoupledIO(new CtrlResp)
     val s_dir_w = DecoupledIO(new SelfDirWrite())
     val c_dir_w = DecoupledIO(new ClientDirWrite())
     val s_tag_w = DecoupledIO(new SelfTagWrite())
@@ -22,7 +21,8 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     val bs_r_addr = DecoupledIO(new DSAddress())
     val bs_r_data = Input(new DSData())
     val cmo_req = DecoupledIO(new MSHRRequest())
-    val resp_in = Flipped(ValidIO(new CtrlResp))
+    val sc_cu_resp_o = DecoupledIO(new CtrlResp)
+    val mshr_sc_resp_i = Flipped(DecoupledIO(new CtrlResp))
   })
 
   val req_reg = Reg(new CtrlReq)
@@ -47,7 +47,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   when(io.req.fire()){
     busy := true.B
   }
-  when(io.resp_out.fire()){
+  when(io.sc_cu_resp_o.fire()){
     busy := false.B
     done := false.B
   }
@@ -238,7 +238,9 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
 
   io.req.ready := !busy
 
-  io.resp_out.valid := io.resp_in.valid
-  io.resp_out.bits.cmd := io.resp_in.cmd
-  io.resp_out.bits.data := req_reg.data
+  io.mshr_sc_resp_i.ready := io.sc_cu_resp_o.ready
+
+  io.sc_cu_resp_o.valid := io.mshr_sc_resp_i.valid
+  io.sc_cu_resp_o.bits.cmd := io.mshr_sc_resp_i.bits.cmd
+  io.sc_cu_resp_o.bits.data := req_reg.data
 }

@@ -596,7 +596,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   io.ctl_ecc.valid := RegNext(tag_err | data_err, false.B)
   if (ctrl.nonEmpty) {
     ctrl.get.io.req <> io.ctl_req
-    io.ctl_resp <> ctrl.get.io.resp_out
+    io.ctl_resp <> ctrl.get.io.sc_cu_resp_o
   } else {
     io.ctl_req <> DontCare
     io.ctl_resp <> DontCare
@@ -650,14 +650,16 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   // CMO response
-  // TODO: Chose one mshr whose io_cmo_resp's valid high
-  // error: io_cmo_resp is not a member of BaseMSHR
   if (ctrl.nonEmpty) {
-    ms.map { m =>
-      if(m.io_cmo_resp.valid) {
-        ctrl.get.io.resp_in.valid := m.io_cmo_resp.valid
-        ctrl.get.io.resp_in.bits := m.io_cmo_resp.bits
-      }
+    val mshrOH = ms.map(_.io.cmo_resp.valid)
+    ctrl.get.io.mshr_sc_resp_i.valid := Mux1H(mshrOH, ms.map(_.io.cmo_resp.valid))
+    ctrl.get.io.mshr_sc_resp_i.bits := Mux1H(mshrOH, ms.map(_.io.cmo_resp.bits))
+    ms.map { mshr =>
+      mshr.io.cmo_resp.ready := ctrl.get.io.mshr_sc_resp_i.ready
+    }
+  } else {
+    ms.map { mshr =>
+      mshr.io.cmo_resp.ready := false.B
     }
   }
 }
