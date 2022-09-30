@@ -78,8 +78,8 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_dir = RegInit(0.U(64.W))
   val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
   val ctl_cmd = RegInit(0.U(64.W))
-  val ctl_ready = RegInit(true.B)   // there are ctl_cmos being idle.
-  val ctl_busy = RegInit(false.B)   // there are ctl_cmos being occupied.
+  val ctl_ready = RegInit(1.U(8.W))   // there are ctl_cmos being idle.
+  val ctl_busy = RegInit(0.U(8.W))   // there are ctl_cmos being occupied.
 
   val ctl_cmo = RegInit(false.B)    // TODO@gravel: support outstanding
 
@@ -140,10 +140,10 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     )
   )
 
-  ctl_ready := !ctl_cmo
-  ctl_busy := ctl_cmo
+  ctl_ready(0) := !ctl_cmo.asUInt()
+  ctl_busy(0) := ctl_cmo.asUInt()
 
-  cmd_in_ready := req.ready && ctl_ready
+  cmd_in_ready := req.ready && ctl_ready(0).asBool()
   when(resp.fire()){
     cmd_out_valid := true.B
   }
