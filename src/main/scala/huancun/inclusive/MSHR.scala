@@ -604,13 +604,15 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   io.ecc.valid := false.B
 
   io.cmo_resp.valid := req_valid && will_be_free && req.fromCmoHelper
-  io.cmo_resp.bits.cmd := Mux(req.param === 1.U, 
+  io.cmo_resp.bits.cmd := Mux(req.param === 0.U, 
                               CacheCMD.CMD_CMO_INV,
-                              Mux(req.param === 2.U,
+                              Mux(req.param === 1.U,
                                   CacheCMD.CMD_CMO_CLEAN,
-                                  Mux(req.param === 3.U,
+                                  Mux(req.param === 2.U,
                                       CacheCMD.CMD_CMO_FLUSH,
                                       0.U)))
                                       
-  io.cmo_resp.bits.data := 0.U  // DontCare
+  for(i <- 0 until 8) {
+    io.cmo_resp.bits.data(i) := 0.U(64.W)   // DontCare
+  }
 }

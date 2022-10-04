@@ -78,10 +78,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_dir = RegInit(0.U(64.W))
   val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
   val ctl_cmd = RegInit(0.U(64.W))
-  val ctl_ready = RegInit(1.U(8.W))   // there are ctl_cmos being idle.
-  val ctl_busy = RegInit(0.U(8.W))   // there are ctl_cmos being occupied.
-
-  val ctl_cmo = RegInit(false.B)    // TODO@gravel: support outstanding
+  val ctl_done = RegInit(1.U(64.W))   // all cmo have been done
 
   val ecc_code = RegInit(0.U(64.W)) // assume non-zero as ECC error
   // for data error: ecc_addr = {set, way, beat}
@@ -105,16 +102,14 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val cmd_in_ready = WireInit(false.B)
   val cmd_out_valid = RegInit(false.B)
   val cmd_out_ready = WireInit(false.B)
-
-  when(cmd_out_ready){ cmd_out_valid := false.B }
-  when(cmd_in_ready){ cmd_in_valid := false.B }
+  val cmo_busy = RegInit(0.U(64.W))
 
   val ctl_config_regs = (
     Seq(ctl_tag, ctl_set, ctl_way) ++
     ctl_data ++
     Seq(ctl_dir) ++
     Seq(ecc_code, ecc_addr) ++
-    Seq(ctl_ready, ctl_busy)
+    Seq(ctl_done)
   ).map(reg => RegField(64, reg, RegWriteFn(reg)))
 
   ctlnode.regmap(
@@ -128,7 +123,10 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     ),
     0x0200 -> Seq(RegField.w(64, RegWriteFn((ivalid, oready, data) => {
       when(oready){ cmd_out_ready := true.B }
-      when(ivalid){ cmd_in_valid := true.B }
+      when(ivalid){
+        cmd_in_valid := true.B
+        cmo_busy(0) := 1.U(1.W)
+      }
       when(ivalid && !cmd_in_valid){
         ctl_cmd := data
       }
@@ -140,16 +138,18 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     )
   )
 
-  ctl_ready(0) := !ctl_cmo.asUInt()
-  ctl_busy(0) := ctl_cmo.asUInt()
+  when(cmd_out_ready){ cmd_out_valid := false.B }
+  when(req.fire){ cmd_in_valid := false.B }
 
-  cmd_in_ready := req.ready && ctl_ready(0).asBool()
+  cmd_in_ready := req.ready
   when(resp.fire()){
     cmd_out_valid := true.B
+    cmo_busy(0) := 0.U(1.W)
   }
+
   resp.ready := !cmd_out_valid
   ecc.ready := ecc_code === 0.U // Block multiple ecc req
-  req.valid := cmd_in_valid
+  req.valid := cmo_busy.orR
   req.bits.cmd := ctl_cmd
   req.bits.data.zip(ctl_data).foreach(x => x._1 := x._2)
   req.bits.tag := ctl_tag
@@ -157,11 +157,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   req.bits.way := ctl_way
   req.bits.dir := ctl_dir
 
-  when(req.fire()) {
-    when(req.bits.cmd === CacheCMD.CMD_CMO_CLEAN || req.bits.cmd === CacheCMD.CMD_CMO_FLUSH || req.bits.cmd === CacheCMD.CMD_CMO_INV) {
-      ctl_cmo := true.B
-    }
-  }
+  ctl_done(0) := !cmo_busy.orR.asBool
 
   when(resp.fire()) {
     switch(resp.bits.cmd){
@@ -180,15 +176,6 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
       is(CacheCMD.CMD_R_C_DIR){
         ctl_dir := resp.bits.data(0)
       }
-      is(CacheCMD.CMD_CMO_CLEAN){
-        ctl_cmo := false.B
-      }
-      is(CacheCMD.CMD_CMO_FLUSH){
-        ctl_cmo := false.B
-      }
-      is(CacheCMD.CMD_CMO_INV){
-        ctl_cmo := false.B
-      }
     }
   }
 
@@ -197,12 +184,6 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     ecc_addr := ecc.bits.addr
   }
   wrapper.intnode.out.head._1.head := ecc_code =/= 0.U
-
-  // find the first bit that is false
-  // def FirstVal(s: Seq[Bool]) = {
-  //     val onehot = (Cat(s).asUInt + 1.U) & ~(Cat(s).asUInt)
-  //     onehot
-  // }
 }
 
 class CtrlReq() extends Bundle {
@@ -241,7 +222,15 @@ object CacheCMD {
   def CMD_W_DATA = 7.U(8.W)
   def CMD_W_S_DIR = 8.U(8.W)
   def CMD_W_C_DIR = 9.U(8.W)
-  def CMD_CMO_INV = "b00010000".U
-  def CMD_CMO_CLEAN = "b00100000".U
-  def CMD_CMO_FLUSH = "b00110000".U
+  def CMD_CMO_INV = (0+16).U
+  def CMD_CMO_CLEAN = (1+16).U
+  def CMD_CMO_FLUSH = (2+16).U
 }
+
+// find the first bit that is false
+// object FirstVal(s: Seq[Bool]) {
+//   def apply(s: Seq[Bool]) = {
+//       val onehot = (Cat(s).asUInt + 1.U) & ~(Cat(s).asUInt)
+//       onehot
+//   }
+// }

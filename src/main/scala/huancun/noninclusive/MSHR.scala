@@ -221,26 +221,26 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     state === BRANCH && perm === toB
   }
 
-  // param: 1.U -> Invalidata
-  //        2.U -> Clean
-  //        3.U -> Flush
+  // param: 0.U -> Invalidata
+  //        1.U -> Clean
+  //        2.U -> Flush
   def onXReq(): Unit = {
-    new_self_meta.dirty := false.B
-    new_self_meta.state := Mux(req.param === 1.U || req.param === 3.U, 
+    new_self_meta.dirty := Mux(self_meta.hit, false.B, self_meta.dirty)
+    new_self_meta.state := Mux(self_meta.hit && (req.param === 0.U || req.param === 2.U), 
                                INVALID,
                                self_meta.state)
     
     new_self_meta.clientStates.zipWithIndex.foreach {
       case(state, i) =>
-        state := Mux(req.param === 1.U || req.param === 3.U, 
+        state := Mux(self_meta.hit && (req.param === 0.U || req.param === 2.U),
                      INVALID,
-                     self_meta.state) 
+                     self_meta.clientStates(i))
     }
     new_clients_meta.zipWithIndex.foreach {
       case(m, i) =>
-        m.state := Mux(req.param === 1.U || req.param === 3.U, 
-                      INVALID,
-                      self_meta.state) 
+        m.state := Mux(clients_meta_reg(i).hit && (req.param === 1.U || req.param === 3.U),
+                       INVALID,
+                       clients_meta_reg(i).state) 
     }
   }
 
@@ -596,57 +596,36 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
   when(!s_acquire) { acquire_flag := acquire_flag | true.B }
 
-  // param: 1.U -> Invalidata
-  //        2.U -> Clean
-  //        3.U -> Flush
+  // param: 0.U -> Invalidata
+  //        1.U -> Clean
+  //        2.U -> Flush
   def x_schedule(): Unit = {
-    // Invalidate: probeToN when clientsHit
-    when(req.param === 1.U) {
+    when(req.param === 0.U) {   // Invalidate
       when(self_meta.hit) {
         s_wbselfdir := false.B
       }
-      clients_meta.map { meta =>
-        when(meta.hit) {
-          s_probe := false.B
-          s_wbclientsdir := false.B
-          w_probeackfirst := false.B
-          w_probeacklast := false.B
-          w_probeack := false.B
-        }
-      }
-    }
-
-    // Clean: now we don't have approches to inform the clients to 
-    //        save the copies that have to release, so just probe to N.
-    when(req.param === 2.U) {
+    }.elsewhen(req.param === 1.U) {   // Clean
+      s_execute := false.B
       when(self_meta.hit && self_meta.dirty) {
         s_release := false.B
         w_releaseack := false.B
         s_wbselfdir := false.B
       }
-      when(Cat(clients_meta.map(_.hit)).orR()) {
-        s_probe := false.B
-        w_probeack := false.B
-        w_probeackfirst := false.B
-        w_probeacklast := false.B
-        s_wbclientsdir := false.B
-      }
-    }
-
-    // Flush: release when hit.
-    when(req.param === 3.U) {
+    }.elsewhen(req.param === 2.U) {   // Flush
+      s_execute := false.B
       when(self_meta.hit) {
         s_release := false.B
         s_wbselfdir := false.B
         w_releaseack := false.B
       }
-      when(Cat(clients_meta.map(_.hit)).orR()) {
-        s_probe := false.B
-        w_probeack := false.B
-        w_probeackfirst := false.B
-        w_probeacklast := false.B
-        s_wbclientsdir := false.B
-      }
+    }
+
+    when(Cat(clients_meta.map(_.hit)).orR) {
+      s_probe := false.B
+      w_probeack := false.B
+      w_probeackfirst := false.B
+      w_probeacklast := false.B
+      s_wbclientsdir := false.B
     }
   }
 
@@ -1112,7 +1091,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       (probe_dirty && !probeAckDataDrop || self_meta.hit && self_meta.dirty ||
         req.needProbeAckData.getOrElse(false.B)) && highest_perm =/= INVALID
     ),
-    if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), self_meta.dirty.asUInt)
+    Mux(req.fromCmoHelper && ((req.param === 1.U && self_meta.dirty) || req.param === 2.U),
+        ReleaseData,
+        if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), self_meta.dirty.asUInt))
   )
   oc.tag := Mux(req.fromB, req.tag, self_meta.tag)
   oc.set := req.set
@@ -1132,10 +1113,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       Cat(INVALID, INVALID) -> NtoN
     )
   )
+  val cmo_param = MuxLookup(
+    self_meta.state,
+    NtoN,
+    Seq(TRUNK -> TtoN,
+        TIP -> TtoN,
+        BRANCH -> BtoN,
+        INVALID -> NtoN)
+  )
   oc.param := Mux(
     req.fromB,
     probeack_param,
-    replace_param
+    Mux(req.fromCmoHelper, cmo_param, replace_param)
   )
   oc.source := io.id
   oc.way := meta_reg.self.way
@@ -1507,11 +1496,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     
   // CMO Resp
   io.cmo_resp.valid := req_valid && will_be_free && req.fromCmoHelper
-  io.cmo_resp.bits.cmd := Mux(req.param === 1.U, 
+  io.cmo_resp.bits.cmd := Mux(req.param === 0.U, 
                               CacheCMD.CMD_CMO_INV,
-                              Mux(req.param === 2.U,
+                              Mux(req.param === 1.U,
                                   CacheCMD.CMD_CMO_CLEAN,
-                                  Mux(req.param === 3.U,
+                                  Mux(req.param === 2.U,
                                       CacheCMD.CMD_CMO_FLUSH,
                                       0.U)))
 
