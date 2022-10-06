@@ -108,8 +108,8 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     Seq(ctl_tag, ctl_set, ctl_way) ++
     ctl_data ++
     Seq(ctl_dir) ++
-    Seq(ecc_code, ecc_addr) ++
-    Seq(ctl_done)
+    Seq(ctl_done) ++
+    Seq(ecc_code, ecc_addr)
   ).map(reg => RegField(64, reg, RegWriteFn(reg)))
 
   ctlnode.regmap(

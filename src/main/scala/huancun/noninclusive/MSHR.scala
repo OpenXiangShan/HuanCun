@@ -1113,18 +1113,22 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       Cat(INVALID, INVALID) -> NtoN
     )
   )
-  val cmo_param = MuxLookup(
-    self_meta.state,
+  val cmo_release_param = MuxLookup(
+    Cat(req.param, self_meta.state),
     NtoN,
-    Seq(TRUNK -> TtoN,
-        TIP -> TtoN,
-        BRANCH -> BtoN,
-        INVALID -> NtoN)
+    Seq(Cat(1.U, TRUNK) -> TtoT,
+        Cat(1.U, TIP) -> TtoT,
+        Cat(1.U, BRANCH) -> BtoB,
+        Cat(1.U, INVALID) -> NtoN,
+        Cat(2.U, TRUNK) -> TtoN,
+        Cat(2.U, TIP) -> TtoN,
+        Cat(2.U, BRANCH) -> BtoN,
+        Cat(2.U, INVALID) -> NtoN)
   )
   oc.param := Mux(
     req.fromB,
     probeack_param,
-    Mux(req.fromCmoHelper, cmo_param, replace_param)
+    Mux(req.fromCmoHelper, cmo_release_param, replace_param)
   )
   oc.source := io.id
   oc.way := meta_reg.self.way

@@ -83,10 +83,19 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   )
   when(req.fromC) {
     // Release / ReleaseData
-    new_meta.dirty := meta.dirty || req.opcode(0)
-    new_meta.state := Mux(req.param === TtoB || req.param === TtoN, TIP, meta.state)
-    new_meta.clients := meta.clients & ~Mux(isToN(req.param), getClientBitOH(req.source), 0.U)
-    new_meta.hit := true.B
+    when(req.fromCmoHelper) {
+      new_meta.dirty := Mux(meta.hit, false.B, meta.dirty)
+      new_meta.state := Mux(meta.hit && (req.param === 0.U || req.param === 2.U),
+                            INVALID,
+                            meta.state)
+      new_meta.hit := true.B
+      new_meta.clients := meta.clients
+    }.otherwise {
+      new_meta.dirty := meta.dirty || req.opcode(0)
+      new_meta.state := Mux(req.param === TtoB || req.param === TtoN, TIP, meta.state)
+      new_meta.clients := meta.clients & ~Mux(isToN(req.param), getClientBitOH(req.source), 0.U)
+      new_meta.hit := true.B
+    }
   }.elsewhen(req.fromB) {
     new_meta.dirty := req.param === toT && meta.dirty
     new_meta.state := probe_next_state
@@ -216,23 +225,36 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     assert(!io.dirResult.bits.hit || !io.dirResult.bits.error)
 
     when(req.fromC) {
-      // Release
-      s_execute := false.B
-      when(
-        !meta.dirty && req.opcode(0) || // from clean to dirty
-          (req.param === TtoB || req.param === TtoN) && meta.state === TRUNK || // from TRUNK to TIP
-          isToN(req.param)
-      ) { // change clients
-        s_writebackdir := false.B
-      }
+      when(req.fromCmoHelper) {
+        when(req.param === 0.U) {   // Invalidate
+          s_writebackdir := false.B
+        }.elsewhen(req.param === 1.U) {   // Clean
+          when(meta.dirty) { 
+            s_release := false.B
+            s_writebackdir := false.B
+          }
+        }.elsewhen(req.param === 2.U) {   // Flush
+          s_release := false.B
+          s_writebackdir := false.B
+        }
+      }.otherwise {
+        // Release
+        s_execute := false.B
+        when(
+          !meta.dirty && req.opcode(0) || // from clean to dirty
+            (req.param === TtoB || req.param === TtoN) && meta.state === TRUNK || // from TRUNK to TIP
+            isToN(req.param)
+        ) { // change clients
+          s_writebackdir := false.B
+        }
 
-      when(req.opcode(0)) { // has data
-        s_writerelease := false.B
-        // when (req.opcode === ReleaseData) {
-        //  assert(req.dirty === true.B) // for inclusive data, we assume releaseData as dirty
-        // }
+        when(req.opcode(0)) { // has data
+          s_writerelease := false.B
+          // when (req.opcode === ReleaseData) {
+          //  assert(req.dirty === true.B) // for inclusive data, we assume releaseData as dirty
+          // }
+        }
       }
-
     }.elsewhen(req.fromB) {
       // Probe
       s_probeack := false.B
@@ -385,9 +407,25 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   ob.param := Mux(!s_rprobe, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
   ob.clients := meta.clients & ~probe_exclude // TODO: Provides all clients needing probe
 
-  oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), meta.dirty.asUInt))
+  oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), 
+                   Mux(req.fromCmoHelper && ((req.param === 1.U && meta.dirty) || req.param === 2.U),
+                       ReleaseData,
+                       if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), meta.dirty.asUInt)))
   oc.tag := meta.tag
   oc.set := req.set
+
+  val cmo_param = MuxLookup(
+    Cat(req.param, meta.state),
+    NtoN,
+    Seq(Cat(1.U, TRUNK) -> TtoT,
+        Cat(1.U, TIP) -> TtoT,
+        Cat(1.U, BRANCH) -> BtoB,
+        Cat(1.U, INVALID) -> NtoN,
+        Cat(2.U, TRUNK) -> TtoN,
+        Cat(2.U, TIP) -> TtoN,
+        Cat(2.U, BRANCH) -> BtoN,
+        Cat(2.U, INVALID) -> NtoN)
+  )
   oc.param := Mux(
     req.fromB,
     MuxLookup(
@@ -405,7 +443,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
         Cat(INVALID, INVALID) -> NtoN
       )
     ),
-    Mux(meta.state === BRANCH, BtoN, TtoN)
+    Mux(req.fromCmoHelper,
+        cmo_param,
+        Mux(meta.state === BRANCH, BtoN, TtoN))
   )
   oc.source := io.id
   oc.way := meta.way
