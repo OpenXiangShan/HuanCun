@@ -221,21 +221,26 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     state === BRANCH && perm === toB
   }
 
+  // param: 0.U -> Invalidata
+  //        1.U -> Clean
+  //        2.U -> Flush
   def onXReq(): Unit = {
-    new_self_meta.dirty := false.B
-    new_self_meta.state := Mux(req.param === 1.U,
-      Mux(self_meta.hit,
-        Mux(isT(self_meta.state), TIP, BRANCH),
-        self_meta.state),
-      INVALID
-    )
+    new_self_meta.dirty := Mux(self_meta.hit, false.B, self_meta.dirty)
+    new_self_meta.state := Mux(self_meta.hit && (req.param === 0.U || req.param === 2.U), 
+                               INVALID,
+                               self_meta.state)
+    
     new_self_meta.clientStates.zipWithIndex.foreach {
-      case (state, i) =>
-        state := Mux(self_meta.hit, Mux(self_meta.clientStates(i) =/= INVALID && req.param === 1.U, BRANCH, INVALID), self_meta.clientStates(i))
+      case(state, i) =>
+        state := Mux(self_meta.hit && (req.param === 0.U || req.param === 2.U),
+                     INVALID,
+                     self_meta.clientStates(i))
     }
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
-        m.state := Mux(m.hit, Mux(clients_meta(i).state =/= INVALID && req.param === 1.U, BRANCH, INVALID), clients_meta(i).state)
+        m.state := Mux(clients_meta(i).hit && (req.param === 0.U || req.param === 2.U),
+                       INVALID,
+                       clients_meta(i).state)
     }
   }
 
@@ -593,24 +598,32 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   def x_schedule(): Unit = { // TODO
     // Do probe to maintain coherence
-    clients_meta.zipWithIndex.foreach {
-      case (meta, i) =>
-        when(meta.hit) {
-          s_probe := false.B
-          s_wbclientsdir := false.B
-          w_probeackfirst := false.B
-          w_probeacklast := false.B
-          w_probeack := false.B
-        }
+    when(Cat(clients_meta.map(_.hit)).orR) {
+      s_probe := false.B
+      s_wbclientsdir := false.B
+      w_probeackfirst := false.B
+      w_probeacklast := false.B
+      w_probeack := false.B
     }
-    when(self_meta.hit) {
-      s_wbselfdir := false.B
-    }
-    // clean or flush need release when self_meta.hit
-    //                need probeAckDataThrough when !self_meta.hit and clients_hit
-    when(req.param =/= 0.U && self_meta.hit) {
-      s_release := false.B
-      w_releaseack := false.B
+
+    when(req.param === 0.U) {   // Invalidate
+      when(self_meta.hit) {
+        s_wbselfdir := false.B
+      }
+    }.elsewhen(req.param === 1.U) {   // Clean
+      s_execute := false.B
+      when(self_meta.hit && self_meta.dirty) {
+        s_release := false.B
+        w_releaseack := false.B
+        s_wbselfdir := false.B
+      }
+    }.elsewhen(req.param === 2.U) {   // Flush
+      s_execute := false.B
+      when(self_meta.hit) {
+        s_release := false.B
+        s_wbselfdir := false.B
+        w_releaseack := false.B
+      }
     }
   }
 
@@ -1076,7 +1089,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       (probe_dirty && !probeAckDataDrop || self_meta.hit && self_meta.dirty ||
         req.needProbeAckData.getOrElse(false.B)) && highest_perm =/= INVALID
     ),
-    if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), self_meta.dirty.asUInt)
+    Mux(req.fromCmoHelper && (req.param === 2.U || (req.param === 1.U && self_meta.dirty)),
+        ReleaseData,
+        if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), self_meta.dirty.asUInt))
   )
   oc.tag := Mux(req.fromB, req.tag, self_meta.tag)
   oc.set := req.set
@@ -1467,4 +1482,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData &&
     req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
+
+  // CMO response
+  io.cmo_resp.valid := req_valid && will_be_free && req.fromCmoHelper
+  io.cmo_resp.bits.cmd := Mux(req.param === 0.U, 
+                              CacheCMD.CMD_CMO_INV,
+                              Mux(req.param === 1.U,
+                                  CacheCMD.CMD_CMO_CLEAN,
+                                  Mux(req.param === 2.U,
+                                      CacheCMD.CMD_CMO_FLUSH,
+                                      0.U)))
+
+  for(i <- 0 until 8) { io.cmo_resp.bits.data(i) := 0.U(64.W) }  // DontCare
 }

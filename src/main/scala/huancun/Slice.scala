@@ -94,9 +94,6 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
     else Module(new noninclusive.MSHR())
   }
   require(mshrsAll == mshrs + 2)
-  val ms_abc = ms.init.init
-  val ms_bc = ms.init.last
-  val ms_c = ms.last
 
   val dataStorage = Module(new DataStorage(parentName)(p))
 
@@ -157,8 +154,15 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
       sinkC.io.alloc.bits,
       cmo_req.bits
     )
+    val cmoOH = ms.map(_.io.cmo_resp.valid)
+    ctrl.get.io.cmo_resp.valid := Mux1H(cmoOH, ms.map(_.io.cmo_resp.valid))
+    ctrl.get.io.cmo_resp.bits := Mux1H(cmoOH, ms.map(_.io.cmo_resp.bits))
+    ms.map { mshr =>
+      mshr.io.cmo_resp.ready := ctrl.get.io.cmo_resp.ready
+    }
   } else {
     mshrAlloc.io.c_req <> sinkC.io.alloc
+    ms.map { mshr => mshr.io.cmo_resp.ready := false.B }
   }
 
   ms.zipWithIndex.foreach {

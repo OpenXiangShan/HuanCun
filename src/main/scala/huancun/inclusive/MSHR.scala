@@ -599,4 +599,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
 
   io.ecc := DontCare
   io.ecc.valid := false.B
+
+  // CMO response(DontCare)
+  io.cmo_resp.valid := false.B
+  io.cmo_resp.bits.cmd := 0.U
+  for(i <- 0 until 8) { io.cmo_resp.bits.data(i) := 0.U(64.W) }
 }
