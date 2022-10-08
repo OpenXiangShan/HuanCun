@@ -232,8 +232,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     
     new_self_meta.clientStates.zipWithIndex.foreach {
       case(state, i) =>
-        state := Mux(self_meta.hit && (req.param === 0.U || req.param === 2.U),
-                     INVALID,
+        state := Mux(self_meta.hit
+                     Mux(req.param === 1.U && self_meta.clientStates(i) =/= INVALID,
+                         BRANCH,
+                         Mux(req.param === 0.U || req.param === 2.U,
+                             INVALID,
+                             self_meta.clientStates(i))
                      self_meta.clientStates(i))
     }
     new_clients_meta.zipWithIndex.foreach {
@@ -611,14 +615,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         s_wbselfdir := false.B
       }
     }.elsewhen(req.param === 1.U) {   // Clean
-      s_execute := false.B
       when(self_meta.hit && self_meta.dirty) {
         s_release := false.B
         w_releaseack := false.B
         s_wbselfdir := false.B
       }
     }.elsewhen(req.param === 2.U) {   // Flush
-      s_execute := false.B
       when(self_meta.hit) {
         s_release := false.B
         s_wbselfdir := false.B
