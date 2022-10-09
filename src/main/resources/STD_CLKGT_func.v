@@ -12,7 +12,7 @@ module STD_CLKGT_func (
 
   always @(posedge CK) 
     begin
-      clk_en_reg <= clk_en;
+      clk_en_reg = clk_en;
     end
 
   assign Q = CK & clk_en_reg;
