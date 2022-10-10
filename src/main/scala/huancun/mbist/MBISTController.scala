@@ -84,6 +84,7 @@ class MBISTController
     val xsx_fscan_in = new FSCANInputInterface
     val xsl2_fscan_in = new FSCANInputInterface
     val fscan_clkungate = Input(Bool())
+    val fscan_mode = Input(Bool())
     val clock = Input(Clock())
     val bisr = if(repairNodes.isDefined) Some(new BISRInputInterface) else None
     val bisr_mem_chain_select = if(repairNodes.isDefined) Some(Input(UInt(1.W))) else None

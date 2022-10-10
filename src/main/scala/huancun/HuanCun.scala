@@ -430,6 +430,7 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
 
     val mbist_extra_banks,mbist_extra_dirs = if (cacheParams.level == 3) Some(IO(Vec(sliceMbistPipelines.length,new MbitsExtraFullInterface))) else None
     val fscan_clkungate = if (cacheParams.level == 3) Some(IO(Input(Bool()))) else None
+    val fscan_mode = if (cacheParams.level == 3) Some(IO(Input(Bool()))) else None
     val xsx_ultiscan = if (cacheParams.level == 3) Some(IO(new FSCANInputInterface)) else None
     val xsl2_ultiscan = if (cacheParams.level == 3) Some(IO(new FSCANInputInterface)) else None
     val hd2prf_in = if (cacheParams.level == 3) Some(IO(new MbitsFuseInterface(isSRAM = false))) else None
@@ -494,6 +495,7 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
           ctrl.io.uhdusplr_out <> intf.uhdusplr_fuse
           ctrl.io.hduspsr_out <> intf.hduspsr_fuse
           ctrl.io.fscan_clkungate := fscan_clkungate.get
+          ctrl.io.fscan_mode := fscan_mode.get
           ctrl.io.clock := clock
           ctrl.io.hd2prf_in := hd2prf_in.get
           ctrl.io.hsuspsr_in := hsuspsr_in.get
