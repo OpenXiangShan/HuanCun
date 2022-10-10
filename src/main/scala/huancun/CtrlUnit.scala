@@ -78,7 +78,8 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_dir = RegInit(0.U(64.W))
   val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
   val ctl_cmd = RegInit(0.U(64.W))
-  val ctl_busy = RegInit(0.U(64.W))
+  val ctl_rdy = RegInit(1.U(64.W))
+  val cmo_busy = RegInit(0.U(8.W))
 
   val ecc_code = RegInit(0.U(64.W)) // assume non-zero as ECC error
   // for data error: ecc_addr = {set, way, beat}
@@ -110,7 +111,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     Seq(ctl_tag, ctl_set, ctl_way) ++
     ctl_data ++
     Seq(ctl_dir) ++
-    Seq(ctl_busy) ++
+    Seq(ctl_rdy) ++
     Seq(ecc_code, ecc_addr)
   ).map(reg => RegField(64, reg, RegWriteFn(reg)))
 
@@ -137,11 +138,11 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     )
   )
   cmd_in_ready := req.fire()
-  when(cmd_in_valid) { ctl_busy := 1.U(64.W) }
-  when(resp.fire()){
-    cmd_out_valid := true.B
-    ctl_busy := 0.U(64.W)
-  }
+  when(cmd_in_valid)  { cmo_busy := 1.U(64.W) }
+  when(resp.fire())   { cmo_busy := 0.U(64.W) }
+  when(req.fire())    { cmd_out_valid := true.B }
+  ctl_rdy := !cmo_busy(0)
+
   resp.ready := !cmd_out_valid
   ecc.ready := ecc_code === 0.U // Block multiple ecc req
   req.valid := cmd_in_valid

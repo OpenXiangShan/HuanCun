@@ -232,18 +232,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     
     new_self_meta.clientStates.zipWithIndex.foreach {
       case(state, i) =>
-        state := Mux(self_meta.hit
+        state := Mux(self_meta.hit,
                      Mux(req.param === 1.U && self_meta.clientStates(i) =/= INVALID,
                          BRANCH,
-                         Mux(req.param === 0.U || req.param === 2.U,
-                             INVALID,
-                             self_meta.clientStates(i))
+                         INVALID),
                      self_meta.clientStates(i))
     }
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
-        m.state := Mux(clients_meta(i).hit && (req.param === 0.U || req.param === 2.U),
-                       INVALID,
+        m.state := Mux(clients_meta(i).hit,
+                       Mux(req.param === 1.U && clients_meta(i) =/= INVALID,
+                           BRANCH,
+                           INVALID),
                        clients_meta(i).state)
     }
   }
