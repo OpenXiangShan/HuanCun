@@ -67,6 +67,9 @@ trait HasHuanCunParameters {
   val bufBlocks = mshrs / 2
   val bufIdxBits = log2Ceil(bufBlocks)
 
+  val cmoBufs = mshrsAll / 2
+  val cmoIdxBits = log2Ceil(cmoBufs)
+
   val alwaysReleaseData = cacheParams.alwaysReleaseData
 
   // req -> sram ports 1 cycle

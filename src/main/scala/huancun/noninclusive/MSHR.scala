@@ -602,7 +602,17 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   def x_schedule(): Unit = { // TODO
     // Do probe to maintain coherence
-    when(Cat(clients_meta.map(_.hit)).orR) {
+    when(req.param === 1.U) {
+      clients_meta.map { case m =>
+        when(m.hit && isT(m.state)) {
+          s_probe := false.B
+          s_wbclientsdir := false.B
+          w_probeackfirst := false.B
+          w_probeacklast := false.B
+          w_probeack := false.B
+        }
+      }
+    }.elsewhen(Cat(clients_meta.map(_.hit)).orR) {
       s_probe := false.B
       s_wbclientsdir := false.B
       w_probeackfirst := false.B

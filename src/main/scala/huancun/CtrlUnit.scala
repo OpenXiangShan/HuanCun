@@ -31,6 +31,9 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   val cacheParams = wrapper.p(HCCacheParamsKey)
 
+  val cmoBufs: Int = 8
+  val cmoIdxBits = log2Ceil(cmoBufs)
+
   val io_req = IO(DecoupledIO(new CtrlReq()))
   val io_resp = IO(Flipped(DecoupledIO(new CtrlResp())))
   val io_ecc = IO(Flipped(DecoupledIO(new EccInfo())))
@@ -72,15 +75,6 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     Seq(clientDirWays, clientDirLgSets)
   }
 
-  val ctl_tag = RegInit(0.U(64.W))
-  val ctl_set = RegInit(0.U(64.W))
-  val ctl_way = RegInit(0.U(64.W))
-  val ctl_dir = RegInit(0.U(64.W))
-  val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
-  val ctl_cmd = RegInit(0.U(64.W))
-  val ctl_rdy = RegInit(1.U(64.W))
-  val cmo_busy = RegInit(0.U(8.W))
-
   val ecc_code = RegInit(0.U(64.W)) // assume non-zero as ECC error
   // for data error: ecc_addr = {set, way, beat}
   // for tag error: ecc_addr = physical address
@@ -99,19 +93,39 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     case (node, reg) => node.out.head._1 := reg(0)
   }
 
+  val ctl_tag = RegInit(0.U(64.W))
+  val ctl_set = RegInit(0.U(64.W))
+  val ctl_way = RegInit(0.U(64.W))
+  val ctl_dir = RegInit(0.U(64.W))
+  val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
+  val ctl_cmd = RegInit(0.U(64.W))
+  val ctl_busy = RegInit(0.U(64.W))
+  val ctl_done = RegInit(1.U(64.W))
+  val cmo_busy = RegInit(0.U(cmoBufs.W))
+
   val cmd_in_valid = RegInit(false.B)
   val cmd_in_ready = WireInit(false.B)
   val cmd_out_valid = RegInit(false.B)
   val cmd_out_ready = WireInit(false.B)
 
+  when(req.fire)     { cmd_in_valid := false.B }
   when(cmd_out_ready){ cmd_out_valid := false.B }
-  when(cmd_in_ready){ cmd_in_valid := false.B }
+  when(req.fire())   { cmd_out_valid := true.B }
+
+  // cmd_in_ready := req.fire()
+
+  ctl_busy := cmd_in_valid
+  val idleOH = WireInit(0.U(cmoBufs.W))
+  idleOH := FirstLow(cmo_busy)
+  when(req.fire) { cmo_busy := cmo_busy | idleOH }
+  when(resp.fire) { cmo_busy := cmo_busy & resp.bits.cmoIdOH }
+  ctl_done := !cmo_busy.orR
 
   val ctl_config_regs = (
     Seq(ctl_tag, ctl_set, ctl_way) ++
+    Seq(ctl_busy, ctl_done) ++
     ctl_data ++
     Seq(ctl_dir) ++
-    Seq(ctl_rdy) ++
     Seq(ecc_code, ecc_addr)
   ).map(reg => RegField(64, reg, RegWriteFn(reg)))
 
@@ -124,6 +138,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
       "Ctrl", None,
       ctl_config_regs
     ),
+    // (ivalid: Bool, oready: Bool, data: UInt) => (iready: Bool, ovalid: Bool)
     0x0200 -> Seq(RegField.w(64, RegWriteFn((ivalid, oready, data) => {
       when(oready){ cmd_out_ready := true.B }
       when(ivalid){ cmd_in_valid := true.B }
@@ -137,21 +152,18 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
       regs = reset_regs
     )
   )
-  cmd_in_ready := req.fire()
-  when(cmd_in_valid)  { cmo_busy := 1.U(64.W) }
-  when(resp.fire())   { cmo_busy := 0.U(64.W) }
-  when(req.fire())    { cmd_out_valid := true.B }
-  ctl_rdy := !cmo_busy(0)
 
-  resp.ready := !cmd_out_valid
-  ecc.ready := ecc_code === 0.U // Block multiple ecc req
-  req.valid := cmd_in_valid
+  req.valid := cmd_in_valid && !cmo_busy.andR
   req.bits.cmd := ctl_cmd
   req.bits.data.zip(ctl_data).foreach(x => x._1 := x._2)
   req.bits.tag := ctl_tag
   req.bits.set := ctl_set
   req.bits.way := ctl_way
   req.bits.dir := ctl_dir
+  req.bits.cmoIdOH := idleOH
+  resp.ready := !cmd_out_valid
+
+  ecc.ready := ecc_code === 0.U // Block multiple ecc req
 
   when(resp.fire()) {
     switch(resp.bits.cmd){
@@ -187,11 +199,13 @@ class CtrlReq() extends Bundle {
   val tag = UInt(64.W)
   val way = UInt(64.W)
   val dir = UInt(64.W)
+  val cmoIdOH = UInt(cmoBufs.W)
 }
 
 class CtrlResp() extends Bundle {
   val cmd = UInt(8.W)
   val data = Vec(8, UInt(64.W))
+  val cmoIdOH = UInt(cmoBufs.W)
 }
 
 class EccInfo() extends Bundle {
@@ -219,4 +233,12 @@ object CacheCMD {
   def CMD_CMO_INV = (0 + 16).U(8.W)
   def CMD_CMO_CLEAN = (1 + 16).U(8.W)
   def CMD_CMO_FLUSH = (2 + 16).U(8.W)
+}
+
+object FirstHigh {
+  def apply(x: UInt): UInt = { (~x + 1) & x }
+}
+
+object FirstLow {
+  def apply(x: UInt): UInt = { (x + 1) & ~x }
 }

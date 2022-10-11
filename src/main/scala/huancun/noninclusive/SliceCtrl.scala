@@ -22,7 +22,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     val bs_r_addr = DecoupledIO(new DSAddress())
     val bs_r_data = Input(new DSData())
     val cmo_req = DecoupledIO(new MSHRRequest())
-    val cmo_resp = Flipped(DecoupledIO(new CtrlResp))
+    val cmo_resp = Vec(mshrsAll, Flipped(DecoupledIO(new CtrlResp)))
   })
 
   val req_reg = Reg(new CtrlReq)
@@ -238,9 +238,14 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     done := true.B
   }
 
-  io.cmo_resp.ready := io.resp.ready
+  val cmoReleaseOL = WireInit(0.U(cmoBufs.W))
+  val cmoIdMask = Vec(mshrsAll, WireInit(0.U(cmoBufs.W)))
+  io.cmoIdMask.zipWithIndex.map { case (cm, i) =>
+    cm := io.cmo_resp(i).bits.cmoIdOH & Cat(Seq.fill(mshrsAll)(io.cmo_resp(i).valid)).asUInt
+  }
+
   io.req.ready := io.cmo_req.ready
+  io.cmo_resp.ready := io.resp.ready
   io.resp.valid := io.cmo_resp.valid
-  io.resp.bits.cmd := io.cmo_resp.bits.cmd
-  io.resp.bits.data := io.cmo_resp.bits.data
+  io.resp.bits <> io.cmo_resp.bits
 }
