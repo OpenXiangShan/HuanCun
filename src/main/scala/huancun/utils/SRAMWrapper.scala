@@ -2,7 +2,7 @@ package huancun.utils
 
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.util.Pow2ClockDivider
+import chisel3.util.experimental.BoringUtils
 
 class STD_CLKGT_func extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
@@ -13,6 +13,27 @@ class STD_CLKGT_func extends BlackBox with HasBlackBoxResource {
   })
 
   addResource("/STD_CLKGT_func.v")
+}
+
+object ClockGating {
+  var needClockDiv2Source: Boolean = false
+
+  def apply(E: Bool, CK: Clock, useBlackBox: Boolean = false): Clock = {
+    if (useBlackBox) {
+      val clkGate = Module(new STD_CLKGT_func)
+      clkGate.io.E := E
+      clkGate.io.TE := false.B
+      clkGate.io.CK := CK
+      clkGate.io.Q
+    }
+    else {
+      needClockDiv2Source = true
+      val Q = Wire(Clock())
+      Q := false.B.asClock
+      BoringUtils.addSink(Q, "clock_div2")
+      Q
+    }
+  }
 }
 
 class SRAMWrapper[T <: Data]
@@ -41,13 +62,9 @@ class SRAMWrapper[T <: Data]
       gen, innerSet, 1, singlePort = true, input_clk_div_by_2 = clk_div_by_2
     ))
 
-    val clkGate = Module(new STD_CLKGT_func)
     val clk_en = RegInit(false.B)
     clk_en := ~clk_en
-    clkGate.io.TE := false.B
-    clkGate.io.E := clk_en
-    clkGate.io.CK := clock
-    val masked_clock = clkGate.io.Q
+    val masked_clock = ClockGating(clk_en, clock)
 
     if (clk_div_by_2) {
       sram.clock := masked_clock

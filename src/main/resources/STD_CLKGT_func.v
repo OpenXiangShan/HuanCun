@@ -17,4 +17,4 @@ module STD_CLKGT_func (
 
   assign Q = CK & clk_en_reg;
 
-endmodule // Copy from Xihu
+endmodule
