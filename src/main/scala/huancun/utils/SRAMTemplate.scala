@@ -22,24 +22,204 @@ package huancun.utils
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental.BoringUtils
 import freechips.rocketchip.tilelink.LFSR64
 
-object HoldUnless {
-  def apply[T <: Data](x: T, en: Bool): T = Mux(en, x, RegEnable(x, 0.U.asTypeOf(x), en))
-}
+import scala.collection.mutable.ListBuffer
 
-object DelayTwoCycle {
-  def apply[T <: Data](x: T, en: Bool): T = {
-    val en1 = RegNext(en)
-    val data_reg = RegEnable(x, en1)
-    val en2 = RegNext(en1)
-    Mux(en2, data_reg, LFSR64().asTypeOf(data_reg))
+object HoldUnless {
+  def apply[T <: Data](x: T, en: Bool, init: Option[T] = None): T = {
+    val hold_data = if (init.isDefined) RegEnable(x, init.get, en) else RegEnable(x, en)
+    Mux(en, x, hold_data)
   }
 }
 
-object ReadAndHold {
-  def apply[T <: Data](x: Mem[T], addr:         UInt, en: Bool): T = HoldUnless(x.read(addr), en)
-  def apply[T <: Data](x: SyncReadMem[T], addr: UInt, en: Bool): T = HoldUnless(x.read(addr, en), RegNext(en))
+class SRAMMbistIO() extends Bundle {
+  val clk = Input(Bool())
+  val clk_sel = Input(Bool())
+  val clk_rst = Input(Bool())
+}
+
+abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None) extends RawModule {
+  val bist = if (hasMbist) Some(IO(new SRAMMbistIO)) else None
+  dontTouch(bist.get)
+
+  override def desiredName: String = sramName.getOrElse(super.desiredName)
+
+  def init(clock: Clock, writeClock: Option[Clock]): Unit
+  def read(addr: UInt): UInt
+  def read(addr: UInt, enable: Bool): UInt = {
+    var rdata = 0.U
+    when (enable) {
+      rdata = read(addr)
+    }
+    rdata
+  }
+  def write(addr: UInt, data: UInt): Unit
+  def write(addr: UInt, data: UInt, mask: UInt): Unit
+}
+
+class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
+  extends SRAMArray(hasMbist, sramName) {
+  val RW0 = IO(new Bundle() {
+    val clk   = Input(Clock())
+    val addr  = Input(UInt(log2Ceil(depth).W))
+    val en    = Input(Bool())
+    val wmode = Input(Bool())
+    val wmask = if (maskSegments > 1) Some(Input(UInt(maskSegments.W))) else None
+    val wdata = Input(UInt(width.W))
+    val rdata = Output(UInt(width.W))
+  })
+
+  val ram = Seq.fill(maskSegments)(Mem(depth, UInt((width / maskSegments).W)))
+
+  withClock(RW0.clk) {
+    // read: rdata will keep stable until the next read enable.
+    val RW0_ren = RW0.en && !RW0.wmode
+    val RW0_rdata = WireInit(VecInit(ram.map(_.read(RW0.addr))))
+    RW0.rdata := RegEnable(RW0_rdata.asUInt, RW0_ren)
+    // write with mask
+    val RW0_wen = RW0.en && RW0.wmode
+    val RW0_wdata = RW0.wdata.asTypeOf(Vec(maskSegments, UInt((width / maskSegments).W)))
+    for (i <- 0 until maskSegments) {
+      val RW0_wmask = if (RW0.wmask.isDefined) RW0.wmask.get(i) else true.B
+      when (RW0_wen && RW0_wmask) {
+        ram(i)(RW0.addr) := RW0_wdata(i)
+      }
+    }
+  }
+
+  def init(clock: Clock, writeClock: Option[Clock] = None): Unit = {
+    dontTouch(RW0)
+    RW0 := DontCare
+    RW0.clk := clock
+    RW0.en := false.B
+  }
+  def read(addr: UInt): UInt = {
+    RW0.addr := addr
+    RW0.en := true.B
+    RW0.wmode := false.B
+    RW0.rdata
+  }
+  def write(addr: UInt, data: UInt): Unit = {
+    val mask = Fill(maskSegments, true.B)
+    write(addr, data, mask)
+  }
+  def write(addr: UInt, data: UInt, mask: UInt): Unit = {
+    RW0.addr := addr
+    RW0.en := true.B
+    RW0.wmode := true.B
+    if (RW0.wmask.isDefined) {
+      RW0.wmask.get := mask
+    }
+    RW0.wdata := data
+  }
+}
+
+class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None)
+  extends SRAMArray(hasMbist, sramName)  {
+  require(width % maskSegments == 0)
+
+  val R0 = IO(new Bundle() {
+    val clk   = Input(Clock())
+    val addr  = Input(UInt(log2Ceil(depth).W))
+    val en    = Input(Bool())
+    val data  = Output(UInt(width.W))
+  })
+
+  val W0 = IO(new Bundle() {
+    val clk   = Input(Clock())
+    val addr  = Input(UInt(log2Ceil(depth).W))
+    val en    = Input(Bool())
+    val data  = Input(UInt(width.W))
+    val mask  = if (maskSegments > 1) Some(Input(UInt(maskSegments.W))) else None
+  })
+
+  val ram = Seq.fill(maskSegments)(Mem(depth, UInt((width / maskSegments).W)))
+
+  // read: rdata will keep stable until the next read enable.
+  withClock(R0.clk) {
+    // RW0_conflict_data will be replaced by width'x in Verilog by scripts.
+    val RW0_conflict_data = Wire(UInt((width / maskSegments).W))
+    RW0_conflict_data := ((1L << (width / maskSegments)) - 1).U
+    // DontTouch RW0_conflict_data to force Chisel not to optimize it out.
+    dontTouch(RW0_conflict_data)
+    val R0_data = VecInit((0 until maskSegments).map(i => {
+      // To align with the real memory model, R0.data should be width'x when R0 and W0 have conflicts.
+      val wmask = if (W0.mask.isDefined) W0.mask.get(i) else true.B
+      val RW0_conflict_REG = RegEnable(W0.en && wmask && R0.addr === W0.addr, R0.en)
+      val data_REG = RegEnable(ram(i).read(R0.addr), R0.en)
+      // The read data naturally holds when not enabled.
+      Mux(RW0_conflict_REG, RW0_conflict_data, data_REG)
+    })).asUInt
+    R0.data := R0_data
+  }
+
+  // write with mask
+  withClock(W0.clk) {
+    val W0_data = W0.data.asTypeOf(Vec(maskSegments, UInt((width / maskSegments).W)))
+    for (i <- 0 until maskSegments) {
+      val W0_mask = if (W0.mask.isDefined) W0.mask.get(i) else true.B
+      when (W0.en && W0_mask) {
+        ram(i)(W0.addr) := W0_data(i)
+      }
+    }
+  }
+
+  def init(clock: Clock, writeClock: Option[Clock]): Unit = {
+    dontTouch(R0)
+    dontTouch(W0)
+    R0 := DontCare
+    R0.clk := clock
+    R0.en := false.B
+    W0 := DontCare
+    W0.clk := writeClock.getOrElse(clock)
+    W0.en := false.B
+  }
+  def read(addr: UInt): UInt = {
+    R0.addr := addr
+    R0.en := true.B
+    R0.data
+  }
+  def write(addr: UInt, data: UInt): Unit = {
+    write(addr, data, ((1L << maskSegments) - 1).U)
+  }
+  def write(addr: UInt, data: UInt, mask: UInt): Unit = {
+    W0.addr := addr
+    W0.en := true.B
+    if (W0.mask.isDefined) {
+      W0.mask.get := mask
+    }
+    W0.data := data
+  }
+}
+
+object SRAMArray {
+  private val instances = ListBuffer.empty[(Boolean, Int, Int, Int, Boolean, Boolean)]
+
+  def apply(clock: Clock, singlePort: Boolean, depth: Int, width: Int,
+            maskSegments: Int = 1,
+            MCP: Boolean = false,
+            writeClock: Option[Clock] = None,
+            hasMbist: Boolean
+           ): (SRAMArray,String) = {
+    val sram_key = (singlePort, depth, width, maskSegments, MCP, hasMbist)
+    if (!instances.contains(sram_key)) {
+      instances += sram_key
+    }
+    val sram_index = instances.indexOf(sram_key)
+    val mcpPrefix = if (MCP) "_multicycle" else ""
+    val numPort = if (singlePort) 1 else 2
+    val maskWidth = width / maskSegments
+    val sramName = Some(s"sram_array_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix")
+    val array = if (singlePort) {
+      Module(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName))
+    } else {
+      Module(new SRAMArray2P(depth, width, maskSegments, hasMbist, sramName))
+    }
+    array.init(clock, writeClock)
+    (array,sramName.get)
+  }
 }
 
 class SRAMBundleA(val set: Int) extends Bundle {
@@ -58,7 +238,7 @@ class SRAMBundleAW[T <: Data](private val gen: T, set: Int, val way: Int = 1) ex
   def apply(data: Vec[T], setIdx: UInt, waymask: UInt): SRAMBundleAW[T] = {
     super.apply(setIdx)
     this.data := data
-    this.waymask.map(_ := waymask)
+    this.waymask.foreach(_ := waymask)
     this
   }
   // this could only be used when waymask is onehot or nway is 1
@@ -97,26 +277,66 @@ class SRAMWriteBus[T <: Data](private val gen: T, val set: Int, val way: Int = 1
   }
 }
 
+object SRAMTemplate {
+  private var uniqueId = 0
+  private val prefix = "sram"
+
+  def addBroadcastBundle(bd:SRAMMbistIO):Unit = {
+    val sigprefix = s"$prefix${uniqueId}_"
+    uniqueId += 1
+    for((name,signal) <- bd.elements) {
+      BoringUtils.addSink(signal, sigprefix + name)
+    }
+  }
+
+  def genTopConnector():Bundle = {
+    val res = Wire(new SRAMMbistIO)
+    val wiresToEverySram = Seq.fill(uniqueId)(Wire(new SRAMMbistIO))
+    for((bd,idx) <- wiresToEverySram.zipWithIndex) {
+      bd := DontCare
+      dontTouch(bd)
+      for((name,signal) <- bd.elements) {
+        BoringUtils.addSource(signal, s"$prefix${idx}_$name")
+        signal := res.elements(name)
+      }
+    }
+    res
+  }
+}
+
 class SRAMTemplate[T <: Data]
 (
-  gen: T, set: Int, way: Int = 1,
-  shouldReset: Boolean = false, holdRead: Boolean = false,
-  singlePort: Boolean = false, bypassWrite: Boolean = false,
-  clk_div_by_2: Boolean = false, input_clk_div_by_2: Boolean = false
+  gen: T, set: Int, way: Int = 1, singlePort: Boolean = false,
+  shouldReset: Boolean = false, extraReset: Boolean = false,
+  holdRead: Boolean = false,bypassWrite: Boolean = false,
+  clk_div_by_2: Boolean = false, input_clk_div_by_2: Boolean = false,
+  hasMbist:Boolean = true
 ) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
   })
+  val extra_reset = if (extraReset) Some(IO(Input(Bool()))) else None
   override def desiredName: String = if (input_clk_div_by_2) s"ClkDiv2SRAMTemplate" else super.desiredName
   val wordType = UInt(gen.getWidth.W)
-  val array = SyncReadMem(set, Vec(way, wordType))
+  val (array,_) = SRAMArray(clock, singlePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist)
+  if(hasMbist) {
+    val bistWires = Wire(array.bist.get.cloneType)
+    bistWires := DontCare
+    array.bist.get := bistWires
+    SRAMTemplate.addBroadcastBundle(bistWires)
+  }
   val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
 
   if (shouldReset) {
     val _resetState = RegInit(true.B)
     val (_resetSet, resetFinish) = Counter(_resetState, set)
     when (resetFinish) { _resetState := false.B }
+    if (extra_reset.isDefined) {
+      when (extra_reset.get) {
+        _resetState := true.B
+      }
+    }
 
     resetState := _resetState
     resetSet := _resetSet
@@ -128,9 +348,9 @@ class SRAMTemplate[T <: Data]
   val setIdx = Mux(resetState, resetSet, io.w.req.bits.setIdx)
   val wdata = VecInit(Mux(resetState, 0.U.asTypeOf(Vec(way, gen)), io.w.req.bits.data).map(_.asTypeOf(wordType)))
   val waymask = Mux(resetState, Fill(way, "b1".U), io.w.req.bits.waymask.getOrElse("b1".U))
-  when (wen) { array.write(setIdx, wdata, waymask.asBools) }
+  when (wen) { array.write(setIdx, wdata.asUInt, waymask) }
 
-  val raw_rdata = array.read(io.r.req.bits.setIdx, realRen)
+  val raw_rdata = array.read(io.r.req.bits.setIdx, realRen).asTypeOf(Vec(way, wordType))
 
   // bypass for dual-port SRAMs
   require(!bypassWrite || bypassWrite && !singlePort)
@@ -184,7 +404,7 @@ class SRAMTemplateWithArbiter[T <: Data](nRead: Int, gen: T, set: Int, way: Int 
     val w = Flipped(new SRAMWriteBus(gen, set, way))
   })
 
-  val ram = Module(new SRAMTemplate(gen, set, way, shouldReset, holdRead = false, singlePort = true))
+  val ram = Module(new SRAMTemplate(gen, set, way, shouldReset = shouldReset, holdRead = false, singlePort = true))
   ram.io.w <> io.w
 
   val readArb = Module(new Arbiter(chiselTypeOf(io.r(0).req.bits), nRead))
@@ -195,4 +415,59 @@ class SRAMTemplateWithArbiter[T <: Data](nRead: Int, gen: T, set: Int, way: Int 
   io.r.map{ case r => {
     r.resp.data := HoldUnless(ram.io.r.resp.data, RegNext(r.req.fire()))
   }}
+}
+
+class FoldedSRAMTemplate[T <: Data](gen: T, set: Int, width: Int = 4, way: Int = 1,
+                                    shouldReset: Boolean = false, extraReset: Boolean = false,
+                                    holdRead: Boolean = false, singlePort: Boolean = false, bypassWrite: Boolean = false) extends Module {
+  val io = IO(new Bundle {
+    val r = Flipped(new SRAMReadBus(gen, set, way))
+    val w = Flipped(new SRAMWriteBus(gen, set, way))
+  })
+  val extra_reset = if (extraReset) Some(IO(Input(Bool()))) else None
+  //   |<----- setIdx ----->|
+  //   | ridx | width | way |
+
+  require(width > 0 && isPow2(width))
+  require(way > 0 && isPow2(way))
+  require(set % width == 0)
+
+  val nRows = set / width
+
+  val array = Module(new SRAMTemplate(gen, set=nRows, way=width*way,
+    shouldReset=shouldReset, extraReset=extraReset, holdRead=holdRead, singlePort=singlePort))
+  if (array.extra_reset.isDefined) {
+    array.extra_reset.get := extra_reset.get
+  }
+
+  io.r.req.ready := array.io.r.req.ready
+  io.w.req.ready := array.io.w.req.ready
+
+  val raddr = io.r.req.bits.setIdx >> log2Ceil(width)
+  val ridx = RegNext(if (width != 1) io.r.req.bits.setIdx(log2Ceil(width)-1, 0) else 0.U(1.W))
+  val ren  = io.r.req.valid
+
+  array.io.r.req.valid := ren
+  array.io.r.req.bits.setIdx := raddr
+
+  val rdata = array.io.r.resp.data
+  for (w <- 0 until way) {
+    val wayData = VecInit(rdata.indices.filter(_ % way == w).map(rdata(_)))
+    val holdRidx = HoldUnless(ridx, RegNext(io.r.req.valid))
+    val realRidx = if (holdRead) holdRidx else ridx
+    io.r.resp.data(w) := Mux1H(UIntToOH(realRidx, width), wayData)
+  }
+
+  val wen = io.w.req.valid
+  val wdata = VecInit(Seq.fill(width)(io.w.req.bits.data).flatten)
+  val waddr = io.w.req.bits.setIdx >> log2Ceil(width)
+  val widthIdx = if (width != 1) io.w.req.bits.setIdx(log2Ceil(width)-1, 0) else 0.U
+  val wmask = (width, way) match {
+    case (1, 1) => 1.U(1.W)
+    case (x, 1) => UIntToOH(widthIdx)
+    case _      => VecInit(Seq.tabulate(width*way)(n => (n / way).U === widthIdx && io.w.req.bits.waymask.get(n % way))).asUInt
+  }
+  require(wmask.getWidth == way*width)
+
+  array.io.w.apply(wen, wdata, waddr, wmask)
 }
