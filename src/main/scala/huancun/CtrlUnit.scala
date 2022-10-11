@@ -109,9 +109,9 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   val ctl_config_regs = (
     Seq(ctl_tag, ctl_set, ctl_way) ++
+    Seq(ctl_rdy) ++
     ctl_data ++
     Seq(ctl_dir) ++
-    Seq(ctl_rdy) ++
     Seq(ecc_code, ecc_addr)
   ).map(reg => RegField(64, reg, RegWriteFn(reg)))
 
