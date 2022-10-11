@@ -154,12 +154,7 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
       sinkC.io.alloc.bits,
       cmo_req.bits
     )
-    val cmoOH = ms.map(_.io.cmo_resp.valid)
-    ctrl.get.io.cmo_resp.valid := Mux1H(cmoOH, ms.map(_.io.cmo_resp.valid))
-    ctrl.get.io.cmo_resp.bits := Mux1H(cmoOH, ms.map(_.io.cmo_resp.bits))
-    ms.map { mshr =>
-      mshr.io.cmo_resp.ready := ctrl.get.io.cmo_resp.ready
-    }
+    ctrl.get.io.cmo_resp.zip(ms.io.cmo_resp).map { _._1 <> _._2 }
   } else {
     mshrAlloc.io.c_req <> sinkC.io.alloc
     ms.map { mshr => mshr.io.cmo_resp.ready := false.B }

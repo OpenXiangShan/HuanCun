@@ -118,7 +118,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val idleOH = WireInit(0.U(cmoBufs.W))
   idleOH := FirstLow(cmo_busy)
   when(req.fire) { cmo_busy := cmo_busy | idleOH }
-  when(resp.fire) { cmo_busy := cmo_busy & resp.bits.cmoIdOH }
+  when(resp.fire) { cmo_busy := cmo_busy & ~resp.bits.cmoIdOH }
   ctl_done := !cmo_busy.orR
 
   val ctl_config_regs = (
