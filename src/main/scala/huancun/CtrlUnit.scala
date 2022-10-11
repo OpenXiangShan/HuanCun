@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy.{AddressSet, BundleBridgeSource, LazyModule, LazyModuleImp, SimpleDevice}
 import freechips.rocketchip.interrupts.{IntSourceNode, IntSourcePortParameters, IntSourcePortSimple}
-import freechips.rocketchip.regmapper.{RegField, RegFieldDesc, RegFieldGroup, RegWriteFn}
+import freechips.rocketchip.regmapper.{RegField, RegFieldDesc, RegFieldGroup, RegReadFn, RegWriteFn}
 import freechips.rocketchip.tilelink.{TLAdapterNode, TLRegisterNode}
 import freechips.rocketchip.util.{SimpleRegIO, UIntToOH1}
 
@@ -113,7 +113,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     ctl_data ++
     Seq(ctl_dir) ++
     Seq(ecc_code, ecc_addr)
-  ).map(reg => RegField(64, reg, RegWriteFn(reg)))
+  ).map(reg => RegField(64, RegReadFn(reg), RegWriteFn(reg)))
 
   ctlnode.regmap(
     0x0000 -> RegFieldGroup(
