@@ -239,17 +239,23 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     done := true.B
   }
 
-  val cmoReleaseOH = WireInit(0.U(cmoBufs.W))
-  val cmoIdMask = Vec(mshrsAll, WireInit(0.U(cmoBufs.W)))
-  cmoIdMask.zipWithIndex.map { case (cm, i) =>
-    cm := io.cmo_resp(i).bits.cmoIdOH & Cat(Seq.fill(mshrsAll)(io.cmo_resp(i).valid)).asUInt
+  def SeqOr(s: Seq[UInt]): UInt = {
+    require(s.size >= 2)
+    s.size match {
+      case 2 => s(0) | s(1)
+      case _ => s(0) | SeqOr(s.drop(1))
+    }
   }
-  for(i <- 0 unitl mshrsAll) { cmoReleaseOH := cmoReleaseOH | cm(i) }
 
+  val cmoIdMask = Wire(Vec(mshrsAll, UInt(cmoBufs.W)))
+  cmoIdMask.zipWithIndex.map { case (cm, i) =>
+    cm := io.cmo_resp(i).bits.cmoIdOH & VecInit(Seq.fill(cmoBufs)(io.cmo_resp(i).valid)).asUInt
+  }
+  
   io.req.ready := io.cmo_req.ready
   io.cmo_resp.map { _.ready := io.resp.ready }
   io.resp.valid := Cat(io.cmo_resp.map(_.valid)).orR
   io.resp.bits.cmd := 16.U(8.W)
-  io.resp.bits.data := 0.U  // DontCare
-  io.resp.bit.cmoIdOH := cmoReleaseOH
+  io.resp.bits.data.map { _ := 0.U } // DontCare
+  io.resp.bits.cmoIdOH := SeqOr(cmoIdMask)
 }

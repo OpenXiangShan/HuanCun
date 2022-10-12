@@ -154,7 +154,7 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
       sinkC.io.alloc.bits,
       cmo_req.bits
     )
-    ctrl.get.io.cmo_resp.zip(ms.io.cmo_resp).map { _._1 <> _._2 }
+    ctrl.get.io.cmo_resp.zip(ms).map { r => r._1 <> r._2.io.cmo_resp }
   } else {
     mshrAlloc.io.c_req <> sinkC.io.alloc
     ms.map { mshr => mshr.io.cmo_resp.ready := false.B }
@@ -628,6 +628,7 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
     mshrReq.bits.fromProbeHelper := false.B
     mshrReq.bits.fromCmoHelper := false.B
     mshrReq.bits.bufIdx := DontCare
+    mshrReq.bits.cmoIdOH := 0.U(8.W)
     mshrReq.bits.dirty := false.B
     mshrReq.bits.needProbeAckData.foreach(_ := false.B)
     pftReq.ready := mshrReq.ready

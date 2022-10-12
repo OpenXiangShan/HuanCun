@@ -40,6 +40,7 @@ class ProbeHelper(entries: Int = 4, enqDelay: Int = 1)(implicit p: Parameters)
   req.off := 0.U
   req.mask := DontCare
   req.bufIdx := DontCare
+  req.cmoIdOH := 0.U(8.W)
   req.needHint.foreach(_ := false.B)
   req.isPrefetch.foreach(_ := false.B)
   req.isBop.foreach(_ := false.B)

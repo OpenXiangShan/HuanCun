@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy.{AddressSet, BundleBridgeSource, LazyModule, LazyModuleImp, SimpleDevice}
 import freechips.rocketchip.interrupts.{IntSourceNode, IntSourcePortParameters, IntSourcePortSimple}
-import freechips.rocketchip.regmapper.{RegField, RegFieldDesc, RegFieldGroup, RegWriteFn}
+import freechips.rocketchip.regmapper.{RegField, RegFieldDesc, RegFieldGroup, RegReadFn, RegWriteFn}
 import freechips.rocketchip.tilelink.{TLAdapterNode, TLRegisterNode}
 import freechips.rocketchip.util.{SimpleRegIO, UIntToOH1}
 
@@ -30,9 +30,6 @@ class CtrlUnit(val node: TLAdapterNode)(implicit p: Parameters)
 class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   val cacheParams = wrapper.p(HCCacheParamsKey)
-
-  val cmoBufs: Int = 8
-  val cmoIdxBits = log2Ceil(cmoBufs)
 
   val io_req = IO(DecoupledIO(new CtrlReq()))
   val io_resp = IO(Flipped(DecoupledIO(new CtrlResp())))
@@ -101,7 +98,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_cmd = RegInit(0.U(64.W))
   val ctl_busy = RegInit(0.U(64.W))
   val ctl_done = RegInit(1.U(64.W))
-  val cmo_busy = RegInit(0.U(cmoBufs.W))
+  val cmo_busy = RegInit(0.U(8.W))
 
   val cmd_in_valid = RegInit(false.B)
   val cmd_in_ready = WireInit(false.B)
@@ -115,7 +112,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   // cmd_in_ready := req.fire()
 
   ctl_busy := cmd_in_valid
-  val idleOH = WireInit(0.U(cmoBufs.W))
+  val idleOH = WireInit(0.U(8.W))
   idleOH := FirstLow(cmo_busy)
   when(req.fire) { cmo_busy := cmo_busy | idleOH }
   when(resp.fire) { cmo_busy := cmo_busy & ~resp.bits.cmoIdOH }
@@ -127,7 +124,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     ctl_data ++
     Seq(ctl_dir) ++
     Seq(ecc_code, ecc_addr)
-  ).map(reg => RegField(64, reg, RegWriteFn(reg)))
+  ).map(reg => RegField(64, RegReadFn(reg), RegWriteFn(reg)))
 
   ctlnode.regmap(
     0x0000 -> RegFieldGroup(
@@ -199,13 +196,13 @@ class CtrlReq() extends Bundle {
   val tag = UInt(64.W)
   val way = UInt(64.W)
   val dir = UInt(64.W)
-  val cmoIdOH = UInt(cmoBufs.W)
+  val cmoIdOH = UInt(8.W)
 }
 
 class CtrlResp() extends Bundle {
   val cmd = UInt(8.W)
   val data = Vec(8, UInt(64.W))
-  val cmoIdOH = UInt(cmoBufs.W)
+  val cmoIdOH = UInt(8.W)
 }
 
 class EccInfo() extends Bundle {
@@ -235,10 +232,6 @@ object CacheCMD {
   def CMD_CMO_FLUSH = (2 + 16).U(8.W)
 }
 
-object FirstHigh {
-  def apply(x: UInt): UInt = { (~x + 1) & x }
-}
-
 object FirstLow {
-  def apply(x: UInt): UInt = { (x + 1) & ~x }
+  def apply(x: UInt): UInt = { (x + 1.U) & ~x }
 }
