@@ -49,7 +49,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val req = Reg(new MSHRRequest)
   val req_valid = RegInit(false.B)
-  val iam = Reg(UInt(log2Up(clientBits).W)) // Which client does this req come from?
+  val iam = Reg(UInt((log2Up(clientBits)+1).W)) // Which client does this req come from?
   val meta_reg = Reg(new DirResult)
   val clients_meta_reg = WireInit(0.U.asTypeOf(io.dirResult.bits.clients.states))
   val meta = Wire(new DirResult)
@@ -162,7 +162,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // self cache does not have the acquired block, but some other client owns the block
   val transmit_from_other_client = !self_meta.hit && Hold(VecInit(clients_meta.zipWithIndex.map {
     case (meta, i) =>
-      (req.opcode === Get || i.U =/= iam) && meta.hit
+      (req.opcode === Get || req_put || i.U =/= iam) && meta.hit
   }).asUInt.orR, l2Only = false) && (!req.isPrefetch.getOrElse(false.B) || prefetch_need_data)
 
   val a_need_data = req.fromA && (req.opcode === Get || req_put || req.opcode === AcquireBlock || req.opcode === Hint)
@@ -693,9 +693,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
-  val preferCache = req.preferCache || cache_alias // Cache alias will always preferCache to avoid trifle
-  val bypassGet = req.opcode === Get && !preferCache
   val bypassPut = req_put && !self_meta.hit && !Cat(clients_meta.map(_.hit)).orR()
+  val preferCache = (req.preferCache && !bypassPut) || cache_alias // Cache alias will always preferCache to avoid trifle
+  val bypassGet = req.opcode === Get && !preferCache
 
   def set_probe(): Unit = {
     a_do_probe := true.B
@@ -741,7 +741,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantfirst := false.B
       w_grantlast := false.B
       w_grant := false.B
-      when (!bypassGet && !req_put) {
+      when (!bypassGet && !bypassPut) {
         s_grantack := false.B
       }
       // for acquirePermMiss and (miss && !preferCache):
@@ -804,7 +804,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(bypassPut) {
       s_transferput := false.B
     }
-    // Put needs to write
+    // Put needs to write (self = T, clean ==> dirty)
     when(req_put && self_meta.hit && !self_meta.dirty) {
       s_wbselfdir := false.B
     }
@@ -977,7 +977,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val acquire_opcode = if (cacheParams.name == "L2") {
     Mux(req.opcode === AcquirePerm && req.param === BtoT, AcquirePerm, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
   } else {
-    req.opcode
+    Mux(req_put, AcquirePerm, req.opcode)
+    // for put & !bypassPut, cache hierachy should have B/T. AcquirePerm is enough
   }
 
   val acquire_param = if (cacheParams.name == "L2") {
@@ -986,7 +987,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       req.param
     )
   } else {
-    Mux(req.opcode === AcquireBlock && req.param === BtoT, NtoT, req.param)
+    Mux(req.opcode === AcquireBlock && req.param === BtoT, NtoT, Mux(req_put, BtoT, req.param))
   }
 
   oa.opcode := Mux(!s_transferput || bypassGet, req.opcode,
@@ -998,7 +999,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       )
     )
     */
-    acquire_opcode
+    Mux(req.opcode === Get, AcquireBlock, acquire_opcode)
   )
   oa.param := Mux(!s_transferput, req.param,
     /*
@@ -1015,11 +1016,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       NtoB
     )
     */
-    acquire_param
+    Mux(req.opcode === Get, NtoB, acquire_param)
   )
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U // TODO: this is deprecated?
-  oa.putData := req_put
+  oa.putData := bypassPut
   oa.bufIdx := req.bufIdx
   oa.size := req.size
 
@@ -1108,7 +1109,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   od.sinkId := io.id
   od.useBypass := (!self_meta.hit || self_meta.state === BRANCH && req_needT) &&
     (!probe_dirty || acquire_flag && oa.opcode =/= AcquirePerm) &&
-    !(meta_reg.self.error || meta_reg.clients.error)
+    !(meta_reg.self.error || meta_reg.clients.error) && !req_put
   od.sourceId := req.source
   od.set := req.set
   od.tag := req.tag
@@ -1405,7 +1406,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req_valid := true.B
     req := io.alloc.bits
     req.alias.foreach(_ := io.alloc.bits.alias.get)
-    iam := OHToUInt(getClientBitOH(io.alloc.bits.source))
+    val clientBitOH = getClientBitOH(io.alloc.bits.source)
+    // The highest bit of iam indicates that req comes from TL-UL node
+    iam := Mux(clientBitOH === 0.U, Cat(1.U(1.W), 0.U(log2Up(clientBits).W)), OHToUInt(clientBitOH))
   }
 
   // Latched control signals for timing
