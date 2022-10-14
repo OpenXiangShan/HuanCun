@@ -5,10 +5,6 @@ init:
 compile:
 	mill -i HuanCun.compile
 
-test:
-	mill -i HuanCun.test.test
-
-
 test-top-l2:
 	mill -i HuanCun.test.runMain huancun.TestTop_L2 -td build
 	mv build/TestTop_L2.v build/TestTop.v
