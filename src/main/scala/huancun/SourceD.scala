@@ -207,7 +207,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   pbQueue.io.deq.ready := s3_valid && s3_need_pb && s4_ready
 
   val s3_rdata = s3_queue.io.deq.bits.data
-  s3_d.valid := s3_valid && (!s3_need_pb || s3_counter === 0.U)
+  s3_d.valid := s3_valid && (!s3_need_pb || s4_ready) && (!s3_need_pb || s3_counter === 0.U)
   s3_d.bits.opcode := s3_req.opcode
   s3_d.bits.param := Mux(s3_releaseAck, 0.U, s3_req.param)
   s3_d.bits.sink := s3_req.sinkId
