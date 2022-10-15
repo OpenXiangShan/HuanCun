@@ -1431,7 +1431,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // if we are waitting for probeack,
   // we should not let B req in (avoid multi-probe to client)
   io.status.bits.nestB := meta_valid &&
-    (w_releaseack && w_probeacklast) &&
+    (w_releaseack && w_probeacklast) && s_writeprobe &&
     (!w_grantfirst || (client_dir_conflict && !probe_helper_finish))
   io.status.bits.blockC := true.B
   // C nest B | C nest A
