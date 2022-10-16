@@ -96,7 +96,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_dir = RegInit(0.U(64.W))
   val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
   val ctl_cmd = RegInit(0.U(64.W))
-  val ctl_busy = RegInit(0.U(64.W))
+  val ctl_rdy = RegInit(1.U(64.W))
   val ctl_done = RegInit(1.U(64.W))
   val cmo_busy = RegInit(0.U(8.W))
 
@@ -111,7 +111,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   // cmd_in_ready := req.fire()
 
-  ctl_busy := cmd_in_valid
+  ctl_rdy := !cmd_in_valid
   val idleOH = WireInit(0.U(8.W))
   idleOH := FirstLow(cmo_busy)
   when(req.fire) { cmo_busy := cmo_busy | idleOH }
@@ -120,7 +120,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   val ctl_config_regs = (
     Seq(ctl_tag, ctl_set, ctl_way) ++
-    Seq(ctl_busy, ctl_done) ++
+    Seq(ctl_rdy, ctl_done) ++
     ctl_data ++
     Seq(ctl_dir) ++
     Seq(ecc_code, ecc_addr)

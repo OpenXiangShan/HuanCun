@@ -154,10 +154,8 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
       sinkC.io.alloc.bits,
       cmo_req.bits
     )
-    ctrl.get.io.cmo_resp.zip(ms).map { r => r._1 <> r._2.io.cmo_resp }
   } else {
     mshrAlloc.io.c_req <> sinkC.io.alloc
-    ms.map { mshr => mshr.io.cmo_resp.ready := false.B }
   }
 
   ms.zipWithIndex.foreach {
@@ -599,11 +597,13 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
   if (ctrl.nonEmpty) {
     ctrl.get.io.req <> io.ctl_req
     io.ctl_resp <> ctrl.get.io.resp
+    ctrl.get.io.cmo_resp.zip(ms).map { r => r._1 <> r._2.io.cmo_resp }
   } else {
     io.ctl_req <> DontCare
     io.ctl_resp <> DontCare
     io.ctl_req.ready := false.B
     io.ctl_resp.valid := false.B
+    ms.map { mshr => mshr.io.cmo_resp.ready := false.B }
   }
 
   def pftReqToMSHRReq(pftReq: DecoupledIO[PrefetchReq]): DecoupledIO[MSHRRequest] = {
