@@ -24,10 +24,14 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
+import freechips.rocketchip.tilelink.TLMessages._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.mbist.{MBISTInterface, MBISTPipeline}
 import huancun.prefetch._
 import huancun.utils.{FastArbiter, Pipeline, ResetGen, SRAMTemplate, DFTResetSignals}
+import huancun.noninclusive.MSHR
+import chisel3.util.experimental.BoringUtils
+import huancun.utils.XSPerfAccumulate
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -459,6 +463,53 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     if(cacheParams.hasMbist) {
       dft.get <> sigFromSrams.get
       dontTouch(dft.get)
+    }
+    
+    if (cacheParams.name == "L2") {
+      val stall_l1d_load_miss = WireDefault(0.B)
+      BoringUtils.addSink(stall_l1d_load_miss, "stall_l1d_load_miss")
+      val stall_l2_miss = slices.map(
+        _.ms.map(_.asInstanceOf[MSHR]).map(y =>
+          y.edgeIn.master.masters.map(z =>
+            if (z.name == "dcache") {
+              val req = 0.U.asTypeOf(y.req)
+              BoringUtils.bore(y.req, Seq(req))
+              val is_load_from_A = z.sourceId.contains(req.source) && req.fromA && !req.isPrefetch.getOrElse(0.B) && (req.opcode === AcquireBlock || req.opcode === Get)
+              val req_valid = WireDefault(0.B)
+              BoringUtils.bore(y.req_valid, Seq(req_valid))
+              val read_miss = WireDefault(0.B)
+              BoringUtils.bore(y.read_miss, Seq(read_miss))
+              val stall_l2_miss = req_valid && is_load_from_A && read_miss
+              stall_l2_miss
+            } else 0.B
+          ).reduce(_ || _)).reduce(_ || _)).reduce(_ || _)
+      val stall_l2_load_miss = stall_l1d_load_miss && stall_l2_miss
+      BoringUtils.addSource(stall_l2_load_miss, "stall_l2_load_miss")
+      val l2_loads_bound = stall_l1d_load_miss && !stall_l2_miss
+      XSPerfAccumulate(cacheParams, "l2_loads_bound", l2_loads_bound)
+    }
+    if (cacheParams.name == "L3") {
+      val stall_l2_load_miss = WireDefault(0.B)
+      BoringUtils.addSink(stall_l2_load_miss, "stall_l2_load_miss")
+      val stall_l3_miss = slices.map(
+        _.ms.map(_.asInstanceOf[MSHR]).map(y =>
+          y.edgeIn.master.masters.map(z =>
+            if (z.name == "L2") {
+              val req = 0.U.asTypeOf(y.req)
+              BoringUtils.bore(y.req, Seq(req))
+              val is_load_from_A = z.sourceId.contains(req.source) && req.fromA && !req.isPrefetch.getOrElse(0.B) && (req.opcode === AcquireBlock || req.opcode === Get)
+              val req_valid = WireDefault(0.B)
+              BoringUtils.bore(y.req_valid, Seq(req_valid))
+              val read_miss = WireDefault(0.B)
+              BoringUtils.bore(y.read_miss, Seq(read_miss))
+              val stall_l3_miss = req_valid && is_load_from_A && read_miss
+              stall_l3_miss
+            } else 0.B
+          ).reduce(_ || _)).reduce(_ || _)).reduce(_ || _)
+      val stall_l3_load_miss = stall_l2_load_miss && stall_l3_miss
+      val l3_loads_bound = stall_l2_load_miss && !stall_l3_miss
+      XSPerfAccumulate(cacheParams, "l3_loads_bound", l3_loads_bound)
+      XSPerfAccumulate(cacheParams, "ddr_loads_bound", stall_l3_load_miss)
     }
   }
 }
