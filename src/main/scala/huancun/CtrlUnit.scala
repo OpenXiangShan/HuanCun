@@ -92,6 +92,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
 
   val ctl_tag = RegInit(0.U(64.W))
   val ctl_set = RegInit(0.U(64.W))
+  val ctl_addr = RegInit(0.U(64.W))
   val ctl_way = RegInit(0.U(64.W))
   val ctl_dir = RegInit(0.U(64.W))
   val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
@@ -119,7 +120,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   ctl_done := !cmo_busy.orR
 
   val ctl_config_regs = (
-    Seq(ctl_tag, ctl_set, ctl_way) ++
+    Seq(ctl_addr, ctl_way) ++
     Seq(ctl_rdy, ctl_done) ++
     ctl_data ++
     Seq(ctl_dir) ++
@@ -150,11 +151,15 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     )
   )
 
+  val offsetBits = log2Ceil(cacheParams.blockBytes)
+  val setBits = log2Ceil(cacheParams.sets)
+
   req.valid := cmd_in_valid && !cmo_busy.andR
   req.bits.cmd := ctl_cmd
   req.bits.data.zip(ctl_data).foreach(x => x._1 := x._2)
-  req.bits.tag := ctl_tag
-  req.bits.set := ctl_set
+  req.bits.tag := ctl_addr >> (offsetBits + setBits)
+  req.bits.set := (ctl_addr >> offsetBits) & 
+                  Cat(0.U((64-setBits).W), VecInit(Seq.fill(setBits)(1.U(1.W))).asUInt)
   req.bits.way := ctl_way
   req.bits.dir := ctl_dir
   req.bits.cmoIdOH := idleOH

@@ -1497,13 +1497,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   // CMO response
   io.cmo_resp.valid := req_valid && will_be_free && req.fromCmoHelper
-  io.cmo_resp.bits.cmd := Mux(req.param === 0.U, 
-                              CacheCMD.CMD_CMO_INV,
-                              Mux(req.param === 1.U,
-                                  CacheCMD.CMD_CMO_CLEAN,
-                                  Mux(req.param === 2.U,
-                                      CacheCMD.CMD_CMO_FLUSH,
-                                      0.U)))
+  io.cmo_resp.bits.cmd := 16.U(8.W)   // DontCare
   io.cmo_resp.bits.cmoIdOH := req.cmoIdOH
 
   for(i <- 0 until 8) { io.cmo_resp.bits.data(i) := 0.U(64.W) }  // DontCare
