@@ -110,6 +110,7 @@ case class HCCacheParameters
   dirReg: Boolean = true,
   enableDebug: Boolean = false,
   enablePerf: Boolean = false,
+  enableTopDown: Boolean = false,
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   prefetch: Option[PrefetchParameters] = None,
   clientCaches: Seq[CacheParameters] = Nil,

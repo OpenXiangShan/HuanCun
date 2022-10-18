@@ -388,7 +388,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
           println(s"\t${i} <= ${c.name}")
       }
     }
-    if (cacheParams.name == "L2") {
+    if (cacheParams.enableTopDown && cacheParams.name == "L2") {
       val stall_l1d_load_miss = WireDefault(0.B)
       BoringUtils.addSink(stall_l1d_load_miss, "stall_l1d_load_miss")
       val stall_l2_miss = slices.map(
@@ -411,7 +411,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       val l2_loads_bound = stall_l1d_load_miss && !stall_l2_miss
       XSPerfAccumulate(cacheParams, "l2_loads_bound", l2_loads_bound)
     }
-    if (cacheParams.name == "L3") {
+    if (cacheParams.enableTopDown && cacheParams.name == "L3") {
       val stall_l2_load_miss = WireDefault(0.B)
       BoringUtils.addSink(stall_l2_load_miss, "stall_l2_load_miss")
       val stall_l3_miss = slices.map(
