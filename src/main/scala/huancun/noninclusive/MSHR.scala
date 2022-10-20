@@ -1326,7 +1326,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantfirst := false.B
       w_grantlast := false.B
       w_grant := false.B
-      when (!bypassGet && !req_put) {
+      when (!bypassGet && !bypassPut) {
         s_grantack := false.B
       }
       need_block_downwards := true.B
