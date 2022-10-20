@@ -223,19 +223,14 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   def onXReq(): Unit = {
     new_self_meta.dirty := false.B
-    new_self_meta.state := Mux(req.param === 1.U,
-      Mux(self_meta.hit,
-        Mux(isT(self_meta.state), TIP, BRANCH),
-        self_meta.state),
-      INVALID
-    )
+    new_self_meta.state := INVALID
     new_self_meta.clientStates.zipWithIndex.foreach {
       case (state, i) =>
-        state := Mux(self_meta.hit, Mux(self_meta.clientStates(i) =/= INVALID && req.param === 1.U, BRANCH, INVALID), self_meta.clientStates(i))
+        state := INVALID
     }
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
-        m.state := Mux(m.hit, Mux(clients_meta(i).state =/= INVALID && req.param === 1.U, BRANCH, INVALID), clients_meta(i).state)
+        m.state := Mux(m.hit, INVALID, clients_meta(i).state)
     }
   }
 
@@ -608,7 +603,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
     // clean or flush need release when self_meta.hit
     //                need probeAckDataThrough when !self_meta.hit and clients_hit
-    when(req.param =/= 0.U && self_meta.hit) {
+    when(req.param =/= 0.U && self_meta.hit && self_meta.dirty) {
       s_release := false.B
       w_releaseack := false.B
     }
@@ -903,7 +898,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
 
     when(req.fromCmoHelper) {
-      probeAckDataThrough := req.param =/= 0.U && (clients_have_T && !self_meta.hit) // Clean & Flush
+      probeAckDataThrough := req.param =/= 0.U // Clean & Flush
       probeAckDataDrop := req.param === 0.U // Invalidate
       probeAckDataSave := !probeAckDataDrop && !probeAckDataThrough
     }
@@ -1036,7 +1031,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       req.opcode === Hint,
       Mux(req.param === PREFETCH_READ, toB, toN),
       Mux(req.fromCmoHelper,
-        Mux(req.param === 1.U, toB, toN),
+        toN,
         Mux(
           req_needT || cache_alias,
           toN,
@@ -1046,9 +1041,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     )
   )
   val b_probe_clients = VecInit(clients_meta.map(_.hit))
-  val x_probe_clients = VecInit(clients_meta.map {
-    case m => Mux(req.param === 1.U, m.hit && isT(m.state), m.hit)
-  })
   val probe_clients = RegEnable(
     Mux(
       req.fromA && req.opcode === Hint,
@@ -1056,10 +1048,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       Mux(
         req.fromA,
         a_probe_clients, // Acquire / Get
-        Mux(req.fromCmoHelper,
-          x_probe_clients,
-          b_probe_clients // Probe
-        )
+        b_probe_clients  // Probe / CMO
       )
     ).asUInt,
     io.dirResult.valid
@@ -1184,9 +1173,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // if need release through
   //      req.param must be [TtoN, BtoN]
   //      Report/TtoB will be dropped
+
+  // Do not care ic.param during CMO, just make sure releaseData will issue
   ic.param := Mux(
     !s_writeprobe,
-    probeack_param, // TODO: check this
+    Mux(req.fromCmoHelper, TtoN, probeack_param), // TODO: check this
     req.param
   )
   ic.save := Mux(s_writeprobe, releaseSave, probeAckDataSave)
@@ -1467,4 +1458,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData &&
     req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
+
+  io.cmo_resp := req_valid && will_be_free && req.fromCmoHelper
 }

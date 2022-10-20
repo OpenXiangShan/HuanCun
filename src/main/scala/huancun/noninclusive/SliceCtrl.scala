@@ -22,6 +22,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     val bs_r_addr = DecoupledIO(new DSAddress())
     val bs_r_data = Input(new DSData())
     val cmo_req = DecoupledIO(new MSHRRequest())
+    val cmo_resp = Input(Bool())
   })
 
   val req_reg = Reg(new CtrlReq)
@@ -210,11 +211,11 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     done := true.B
   }
 
-  val address = Cat(io.req.bits.tag(fullTagBits-1, 0), io.req.bits.set(setBits-1, 0), 0.U(offsetBits.W))
+  val address = Cat(req_reg.tag(fullTagBits-1, 0), req_reg.set(setBits-1, 0), 0.U(offsetBits.W))
   val (cmo_tag, cmo_set, _) = parseAddress(address)
   io.cmo_req.bits.channel := 4.U
   io.cmo_req.bits.opcode := 0.U  // DontCare
-  io.cmo_req.bits.param := io.req.bits.cmd(1, 0)
+  io.cmo_req.bits.param := req_reg.cmd(1, 0)
   io.cmo_req.bits.size := log2Up(blockBytes).U
   io.cmo_req.bits.source := 0.U  // DontCare
   io.cmo_req.bits.set := cmo_set
@@ -237,8 +238,8 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     done := true.B
   }
 
-  io.req.ready := !busy
-  io.resp.valid := done
-  io.resp.bits.cmd := req_reg.cmd
-  io.resp.bits.data := req_reg.data
+  io.req.ready := !s_cmo
+  io.resp.valid := io.cmo_resp // assert io.resp.ready holds true
+  io.resp.bits.cmd := CacheCMD.CMD_CMO_INV // dont care
+  io.resp.bits.data := req_reg.data // dont care
 }
