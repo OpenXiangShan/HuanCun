@@ -212,7 +212,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   }
 
   val address = Cat(req_reg.tag(fullTagBits-1, 0), req_reg.set(setBits-1, 0), 0.U(offsetBits.W))
-  val (cmo_tag, cmo_set, _) = parseAddress(address)
+  val (cmo_tag, cmo_set, _) = parseFullAddress(address)
   io.cmo_req.bits.channel := 4.U
   io.cmo_req.bits.opcode := 0.U  // DontCare
   io.cmo_req.bits.param := req_reg.cmd(1, 0)
