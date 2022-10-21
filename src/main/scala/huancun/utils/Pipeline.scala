@@ -45,17 +45,3 @@ object RegNextN {
   }
 }
 
-object ValidIODelay {
-  def apply[T <: Data](in: Valid[T], n: Int = 1): Valid[T] = {
-    (0 until n).foldLeft(in){
-      (prev, _) =>
-        val v = RegNext(prev.valid, false.B)
-        val d = RegEnable(prev.bits, prev.valid)
-        val w = Wire(in.cloneType)
-        w.valid := v
-        w.bits := d
-        w
-    }
-  }
-}
-

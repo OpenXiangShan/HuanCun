@@ -213,8 +213,3 @@ class PutBufferBeatEntry(implicit p: Parameters) extends HuanCunBundle {
   val mask = UInt(beatBytes.W)
   val corrupt = Bool()
 }
-
-class PrefetchRecv extends Bundle {
-  val addr = Flipped(ValidIO(UInt(64.W)))
-  val l2_pf_en = Input(Bool())
-}
