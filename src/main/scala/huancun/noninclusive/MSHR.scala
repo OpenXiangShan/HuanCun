@@ -694,7 +694,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   val bypassPut = req_put && !self_meta.hit && !Cat(clients_meta.map(_.hit)).orR()
-  val preferCache = (req.preferCache && !bypassPut) || cache_alias // Cache alias will always preferCache to avoid trifle
+  val bypassPut_latch = Hold(bypassPut, l2Only=false)
+  val preferCache = (req.preferCache && !bypassPut_latch) || cache_alias // Cache alias will always preferCache to avoid trifle
   val bypassGet = req.opcode === Get && !preferCache
 
   def set_probe(): Unit = {
@@ -1020,7 +1021,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U // TODO: this is deprecated?
-  oa.putData := bypassPut
+  oa.putData := bypassPut_latch
   oa.bufIdx := req.bufIdx
   oa.size := req.size
 
@@ -1152,7 +1153,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     false.B
   )
   od.bufIdx := req.bufIdx
-  od.bypassPut := bypassPut
+  od.bypassPut := bypassPut_latch
 
   oe.sink := sink
 
@@ -1326,7 +1327,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantfirst := false.B
       w_grantlast := false.B
       w_grant := false.B
-      when (!bypassGet && !bypassPut) {
+      when (!bypassGet && !bypassPut_latch) {
         s_grantack := false.B
       }
       need_block_downwards := true.B
