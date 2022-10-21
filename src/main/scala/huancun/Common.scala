@@ -139,7 +139,6 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val bufIdx = UInt(bufIdxBits.W)
   val needHint = prefetchOpt.map(_ => Bool())
   val isPrefetch = prefetchOpt.map(_ => Bool())
-  val isBop = prefetchOpt.map(_ => Bool())
   val alias = aliasBitsOpt.map(_ => UInt(aliasBitsOpt.get.W))
   val preferCache = Bool()
   val dirty = Bool()

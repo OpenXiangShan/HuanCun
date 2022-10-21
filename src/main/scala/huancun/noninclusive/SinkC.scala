@@ -66,8 +66,6 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.mask := 0.U // DontCare
   io.alloc.bits.bufIdx := insertIdx
   io.alloc.bits.needHint.foreach(_ := false.B)
-  io.alloc.bits.isPrefetch.foreach(_ := false.B)
-  io.alloc.bits.isBop.foreach(_ := false.B)
   io.alloc.bits.alias.foreach(_ := 0.U)
   io.alloc.bits.preferCache := true.B
   io.alloc.bits.dirty := c.bits.echo.lift(DirtyKey).getOrElse(true.B)

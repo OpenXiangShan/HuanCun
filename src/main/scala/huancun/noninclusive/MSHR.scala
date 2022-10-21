@@ -812,7 +812,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       when(req.opcode =/= Hint && req.needHint.getOrElse(false.B) && (!self_meta.hit || self_meta.prefetch.get)) {
         s_triggerprefetch.map(_ := false.B)
       }
-      when(req.opcode === Hint && req.isBop.getOrElse(false.B)) {
+      when(req.opcode === Hint) {
         s_prefetchack.map(_ := false.B)
       }
     })
