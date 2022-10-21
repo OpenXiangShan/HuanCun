@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy.{AddressSet, BundleBridgeSource, LazyModule, LazyModuleImp, SimpleDevice}
 import freechips.rocketchip.interrupts.{IntSourceNode, IntSourcePortParameters, IntSourcePortSimple}
-import freechips.rocketchip.regmapper.{RegField, RegFieldDesc, RegFieldGroup, RegWriteFn}
+import freechips.rocketchip.regmapper.{RegField, RegFieldDesc, RegFieldGroup, RegReadFn, RegWriteFn}
 import freechips.rocketchip.tilelink.{TLAdapterNode, TLRegisterNode}
 import freechips.rocketchip.util.{SimpleRegIO, UIntToOH1}
 
@@ -78,6 +78,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_dir = RegInit(0.U(64.W))
   val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
   val ctl_cmd = RegInit(0.U(64.W))
+  val ctl_rdy = RegInit(1.U(64.W))
 
   val ecc_code = RegInit(0.U(64.W)) // assume non-zero as ECC error
   // for data error: ecc_addr = {set, way, beat}
@@ -112,6 +113,10 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     Seq(ecc_code, ecc_addr)
   ).map(reg => RegField(64, reg, RegWriteFn(reg)))
 
+  val ctl_cmo_rdy_regs = (
+    Seq(ctl_rdy)
+  ).map(reg => RegField(64, RegReadFn(reg), RegWriteFn(reg)))
+
   ctlnode.regmap(
     0x0000 -> RegFieldGroup(
       "Config", Some("Information about cache configuration"),
@@ -120,6 +125,10 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     0x0100 -> RegFieldGroup(
       "Ctrl", None,
       ctl_config_regs
+    ),
+    0x0180 -> RegFieldGroup(
+       "Ready", None,
+       ctl_cmo_rdy_regs
     ),
     0x0200 -> Seq(RegField.w(64, RegWriteFn((ivalid, oready, data) => {
       when(oready){ cmd_out_ready := true.B }
@@ -135,10 +144,17 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     )
   )
   cmd_in_ready := req.ready
-  when(resp.fire()){
+  when(req.fire()){
     cmd_out_valid := true.B
   }
-  resp.ready := !cmd_out_valid
+  when(resp.fire()) {
+    ctl_rdy := 1.U
+  }
+  when(cmd_in_valid) {
+    ctl_rdy := 0.U
+  }
+
+  resp.ready := true.B // TODO: be careful about resp.ready
   ecc.ready := ecc_code === 0.U // Block multiple ecc req
   req.valid := cmd_in_valid
   req.bits.cmd := ctl_cmd

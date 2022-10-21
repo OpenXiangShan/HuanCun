@@ -157,6 +157,8 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
       sinkC.io.alloc.bits,
       cmo_req.bits
     )
+    val cmoOH = Cat(ms.map(_.io.cmo_resp))
+    ctrl.get.io.cmo_resp := cmoOH =/= 0.U
   } else {
     mshrAlloc.io.c_req <> sinkC.io.alloc
   }
