@@ -69,6 +69,18 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
     })
   }
 
+  val bufferLeakCnt = RegInit(0.U(12.W)) // check buffer leak for index 0
+  dontTouch(bufferLeakCnt)
+  when(bufVals(0)) {
+    bufferLeakCnt := bufferLeakCnt + 1.U
+  }.otherwise {
+    bufferLeakCnt := 0.U
+  }
+
+  when(bufferLeakCnt === 800.U) {
+    assert(false.B, "buffer leak at index 0")
+  }
+
   val (tag, set, offset) = parseAddress(a.bits.address)
 
   io.alloc.valid := a.valid && first && !noSpace
