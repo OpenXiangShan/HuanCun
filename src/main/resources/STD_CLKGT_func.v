@@ -2,7 +2,9 @@ module STD_CLKGT_func (
   input  wire TE,
   input  wire E,
   input  wire CK,
-  output wire Q
+  output wire Q,
+  input  wire dft_l3dataram_clk,
+  input  wire dft_l3dataramclk_bypass
 );
 
   wire clk_en;

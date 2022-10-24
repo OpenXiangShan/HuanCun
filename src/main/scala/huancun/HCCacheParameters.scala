@@ -127,6 +127,8 @@ case class HCCacheParameters
   sramClkDivBy2: Boolean = false,
   sramDepthDiv: Int = 1,
   simulation: Boolean = false,
+  hasMbist: Boolean = true,
+  hasShareBus: Boolean = false,
   innerBuf: TLBufferParams = TLBufferParams(),
   outerBuf: TLBufferParams = TLBufferParams(
     a = BufferParams.default,

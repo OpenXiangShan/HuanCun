@@ -25,6 +25,7 @@ import chisel3.util._
 import chisel3.util.random.LFSR
 import freechips.rocketchip.tilelink.TLMessages
 import freechips.rocketchip.util.Pow2ClockDivider
+import huancun.mbist.MBISTPipeline
 import huancun.utils._
 
 trait BaseDirResult extends HuanCunBundle {
@@ -66,7 +67,8 @@ class SubDirectory[T <: Data](
   dir_init_fn: () => T,
   dir_hit_fn: T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
-  replacement: String)(implicit p: Parameters)
+  replacement: String,
+  parentName:String = "Unknown")(implicit p: Parameters)
     extends MultiIOModule {
 
   val setBits = log2Ceil(sets)
@@ -103,15 +105,18 @@ class SubDirectory[T <: Data](
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true,
+    clk_div_by_2 = clk_div_by_2,
+    hasMbist = p(HCCacheParamsKey).hasMbist,
+    hasShareBus = p(HCCacheParamsKey).hasShareBus,
+    parentName = parentName + "metaArray_")
+  )
 
-  val clkGate = Module(new STD_CLKGT_func)
-  val clk_en = RegInit(true.B)
-  clk_en := ~clk_en
-  clkGate.io.TE := false.B
-  clkGate.io.E := clk_en
-  clkGate.io.CK := clock
-  val masked_clock = clkGate.io.Q
+  val mbistMetaPipeline = if(p(HCCacheParamsKey).hasMbist && p(HCCacheParamsKey).hasShareBus) {
+    Some(Module(new MBISTPipeline(1,s"${parentName}_mbistMetaPipe")))
+  } else {
+    None
+  }
 
   val tag_wen = io.tag_w.valid
   val dir_wen = io.dir_w.valid
@@ -127,21 +132,32 @@ class SubDirectory[T <: Data](
   println(s"Tag ECC bits:$eccBits")
   val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true,
+    clk_div_by_2 = clk_div_by_2,
+    hasMbist = p(HCCacheParamsKey).hasMbist,
+    hasShareBus = p(HCCacheParamsKey).hasShareBus,
+    parentName = parentName + "tagArray_"))
   if(eccBits > 0){
-    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true,
+      clk_div_by_2 = clk_div_by_2,
+      hasMbist = p(HCCacheParamsKey).hasMbist,
+      hasShareBus = p(HCCacheParamsKey).hasShareBus,
+      parentName = parentName + "eccArray_"))
     eccArray.io.w(
       io.tag_w.fire(),
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
       io.tag_w.bits.set,
       UIntToOH(io.tag_w.bits.way)
     )
-    if (clk_div_by_2) {
-      eccArray.clock := masked_clock
-    }
     eccRead := eccArray.io.r(io.read.fire(), io.read.bits.set).resp.data
   } else {
     eccRead.foreach(_ := 0.U)
+  }
+
+  val mbistTagEccPipeline = if(p(HCCacheParamsKey).hasMbist && p(HCCacheParamsKey).hasShareBus) {
+    Some(Module(new MBISTPipeline(1,s"${parentName}_mbistTagEccPipe")))
+  } else {
+    None
   }
 
   tagArray.io.w(
@@ -152,10 +168,7 @@ class SubDirectory[T <: Data](
   )
   tagRead := tagArray.io.r(io.read.fire(), io.read.bits.set).resp.data
 
-  if (clk_div_by_2) {
-    metaArray.clock := masked_clock
-    tagArray.clock := masked_clock
-  }
+
 
   val reqReg = RegEnable(io.read.bits, enable = io.read.fire())
   val reqValidReg = RegInit(false.B)
@@ -175,11 +188,19 @@ class SubDirectory[T <: Data](
     }
     0.U
   } else {
-    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
+    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true,
+      hasMbist = p(HCCacheParamsKey).hasMbist,
+      hasShareBus = p(HCCacheParamsKey).hasShareBus,
+      parentName = parentName + "replacer_"))
     val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
     val next_state = repl.get_next_state(repl_state, way_s1)
     replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqReg.set), 1.U)
     repl_state
+  }
+  val mbistReplPipeline = if(p(HCCacheParamsKey).hasMbist && p(HCCacheParamsKey).hasShareBus && replacement != "random") {
+    Some(Module(new MBISTPipeline(1,s"${parentName}_mbistReplPipe")))
+  } else {
+    None
   }
 
   io.resp.valid := reqValidReg
@@ -258,11 +279,12 @@ abstract class SubDirectoryDoUpdate[T <: Data](
   dir_init_fn: () => T,
   dir_hit_fn:  T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
-  replacement: String)(implicit p: Parameters)
+  replacement: String,
+  parentName: String = "Unknown")(implicit p: Parameters)
     extends SubDirectory[T](
       wports, sets, ways, tagBits,
       dir_init_fn, dir_hit_fn, invalid_way_sel,
-      replacement
+      replacement,parentName = parentName
     ) with HasUpdate {
 
   val update = doUpdate(reqReg.replacerInfo)

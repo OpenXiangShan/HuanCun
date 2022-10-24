@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.SetAssocLRU
 import huancun._
+import huancun.mbist.MBISTPipeline
 import huancun.utils._
 
 // TODO: inclusive may have cache aliase too
@@ -42,7 +43,7 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Dir
   val tagWReq = Flipped(DecoupledIO(new TagWrite))
 }
 
-class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite] {
+class Directory(parentName:String = "Unknown")(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite] {
 
   val io = IO(new DirectoryIO())
 
@@ -67,9 +68,15 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
       },
       dir_hit_fn = x => x.state =/= MetaData.INVALID,
       invalid_way_sel = invalid_way_sel,
-      replacement = cacheParams.replacement
+      replacement = cacheParams.replacement,
+      parentName = parentName + "dir_"
     ) with UpdateOnAcquire
   )
+  val mbistDirPipeline = if(cacheParams.hasMbist && cacheParams.hasShareBus) {
+    Some(Module(new MBISTPipeline(2,s"${parentName}_mbistDirPipe")))
+  } else {
+    None
+  }
   val rport = dir.io.read
   val req = io.read
   rport.valid := req.valid

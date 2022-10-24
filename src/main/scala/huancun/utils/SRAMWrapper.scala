@@ -3,22 +3,15 @@ package huancun.utils
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.Pow2ClockDivider
-
-class STD_CLKGT_func extends BlackBox with HasBlackBoxResource {
-  val io = IO(new Bundle {
-    val TE = Input(Bool())
-    val E  = Input(Bool())
-    val CK = Input(Clock())
-    val Q  = Output(Clock())
-  })
-
-  addResource("/STD_CLKGT_func.v")
-}
+import huancun.mbist.{MBISTClockGateCell, MBISTPipeline}
 
 class SRAMWrapper[T <: Data]
 (
   gen: T, set: Int, n: Int = 1,
-  clk_div_by_2: Boolean = false
+  clk_div_by_2: Boolean = false,
+  hasMbist:Boolean = true,
+  hasShareBus:Boolean = false,
+  parentName:String = "unknown"
 ) extends Module {
 
   val io = IO(new Bundle() {
@@ -38,25 +31,21 @@ class SRAMWrapper[T <: Data]
     val ren = if(n == 1) true.B else i.U === r_sel
     val wen = if(n == 1) true.B else i.U === w_sel
     val sram = Module(new SRAMTemplate[T](
-      gen, innerSet, 1, singlePort = true, input_clk_div_by_2 = clk_div_by_2
+      gen, innerSet, 1, singlePort = true, clk_div_by_2 = clk_div_by_2,
+      hasMbist = hasMbist, hasShareBus = hasShareBus, parentName = parentName + s"bank${i}_"
     ))
 
-    val clkGate = Module(new STD_CLKGT_func)
-    val clk_en = RegInit(true.B)
-    clk_en := ~clk_en
-    clkGate.io.TE := false.B
-    clkGate.io.E := clk_en
-    clkGate.io.CK := clock
-    val masked_clock = clkGate.io.Q
-
-    if (clk_div_by_2) {
-      sram.clock := masked_clock
-    }
+    sram.clock := clock
     sram.io.r.req.valid := io.r.req.valid && ren
     sram.io.r.req.bits.apply(r_setIdx)
     sram.io.w.req.valid := io.w.req.valid && wen
     sram.io.w.req.bits.apply(io.w.req.bits.data(0), w_setIdx, 1.U)
     sram
+  }
+  val mbistPipeline = if(hasMbist && hasShareBus) {
+    Some(Module(new MBISTPipeline(1,s"${parentName}_mbistPipe")))
+  } else {
+    None
   }
 
   val ren_vec_0 = VecInit(banks.map(_.io.r.req.fire()))

@@ -25,8 +25,9 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
+import huancun.mbist.{MBISTInterface, MBISTPipeline}
 import huancun.prefetch._
-import huancun.utils.{FastArbiter, Pipeline, ResetGen}
+import huancun.utils.{FastArbiter, Pipeline, ResetGen, SRAMTemplate}
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -167,7 +168,7 @@ abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with Has
 
 abstract class HuanCunModule(implicit val p: Parameters) extends MultiIOModule with HasHuanCunParameters
 
-class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
+class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
   val xfer = TransferSizes(blockBytes, blockBytes)
   val atom = TransferSizes(1, cacheParams.channelBytes.d.get)
@@ -279,7 +280,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
       out <> arbiter.io.out
     }
-    val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
+    val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher(parentName = parentName + "prefetcher_")(pftParams)))
     val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
@@ -316,17 +317,24 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
     }
 
-    val slices = node.in.zip(node.out).zipWithIndex.map {
+    val slicesWithPipelines = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
-        val rst = if(cacheParams.level == 3 && !cacheParams.simulation) {
-          ResetGen()
-        } else reset
-        val slice = withReset(rst){ Module(new Slice()(p.alterPartial {
+        val rst = if(cacheParams.level == 3 && !cacheParams.simulation) ResetGen() else reset
+        val slice = withReset(rst){ Module(new Slice(parentName = parentName + s"slice${i}_")(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut
           case BankBitsKey => bankBits
         })) }
+        val mbistSlicePipeline = if(cacheParams.hasMbist && cacheParams.hasShareBus) {
+          if(cacheParams.level == 2) {
+            Some(Module(new MBISTPipeline(3, s"MBIST_L2S${i}")))
+          } else {
+            Some(Module(new MBISTPipeline(Int.MaxValue, s"MBIST_L3S${i}")))
+          }
+        } else {
+          None
+        }
         slice.io.in <> in
         in.b.bits.address := restoreAddress(slice.io.in.b.bits.address, i)
         out <> slice.io.out
@@ -359,8 +367,15 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             }
         }
         io.perfEvents(i) := slice.perfinfo
-        slice
+        (slice,mbistSlicePipeline)
     }
+    if(cacheParams.level == 2) {
+      println(s"L2:hasMbist = ${cacheParams.hasMbist}, hasShareBus = ${cacheParams.hasShareBus}")
+    } else {
+      println(s"L3:hasMbist = ${cacheParams.hasMbist}, hasShareBus = ${cacheParams.hasShareBus}")
+    }
+    val slices = slicesWithPipelines.map(_._1)
+    val mbistPipes = slicesWithPipelines.map(_._2)
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
     val slices_ecc = slices.zipWithIndex.map {
       case (s, i) => Pipeline(s.io.ctl_ecc, depth = 2, pipe = false, name = Some(s"ecc_buffer_$i"))
@@ -400,6 +415,48 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
           println(s"\t${i} <= ${c.name}")
       }
     }
+    val hasShareBus = cacheParams.hasMbist && cacheParams.hasShareBus
+    /*****************************************l2 Mbist Share Bus***************************************/
+    val l2TopPipeLine = if(hasShareBus && cacheParams.level == 2) {
+      Some(Module(new MBISTPipeline(Int.MaxValue, s"MBIST_L2")))
+    } else {
+      None
+    }
+    val l2pipePorts = if(hasShareBus && cacheParams.level == 2) {
+      Some(IO(l2TopPipeLine.get.io.mbist.get.cloneType))
+    } else {
+      None
+    }
+    if(hasShareBus && cacheParams.level == 2){
+      l2pipePorts.get <> l2TopPipeLine.get.io.mbist.get
+    }
+    /*****************************************l3 Mbist Share Bus***************************************/
+    val l3Intfs = if(hasShareBus && cacheParams.level == 3) {
+      Some(mbistPipes.zipWithIndex.map( {case (pip,idx) => {
+        val params = pip.get.bd.params
+        val node = pip.get.node
+        val intf = Module(new MBISTInterface(
+          params = Seq(params),
+          ids = Seq(node.children.flatMap(_.array_id)),
+          name = s"MBIST_intf_l3_slice${idx}",
+          pipelineNum = 1
+        ))
+        intf.toPipeline.head <> pip.get.io.mbist.get
+        intf.mbist := DontCare
+        pip.get.genCSV(intf.info, s"MBIST_L3S${idx}")
+        dontTouch(intf.mbist)
+        //TODO: add mbist controller connections here
+        intf
+      }}))
+    } else {
+      None
+    }
+    /****************************************Broadcast Signals*******************************************/
+    val sigFromSrams = if(cacheParams.hasMbist) Some(SRAMTemplate.genBroadCastBundleTop()) else None
+    val mbistBroadCast = if(cacheParams.hasMbist) Some(IO(sigFromSrams.get.cloneType)) else None
+    if(cacheParams.hasMbist) {
+      mbistBroadCast.get <> sigFromSrams.get
+      dontTouch(mbistBroadCast.get)
+    }
   }
-
 }

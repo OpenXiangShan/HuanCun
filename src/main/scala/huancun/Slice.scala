@@ -28,7 +28,7 @@ import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
 import huancun.prefetch._
 import huancun.utils.{FastArbiter, LatchFastArbiter, Pipeline}
 
-class Slice()(implicit p: Parameters) extends HuanCunModule {
+class Slice(parentName: String = "Unknown")(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
     val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
@@ -98,7 +98,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val ms_bc = ms.init.last
   val ms_c = ms.last
 
-  val dataStorage = Module(new DataStorage())
+  val dataStorage = Module(new DataStorage(parentName = parentName + "dataStorage_"))
 
   dataStorage.io.sinkD_wdata := sinkD.io.bs_wdata
   dataStorage.io.sinkD_waddr <> sinkD.io.bs_waddr
@@ -370,8 +370,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   }
 
   val directory = Module({
-    if (cacheParams.inclusive) new inclusive.Directory()
-    else new noninclusive.Directory()
+    if (cacheParams.inclusive) new inclusive.Directory(parentName = parentName + "directory_")
+    else new noninclusive.Directory(parentName = parentName + "directory_")
   })
   directory.io.read <> ctrl_arb(mshrAlloc.io.dirRead, ctrl.map(_.io.dir_read))
   ctrl.map(c => {
