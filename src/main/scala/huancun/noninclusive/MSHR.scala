@@ -738,10 +738,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         Mux(req_needT, !isT(highest_perm), highest_perm === INVALID)
       )
     ) {
-      s_acquire := false.B
+      s_acquire := false.B // for bypassPut case, s_acquire actually means s_put
       w_grantfirst := false.B
       w_grantlast := false.B
-      w_grant := false.B
+      w_grant := false.B  // for bypassPut case, w_grant actually means w_accessack
       when (!bypassGet && !bypassPut) {
         s_grantack := false.B
       }
@@ -1374,7 +1374,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     RegNext(s_wbselfdir && s_wbselftag && s_wbclientsdir && s_wbclientstag && meta_valid, true.B) &&
     s_writerelease && s_writeprobe &&
     s_triggerprefetch.getOrElse(true.B) &&
-    s_prefetchack.getOrElse(true.B) // TODO: s_writeput?
+    s_prefetchack.getOrElse(true.B) &&
+    s_transferput // TODO: s_transferput?
   will_be_free := no_wait && no_schedule
   when(will_be_free) {
     meta_valid := false.B
