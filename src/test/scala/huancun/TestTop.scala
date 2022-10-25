@@ -217,7 +217,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
       sets = 256,
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 128, ways = 4, blockGranularity = log2Ceil(128), name = "L2")),
-      sramClkDivBy2 = false,
+      sramClkDivBy2 = true,
       sramDepthDiv = 4,
       simulation = true,
     )
@@ -227,7 +227,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
   val dma_node = createDMANode(s"dma", 16)
   val master_nodes = l1d_nodes ++ Seq(dma_node)
 
-  val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
+  val ram = LazyModule(new TLRAM(AddressSet(0, 0xFFFFFL), beatBytes = 32))
   val l3_binder = BankBinder(L3NBanks, L3BlockSize)
   val mem_xbar = TLXbar()
   val l3_banked_xbar = TLXbar()
@@ -238,6 +238,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
   val l2_xbar = TLXbar()
 
   ram.node :=
+    TLBuffer.chainNode(100) :=
     TLFragmenter(32, 64) :=
     TLSourceShrinker(64) :=
     TLWidthWidget(L3OuterBusWidth / 8) :=
