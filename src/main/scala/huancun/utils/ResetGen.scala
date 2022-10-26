@@ -71,4 +71,17 @@ object ResetGen {
     }
     resetReg.tail
   }
+
+  def applyOneLevel(resetSigs: Seq[Reset], reset: Reset, sim: Boolean): Reset = {
+    val resetReg = Wire(Reset())
+    resetReg := reset
+    if (!sim) {
+      withReset(reset) {
+        val resetGen = Module(new ResetGen)
+        resetReg := resetGen.o_reset
+      }
+    }
+    resetSigs.foreach(_ := resetReg)
+    resetReg
+  }
 }
