@@ -541,6 +541,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_grant = RegInit(true.B)
   val w_releaseack = RegInit(true.B)
   val w_grantack = RegInit(true.B)
+  val w_putwritten = RegInit(true.B)
 
   val acquire_flag = RegInit(false.B)
 
@@ -570,6 +571,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_grant := true.B
     w_releaseack := true.B
     w_grantack := true.B
+    w_putwritten := true.B
 
     promoteT_safe := true.B
     gotT := false.B
@@ -802,6 +804,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(bypassPut) {
       s_transferput := false.B
     }
+    when(req_put && !bypassPut) {
+      w_putwritten := false.B
+    }
     // Put needs to write (self = T, clean ==> dirty)
     when(req_put && self_meta.hit && !self_meta.dirty) {
       s_wbselfdir := false.B
@@ -907,7 +912,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
-  val no_wait = w_probeacklast && w_grantlast && w_releaseack && w_grantack
+  val no_wait = w_probeacklast && w_grantlast && w_releaseack && w_grantack && w_putwritten
 
   val clients_meta_busy = Cat(clients_meta.map(s => !s.hit && s.state =/= INVALID)).orR()
   val client_dir_conflict = RegEnable(
@@ -1340,6 +1345,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
     }
   }
+
   when(req_valid && io.resps.sink_d.valid) {
     when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData || io.resps.sink_d.bits.opcode === AccessAckData || io.resps.sink_d.bits.opcode === AccessAck) {
       sink := io.resps.sink_d.bits.sink
@@ -1356,10 +1362,14 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(io.resps.sink_d.bits.opcode === ReleaseAck) {
       w_releaseack := true.B
     }
-
   }
+
   when(io.resps.sink_e.valid) {
     w_grantack := true.B
+  }
+
+  when(io.resps.source_d.valid) {
+    w_putwritten := true.B
   }
 
   // Release MSHR
@@ -1368,7 +1378,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     s_writerelease && s_writeprobe &&
     s_triggerprefetch.getOrElse(true.B) &&
     s_prefetchack.getOrElse(true.B) &&
-    s_transferput // TODO: s_transferput?
+    s_transferput
   will_be_free := no_wait && no_schedule
   when(will_be_free) {
     meta_valid := false.B

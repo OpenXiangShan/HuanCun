@@ -28,6 +28,7 @@ class MSHRResps(implicit p: Parameters) extends HuanCunBundle {
   val sink_c = ValidIO(new SinkCResp)
   val sink_d = ValidIO(new SinkDResp)
   val sink_e = ValidIO(new SinkEResp)
+  val source_d = ValidIO(new SourceDResp)
 }
 
 class NestedWriteback(implicit p: Parameters) extends HuanCunBundle {
