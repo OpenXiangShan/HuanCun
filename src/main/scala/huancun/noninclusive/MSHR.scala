@@ -694,8 +694,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   val bypassPut = req_put && !self_meta.hit && !Cat(clients_meta.map(_.hit)).orR()
-  val bypassPut_latch = Hold(bypassPut, l2Only=false)
-  val preferCache = (req.preferCache && !bypassPut_latch) || cache_alias // Cache alias will always preferCache to avoid trifle
+  val bypassPut_latch = Keep(bypassPut)
+  val bypassPut_all = Mux(io.dirResult.valid, bypassPut, bypassPut_latch)
+  // Cache alias will always preferCache to avoid trifle
+  val preferCache = (req.preferCache && !bypassPut_all) || cache_alias
   val bypassGet = req.opcode === Get && !preferCache
 
   def set_probe(): Unit = {
@@ -1400,6 +1402,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
       (x.asUInt() | reg.asUInt()).asTypeOf(x)
     }
+  }
+
+  def Keep[T <: Data](x: T): T = {
+    val reg = RegInit(0.U.asTypeOf(x))
+    when(io.dirResult.valid){
+      reg := x
+    }.elsewhen(will_be_free){
+      reg := 0.U
+    }
+    reg.asUInt().asTypeOf(x)
   }
 
   io.status.bits.will_free := will_be_free
