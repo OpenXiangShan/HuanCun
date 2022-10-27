@@ -6,7 +6,6 @@ import huancun.{DumpVCD, HCCacheParamsKey, HasHuanCunParameters, UseVerilatorBac
 import tltest.TLMessagesBigInt.trunk
 import chiseltest._
 import chisel3.util._
-import chiseltest.experimental.TestOptionBuilder.ChiselScalatestOptionBuilder
 
 class DirConflictTester extends TLCTest
   with RandomSampleUtil
