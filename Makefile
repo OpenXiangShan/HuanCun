@@ -24,6 +24,9 @@ test-top-fullsys:
 basic-test:
 	mill -i HuanCun.test.testOnly -o -s huancun.ConnectionTester
 
+mshrtest:
+	mill -i HuanCun.test.testOnly -o -s huancun.MSTest
+
 bsp:
 	mill -i mill.bsp.BSP/install
 
