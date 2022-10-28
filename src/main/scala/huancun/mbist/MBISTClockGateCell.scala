@@ -35,13 +35,9 @@ class MBISTClockGateCell extends Module{
   val out_clock = IO(Output(Clock()))
 
   val cg_en_reg = RegInit(true.B)
-  val readen_delay2 = RegEnable(RegEnable(mbist.readen,enable = mbist.req, init = false.B), enable = mbist.req, init = false.B)
-  val writeen_delay2 = RegEnable(RegEnable(mbist.writeen,enable = mbist.req, init = false.B), enable = mbist.req, init = false.B)
-  val req_delay2 = RegNext(RegNext(mbist.req,init = false.B),init = false.B)
-
   cg_en_reg := !cg_en_reg
 
-  val E = Mux(req_delay2, readen_delay2 | writeen_delay2, cg_en_reg)
+  val E = Mux(mbist.req, mbist.readen | mbist.writeen, cg_en_reg)
   val TE = dft.cgen
 
   val CG = Module(new STD_CLKGT_func)

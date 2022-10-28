@@ -27,7 +27,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.mbist.{MBISTInterface, MBISTPipeline}
 import huancun.prefetch._
-import huancun.utils.{FastArbiter, Pipeline, ResetGen, SRAMTemplate}
+import huancun.utils.{FastArbiter, Pipeline, ResetGen, SRAMTemplate, DFTResetSignals}
 
 trait HasHuanCunParameters {
   val p: Parameters
@@ -317,10 +317,12 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
       }
     }
 
+    val dfx_reset = if(cacheParams.level == 3 && !cacheParams.simulation) Some(IO(Input(new DFTResetSignals()))) else None
+
     val slicesWithPipelines = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
-        val rst = if(cacheParams.level == 3 && !cacheParams.simulation) ResetGen() else reset
+        val rst = if(cacheParams.level == 3 && !cacheParams.simulation) ResetGen(2, dfx_reset) else reset
         val slice = withReset(rst){ Module(new Slice(parentName = parentName + s"slice${i}_")(p.alterPartial {
           case EdgeInKey  => edgeIn
           case EdgeOutKey => edgeOut
@@ -453,10 +455,10 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
     }
     /****************************************Broadcast Signals*******************************************/
     val sigFromSrams = if(cacheParams.hasMbist) Some(SRAMTemplate.genBroadCastBundleTop()) else None
-    val mbistBroadCast = if(cacheParams.hasMbist) Some(IO(sigFromSrams.get.cloneType)) else None
+    val dft = if(cacheParams.hasMbist) Some(IO(sigFromSrams.get.cloneType)) else None
     if(cacheParams.hasMbist) {
-      mbistBroadCast.get <> sigFromSrams.get
-      dontTouch(mbistBroadCast.get)
+      dft.get <> sigFromSrams.get
+      dontTouch(dft.get)
     }
   }
 }

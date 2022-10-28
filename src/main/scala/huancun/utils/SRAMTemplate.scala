@@ -44,12 +44,12 @@ class SRAMMbistIO(selectedLen:Int) extends Bundle {
 }
 
 class BroadCastBundle() extends Bundle {
-  val dft_ram_hold = Input(Bool())
-  val dft_ram_bypass = Input(Bool())
-  val dft_ram_bp_clken = Input(Bool())
-  val dft_l3dataram_clk = Input(Bool())
-  val dft_l3dataramclk_bypass = Input(Bool())
-  val dftcgen = Input(Bool())
+  val ram_hold = Input(Bool())
+  val ram_bypass = Input(Bool())
+  val ram_bp_clken = Input(Bool())
+  val l3dataram_clk = Input(Bool())
+  val l3dataramclk_bypass = Input(Bool())
+  val cgen = Input(Bool())
 }
 
 abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None,selectedLen:Int) extends RawModule {
@@ -371,21 +371,22 @@ class SRAMTemplate[T <: Data]
   val broadCastSignals = Wire(new BroadCastBundle)
   val implementSinglePort = singlePort
   val isBypassWriteLegal = if(implementSinglePort) true else bypassWrite
-  require(isBypassWriteLegal, "Dual Port SRAM Must implement bypass write!")
+  require(isBypassWriteLegal, "Dual port SRAM MUST implement bypass write!")
 
   broadCastSignals := DontCare
   dontTouch(broadCastSignals)
   if(hasMbist) SRAMTemplate.addBroadCastBundleSink(broadCastSignals)
   wrapperId += 1
 
-  val clkGate = Module(new MBISTClockGateCell)
-  clkGate.clock := clock
-  clkGate.reset := reset
-  clkGate.dft.cgen := broadCastSignals.dftcgen
-  clkGate.dft.l3dataram_clk := broadCastSignals.dft_l3dataram_clk
-  clkGate.dft.l3dataramclk_bypass := broadCastSignals.dft_l3dataramclk_bypass
-
-  val master_clock = if(clk_div_by_2) clkGate.out_clock else clock
+  val clkGate = if(clk_div_by_2) Some(Module(new MBISTClockGateCell)) else None
+  if(clk_div_by_2){
+    clkGate.get.clock := clock
+    clkGate.get.reset := reset
+    clkGate.get.dft.cgen := broadCastSignals.cgen
+    clkGate.get.dft.l3dataram_clk := broadCastSignals.l3dataram_clk
+    clkGate.get.dft.l3dataramclk_bypass := broadCastSignals.l3dataramclk_bypass
+  }
+  val master_clock = if(clk_div_by_2) clkGate.get.out_clock else clock
 
   val isNto1 = gen.getWidth > maxMbistDataWidth
 
@@ -404,7 +405,7 @@ class SRAMTemplate[T <: Data]
   val myDataWidth = if (isNto1) mbistDataWidthNto1 else mbistDataWidth1toN
   val myMaskWidth = if (isNto1) maskWidthNto1 else maskWidth1toN
   val myArrayIds = Seq.tabulate(myNodeNum)(idx => SRAMTemplate.getDomainID() + idx)
-  val (array,vname) = SRAMArray(clock, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2,
+  val (array,vname) = SRAMArray(master_clock, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2,
     hasMbist = hasMbist,selectedLen = if(hasMbist && hasShareBus) myNodeNum else 0)
   val myNodeParam = RAM2MBISTParams(set, myDataWidth,myMaskWidth,implementSinglePort,vname,parentName,myNodeNum,myArrayIds.max,bitWrite,foundry,sramInst)
   val sram_prefix = "sram_" + nodeId + "_"
@@ -429,24 +430,28 @@ class SRAMTemplate[T <: Data]
 
   if (hasMbist && hasShareBus) {
     MBIST.addRamNode(myMbistBundle, sram_prefix, myArrayIds)
-    clkGate.mbist.req := myMbistBundle.ack
-    clkGate.mbist.writeen := myMbistBundle.we
-    clkGate.mbist.readen := myMbistBundle.re
+    if(clk_div_by_2){
+      clkGate.get.mbist.req := myMbistBundle.ack
+      clkGate.get.mbist.writeen := myMbistBundle.we
+      clkGate.get.mbist.readen := myMbistBundle.re
+    }
     val addId = if (isNto1) mbistNodeNumNto1 else mbistNodeNum1toN
     nodeId += addId
     SRAMTemplate.increaseDomainID(addId)
-    array.mbist.get.selectedOH := myMbistBundle.selectedOH & (!broadCastSignals.dft_ram_hold)
+    array.mbist.get.selectedOH := myMbistBundle.selectedOH & (!broadCastSignals.ram_hold)
   }
   else{
-    clkGate.mbist.req := false.B
-    clkGate.mbist.writeen := false.B
-    clkGate.mbist.readen := false.B
+    if(clk_div_by_2){
+      clkGate.get.mbist.req := false.B
+      clkGate.get.mbist.writeen := false.B
+      clkGate.get.mbist.readen := false.B
+    }
     array.mbist.get.selectedOH := DontCare
   }
   if(hasMbist) {
     MBIST.noDedup(this)
-    array.mbist.get.dft_ram_bp_clken := broadCastSignals.dft_ram_bp_clken
-    array.mbist.get.dft_ram_bypass := broadCastSignals.dft_ram_bypass
+    array.mbist.get.dft_ram_bp_clken := broadCastSignals.ram_bp_clken
+    array.mbist.get.dft_ram_bypass := broadCastSignals.ram_bypass
   }
 
   withClockAndReset(master_clock, reset) {
