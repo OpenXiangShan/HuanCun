@@ -225,10 +225,11 @@ class SubDirectory[T <: Data](
   )
 
   val cycleCnt = Counter(true.B, 2)
-  when(resetIdx === 0.U && !cycleCnt._1(0)) {
+  val resetMask = if (clk_div_by_2) !cycleCnt._1(0) else true.B
+  when(resetIdx === 0.U && resetMask) {
     resetFinish := true.B
   }
-  when(!resetFinish && !cycleCnt._1(0)) {
+  when(!resetFinish && resetMask) {
     resetIdx := resetIdx - 1.U
   }
 
