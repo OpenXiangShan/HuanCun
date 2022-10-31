@@ -106,7 +106,7 @@ class SubDirectory[T <: Data](
   val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
 
   val clkGate = Module(new STD_CLKGT_func)
-  val clk_en = RegInit(true.B)
+  val clk_en = RegInit(false.B)
   clk_en := ~clk_en
   clkGate.io.TE := false.B
   clkGate.io.E := clk_en
@@ -225,7 +225,7 @@ class SubDirectory[T <: Data](
   )
 
   val cycleCnt = Counter(true.B, 2)
-  val resetMask = if (clk_div_by_2) !cycleCnt._1(0) else true.B
+  val resetMask = if (clk_div_by_2) cycleCnt._1(0) else true.B
   when(resetIdx === 0.U && resetMask) {
     resetFinish := true.B
   }

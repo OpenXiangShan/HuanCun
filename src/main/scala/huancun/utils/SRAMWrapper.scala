@@ -42,7 +42,7 @@ class SRAMWrapper[T <: Data]
     ))
 
     val clkGate = Module(new STD_CLKGT_func)
-    val clk_en = RegInit(true.B)
+    val clk_en = RegInit(false.B)
     clk_en := ~clk_en
     clkGate.io.TE := false.B
     clkGate.io.E := clk_en

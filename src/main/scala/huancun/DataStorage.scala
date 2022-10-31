@@ -165,7 +165,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
       .map(banks => Cat(banks).orR())
       .zip(stackRdy)
       .foreach {
-        case (accessed, rdy) => rdy := !accessed && !cycleCnt._1(0)
+        case (accessed, rdy) => rdy := !accessed && cycleCnt._1(0)
       }
   }
 
