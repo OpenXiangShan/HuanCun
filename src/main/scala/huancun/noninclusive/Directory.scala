@@ -251,7 +251,7 @@ class Directory(implicit p: Parameters)
 
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val cycleCnt = Counter(true.B, 2)
-  val readyMask = if (clk_div_by_2) !cycleCnt._1(0) else true.B
+  val readyMask = if (clk_div_by_2) cycleCnt._1(0) else true.B
   req.ready := Cat(rports.map(_.ready)).andR() && readyMask
   val reqValidReg = RegNext(req.fire(), false.B)
   val reqIdOHReg = RegEnable(req.bits.idOH, req.fire()) // generate idOH in advance to index MSHRs
