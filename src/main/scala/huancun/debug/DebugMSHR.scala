@@ -14,11 +14,63 @@ import huancun.noninclusive.MSHR
 class DebugMSHR()(implicit p: Parameters) extends noninclusive.MSHR {
   val cntCycle = RegInit(0.U(32.W))
   cntCycle := cntCycle + 1.U
-  when (cntCycle === 8.U) {
-    print_sw_flags()
-    print_tasks()
-    print_new_meta()
+  // when (cntCycle === 3.U || cntCycle === 5.U) {
+  //   print_sw_flags()
+  //   print_tasks()
+  //   print_new_meta()
+  // }
+  when(io.alloc.valid) {
+    print_req_info()
   }
+
+  when(io.dirResult.valid) {
+    print_dir_result()
+    print_sw_flags()
+  }
+  when(io.dir_write.valid) {
+    print_new_self_dir()
+  }
+  when(io.tag_write.valid) {
+    print_new_self_tag()
+  }
+
+  // when(io.will_be_free) {
+  //   print_all_new_meta()
+  // }
+
+  def print_req_info() = {
+
+
+  }
+
+  def print_dir_result() = {
+    val resp = io.dirResult.bits
+    printf("=== DIR RESULT ===\n")
+    printf(p"sourceId = ${resp.sourceId}\n")
+    printf(p"set = ${resp.set}\n")
+    printf(p"replacerInfo_channel = ${resp.replacerInfo.channel}\n")
+    printf(p"replacerInfo_opcode = ${resp.replacerInfo.opcode}\n")
+
+    printf(p"self_dir_hit = ${resp.self.hit}\n")
+    printf(p"self_dir_way = ${resp.self.way}\n")
+    printf(p"self_dir_tag = ${resp.self.tag}\n")
+    printf(p"self_dir_dirty = ${resp.self.dirty}\n")
+    printf(p"self_dir_state = ${resp.self.state}\n")
+    printf(p"self_dir_error = ${resp.self.error}\n")
+    resp.self.clientStates.zipWithIndex.foreach {
+      case(s, i) => printf(p"self_clientstates_$i = $s\n")
+    }
+    resp.self.prefetch.map(printf("self_prefetch = %b\n",_))
+
+    printf(p"clients_tag = ${resp.clients.tag}\n")
+    printf(p"clients_way = ${resp.clients.way}\n")
+    printf(p"clients_error = ${resp.clients.error}\n")
+    printf(p"clients_tag_match = ${resp.clients.tag_match}\n")
+    resp.clients.states.zipWithIndex.foreach {
+      case (s, i) => printf(p"clientstates_state_$i = ${s.state}, alias = ${s.alias}, hit = ${s.hit}\n")
+    }
+  }
+
 
   def print_sw_flags() = {
     printf("=== SW FLAGS ===\n")
@@ -81,9 +133,12 @@ class DebugMSHR()(implicit p: Parameters) extends noninclusive.MSHR {
 
   }
 
-  def print_new_meta() = {
-    printf("=== NEW META ===\n")
+  def print_new_self_dir() = {
+    printf("=== NEW SELF DIR ===\n")
 
+  }
+  def print_new_self_tag() = {
+    printf("=== NEW SELF TAG ===\n")
 
   }
 
