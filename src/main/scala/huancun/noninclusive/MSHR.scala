@@ -49,7 +49,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val req = Reg(new MSHRRequest)
   val req_valid = RegInit(false.B)
-  val iam = Reg(UInt(log2Up(clientBits).W)) // Which client does this req come from?
+  val iam = Reg(UInt((log2Up(clientBits)+1).W)) // Which client does this req come from?
   val meta_reg = Reg(new DirResult)
   val clients_meta_reg = WireInit(0.U.asTypeOf(io.dirResult.bits.clients.states))
   val meta = Wire(new DirResult)
@@ -162,7 +162,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // self cache does not have the acquired block, but some other client owns the block
   val transmit_from_other_client = !self_meta.hit && Hold(VecInit(clients_meta.zipWithIndex.map {
     case (meta, i) =>
-      (req.opcode === Get || i.U =/= iam) && meta.hit
+      (req.opcode === Get || req_put || i.U =/= iam) && meta.hit
   }).asUInt.orR, l2Only = false) && (!req.isPrefetch.getOrElse(false.B) || prefetch_need_data)
 
   val a_need_data = req.fromA && (req.opcode === Get || req_put || req.opcode === AcquireBlock || req.opcode === Hint)
@@ -546,6 +546,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_grant = RegInit(true.B)
   val w_releaseack = RegInit(true.B)
   val w_grantack = RegInit(true.B)
+  val w_putwritten = RegInit(true.B)
 
   val acquire_flag = RegInit(false.B)
 
@@ -575,6 +576,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_grant := true.B
     w_releaseack := true.B
     w_grantack := true.B
+    w_putwritten := true.B
 
     promoteT_safe := true.B
     gotT := false.B
@@ -693,9 +695,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
-  val preferCache = req.preferCache || cache_alias // Cache alias will always preferCache to avoid trifle
-  val bypassGet = req.opcode === Get && !preferCache
   val bypassPut = req_put && !self_meta.hit && !Cat(clients_meta.map(_.hit)).orR()
+  val bypassPut_latch = Keep(bypassPut)
+  val bypassPut_all = Mux(io.dirResult.valid, bypassPut, bypassPut_latch)
+  // Cache alias will always preferCache to avoid trifle
+  val preferCache = (req.preferCache && !bypassPut_all) || cache_alias
+  val bypassGet = req.opcode === Get && !preferCache
 
   def set_probe(): Unit = {
     a_do_probe := true.B
@@ -737,11 +742,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         Mux(req_needT, !isT(highest_perm), highest_perm === INVALID)
       )
     ) {
-      s_acquire := false.B
+      s_acquire := false.B // for bypassPut case, s_acquire actually means s_put
       w_grantfirst := false.B
       w_grantlast := false.B
-      w_grant := false.B
-      when (!bypassGet && !req_put) {
+      w_grant := false.B  // for bypassPut case, w_grant actually means w_accessack
+      when (!bypassGet && !bypassPut) {
         s_grantack := false.B
       }
       // for acquirePermMiss and (miss && !preferCache):
@@ -804,7 +809,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(bypassPut) {
       s_transferput := false.B
     }
-    // Put needs to write
+    when(req_put && !bypassPut) {
+      w_putwritten := false.B
+    }
+    // Put needs to write (self = T, clean ==> dirty)
     when(req_put && self_meta.hit && !self_meta.dirty) {
       s_wbselfdir := false.B
     }
@@ -909,7 +917,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
-  val no_wait = w_probeacklast && w_grantlast && w_releaseack && w_grantack
+  val no_wait = w_probeacklast && w_grantlast && w_releaseack && w_grantack && w_putwritten
 
   val clients_meta_busy = Cat(clients_meta.map(s => !s.hit && s.state =/= INVALID)).orR()
   val client_dir_conflict = RegEnable(
@@ -932,7 +940,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.tasks.source_a.valid := io.enable && (!s_acquire || !s_transferput) && s_release && s_probe && can_start
   io.tasks.source_b.valid := io.enable && !s_probe && s_release
   io.tasks.source_c.valid := io.enable && (!s_release || !s_probeack && s_writerelease && w_probeack)
-  io.tasks.source_d.valid := io.enable && !s_execute && can_start && w_grant && s_writeprobe && w_probeacklast // TODO: is there dependency between s_writeprobe and w_probeack?
+  io.tasks.source_d.valid := io.enable && !s_execute && can_start && w_grant && s_writeprobe && w_probeacklast && s_transferput // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
   io.tasks.dir_write.valid := io.enable && !s_wbselfdir && no_wait && can_start
   io.tasks.tag_write.valid := io.enable && !s_wbselftag && no_wait && can_start
@@ -977,7 +985,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val acquire_opcode = if (cacheParams.name == "L2") {
     Mux(req.opcode === AcquirePerm && req.param === BtoT, AcquirePerm, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
   } else {
-    req.opcode
+    Mux(req_put, AcquireBlock, req.opcode)
+    // for put & !bypassPut, cache hierachy should have B/T. AcquirePerm is enough
   }
 
   val acquire_param = if (cacheParams.name == "L2") {
@@ -986,7 +995,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       req.param
     )
   } else {
-    Mux(req.opcode === AcquireBlock && req.param === BtoT, NtoT, req.param)
+    Mux(req.opcode === AcquireBlock && req.param === BtoT, NtoT, Mux(req_put, NtoT, req.param))
   }
 
   oa.opcode := Mux(!s_transferput || bypassGet, req.opcode,
@@ -998,7 +1007,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       )
     )
     */
-    acquire_opcode
+    Mux(req.opcode === Get, AcquireBlock, acquire_opcode)
   )
   oa.param := Mux(!s_transferput, req.param,
     /*
@@ -1015,11 +1024,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       NtoB
     )
     */
-    acquire_param
+    Mux(req.opcode === Get, NtoB, acquire_param)
   )
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U // TODO: this is deprecated?
-  oa.putData := req_put
+  oa.putData := bypassPut_latch
   oa.bufIdx := req.bufIdx
   oa.size := req.size
 
@@ -1108,7 +1117,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   od.sinkId := io.id
   od.useBypass := (!self_meta.hit || self_meta.state === BRANCH && req_needT) &&
     (!probe_dirty || acquire_flag && oa.opcode =/= AcquirePerm) &&
-    !(meta_reg.self.error || meta_reg.clients.error)
+    !(meta_reg.self.error || meta_reg.clients.error) && !req_put
   od.sourceId := req.source
   od.set := req.set
   od.tag := req.tag
@@ -1151,7 +1160,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     false.B
   )
   od.bufIdx := req.bufIdx
-  od.bypassPut := bypassPut
+  od.bypassPut := bypassPut_latch
 
   oe.sink := sink
 
@@ -1325,7 +1334,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantfirst := false.B
       w_grantlast := false.B
       w_grant := false.B
-      when (!bypassGet && !req_put) {
+      when (!bypassGet && !bypassPut_latch) {
         s_grantack := false.B
       }
       need_block_downwards := true.B
@@ -1345,6 +1354,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }
     }
   }
+
   when(req_valid && io.resps.sink_d.valid) {
     when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData || io.resps.sink_d.bits.opcode === AccessAckData || io.resps.sink_d.bits.opcode === AccessAck) {
       sink := io.resps.sink_d.bits.sink
@@ -1354,15 +1364,21 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       bad_grant := io.resps.sink_d.bits.denied
       gotT := io.resps.sink_d.bits.param === toT
       gotDirty := io.resps.sink_d.bits.dirty
-      req.bufIdx := io.resps.sink_d.bits.bufIdx
+      when (!req_put) {
+        req.bufIdx := io.resps.sink_d.bits.bufIdx
+      }
     }
     when(io.resps.sink_d.bits.opcode === ReleaseAck) {
       w_releaseack := true.B
     }
-
   }
+
   when(io.resps.sink_e.valid) {
     w_grantack := true.B
+  }
+
+  when(io.resps.source_d.valid) {
+    w_putwritten := true.B
   }
 
   // Release MSHR
@@ -1370,7 +1386,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     RegNext(s_wbselfdir && s_wbselftag && s_wbclientsdir && s_wbclientstag && meta_valid, true.B) &&
     s_writerelease && s_writeprobe &&
     s_triggerprefetch.getOrElse(true.B) &&
-    s_prefetchack.getOrElse(true.B) // TODO: s_writeput?
+    s_prefetchack.getOrElse(true.B) &&
+    s_transferput
   will_be_free := no_wait && no_schedule
   when(will_be_free) {
     meta_valid := false.B
@@ -1397,6 +1414,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
+  def Keep[T <: Data](x: T): T = {
+    val reg = RegInit(0.U.asTypeOf(x))
+    when(io.dirResult.valid){
+      reg := x
+    }.elsewhen(will_be_free){
+      reg := 0.U
+    }
+    reg.asUInt().asTypeOf(x)
+  }
+
   io.status.bits.will_free := will_be_free
 
   // Alloc MSHR (alloc has higher priority than release)
@@ -1405,7 +1432,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req_valid := true.B
     req := io.alloc.bits
     req.alias.foreach(_ := io.alloc.bits.alias.get)
-    iam := OHToUInt(getClientBitOH(io.alloc.bits.source))
+    val clientBitOH = getClientBitOH(io.alloc.bits.source)
+    // The highest bit of iam indicates that req comes from TL-UL node
+    iam := Mux(clientBitOH === 0.U, Cat(1.U(1.W), 0.U(log2Up(clientBits).W)), OHToUInt(clientBitOH))
   }
 
   // Latched control signals for timing
@@ -1428,7 +1457,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // if we are waitting for probeack,
   // we should not let B req in (avoid multi-probe to client)
   io.status.bits.nestB := meta_valid &&
-    (w_releaseack && w_probeacklast) &&
+    (w_releaseack && w_probeacklast) && s_writeprobe &&
     (!w_grantfirst || (client_dir_conflict && !probe_helper_finish))
   io.status.bits.blockC := true.B
   // C nest B | C nest A

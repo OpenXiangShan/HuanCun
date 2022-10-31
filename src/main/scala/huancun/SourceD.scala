@@ -52,6 +52,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     // putbuffer interface
     val pb_pop = DecoupledIO(new PutBufferPop)
     val pb_beat = Input(new PutBufferBeatEntry)
+    // resp when merged putdata is written back
+    val resp = ValidIO(new SourceDResp)
   })
 
   val d = io.d
@@ -170,6 +172,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   class PipeInfo extends Bundle {
     val counter = UInt(beatBits.W)
     val beat = UInt(beatBits.W)
+    val last = Bool()
     val needPb = Bool()
     val need_d = Bool()
     val isReleaseAck = Bool()
@@ -182,6 +185,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   pipe.io.in.valid := s2_valid
   pipe.io.in.bits.counter := s2_counter
   pipe.io.in.bits.beat := s2_beat
+  pipe.io.in.bits.last := s2_last
   pipe.io.in.bits.needPb := s2_need_pb
   pipe.io.in.bits.need_d := s2_need_d
   pipe.io.in.bits.isReleaseAck := s2_releaseAck
@@ -193,6 +197,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s3_req = s3_regs.req
   val s3_counter = s3_regs.counter
   val s3_beat = s3_regs.beat
+  val s3_last = s3_regs.last
   val s3_pbdata = pbQueue.io.deq.bits
   val s3_need_pb = s3_regs.needPb
   val s3_releaseAck = s3_regs.isReleaseAck
@@ -207,7 +212,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   pbQueue.io.deq.ready := s3_valid && s3_need_pb && s4_ready
 
   val s3_rdata = s3_queue.io.deq.bits.data
-  s3_d.valid := s3_valid && (!s3_need_pb || s3_counter === 0.U)
+  s3_d.valid := pipe.io.out.valid && (!s3_need_pb || (s4_ready && s3_counter === 0.U))
   s3_d.bits.opcode := s3_req.opcode
   s3_d.bits.param := Mux(s3_releaseAck, 0.U, s3_req.param)
   s3_d.bits.sink := s3_req.sinkId
@@ -225,10 +230,10 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   )
   s3_queue.io.enq.bits := io.bs_rdata
   assert(!s3_queue.io.enq.valid || s3_queue.io.enq.ready)
-  s3_queue.io.deq.ready := Mux(s3_need_pb, s4_ready, s3_d.ready) && s3_valid
+  s3_queue.io.deq.ready := Mux(s3_need_pb, s4_ready && (s3_counter =/= 0.U || s3_d.ready), s3_d.ready) && s3_valid
 
-  pipe.io.out.ready := !s3_valid || Mux(s3_need_pb, s4_ready, s3_d.ready)
-  s3_valid := pipe.io.out.valid
+  pipe.io.out.ready := Mux(s3_need_pb, s4_ready && (s3_counter =/= 0.U || s3_d.ready), s3_d.ready)
+  s3_valid := pipe.io.out.fire
 
   // stage4
   val s4_latch = s3_valid && s4_ready
@@ -237,6 +242,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s4_pbdata = RegEnable(s3_pbdata, s4_latch)
   val s4_need_pb = RegEnable(s3_need_pb, s4_latch)
   val s4_beat = RegEnable(s3_beat, s4_latch)
+  val s4_last = RegEnable(s3_last, s4_latch)
   val s4_full = RegInit(false.B)
 
   when (io.bs_waddr.ready || !s4_need_pb) { s4_full := false.B }
@@ -257,6 +263,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.bs_wdata.corrupt := false.B
 
   s4_ready := !s4_full || io.bs_waddr.ready || !s4_need_pb
+
+  io.resp.valid := io.bs_waddr.fire && s4_last
+  io.resp.bits.sink := s4_req.sinkId
 
   TLArbiter.lowest(edgeIn, io.d, s3_d, s2_d)
 

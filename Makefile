@@ -17,6 +17,10 @@ test-top-l2l3:
 	mill -i HuanCun.test.runMain huancun.TestTop_L2L3 -td build
 	mv build/TestTop_L2L3.v build/TestTop.v
 
+test-top-fullsys:
+	mill -i HuanCun.test.runMain huancun.TestTop_FullSys -td build
+	mv build/TestTop_FullSys.v build/TestTop.v
+
 basic-test:
 	mill -i HuanCun.test.testOnly -o -s huancun.ConnectionTester
 
