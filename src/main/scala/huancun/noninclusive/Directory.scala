@@ -263,8 +263,10 @@ class Directory(parentName: String = "Unknown")(implicit p: Parameters)
     }
   }
 
+  val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val cycleCnt = Counter(true.B, 2)
-  req.ready := Cat(rports.map(_.ready)).andR() && !cycleCnt._1(0)
+  val readyMask = if (clk_div_by_2) cycleCnt._1(0) else true.B
+  req.ready := Cat(rports.map(_.ready)).andR() && readyMask
   val reqValidReg = RegNext(req.fire(), false.B)
   val reqIdOHReg = RegEnable(req.bits.idOH, req.fire()) // generate idOH in advance to index MSHRs
   val sourceIdReg = RegEnable(RegEnable(req.bits.source, req.fire()), reqValidReg)
@@ -304,26 +306,26 @@ class Directory(parentName: String = "Unknown")(implicit p: Parameters)
   selfDir.io.tag_w.bits.tag := io.tagWReq.bits.tag
   selfDir.io.tag_w.bits.set := io.tagWReq.bits.set
   selfDir.io.tag_w.bits.way := io.tagWReq.bits.way
-  io.tagWReq.ready := selfDir.io.tag_w.ready && !cycleCnt._1(0)
+  io.tagWReq.ready := selfDir.io.tag_w.ready && readyMask
   // Clients Tag Write
   clientDir.io.tag_w.valid := io.clientTagWreq.valid
   clientDir.io.tag_w.bits.tag := io.clientTagWreq.bits.tag
   clientDir.io.tag_w.bits.set := io.clientTagWreq.bits.set
   clientDir.io.tag_w.bits.way := io.clientTagWreq.bits.way
-  io.clientTagWreq.ready := clientDir.io.tag_w.ready && !cycleCnt._1(0)
+  io.clientTagWreq.ready := clientDir.io.tag_w.ready && readyMask
 
   // Self Dir Write
   selfDir.io.dir_w.valid := io.dirWReq.valid
   selfDir.io.dir_w.bits.set := io.dirWReq.bits.set
   selfDir.io.dir_w.bits.way := io.dirWReq.bits.way
   selfDir.io.dir_w.bits.dir := io.dirWReq.bits.data
-  io.dirWReq.ready := selfDir.io.dir_w.ready && !cycleCnt._1(0)
+  io.dirWReq.ready := selfDir.io.dir_w.ready && readyMask
   // Clients Dir Write
   clientDir.io.dir_w.valid := io.clientDirWReq.valid
   clientDir.io.dir_w.bits.set := io.clientDirWReq.bits.set
   clientDir.io.dir_w.bits.way := io.clientDirWReq.bits.way
   clientDir.io.dir_w.bits.dir := io.clientDirWReq.bits.data
-  io.clientDirWReq.ready := clientDir.io.dir_w.ready && !cycleCnt._1(0)
+  io.clientDirWReq.ready := clientDir.io.dir_w.ready && readyMask
 
   assert(dirReadPorts == 1)
   val req_r = RegEnable(req.bits, req.fire())

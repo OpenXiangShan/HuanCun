@@ -41,7 +41,8 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val beats = blockBytes / beatBytes
   val busy = RegInit(false.B)
 
-  io.task.ready := Mux(io.task.bits.putData, !busy, a_acquire.ready)  // TODO: not ready until all beats of Put fire
+  // io.task.ready := Mux(io.task.bits.putData, !busy, a_acquire.ready)  // TODO: not ready until all beats of Put fire
+  io.task.ready := a_acquire.ready && !busy
 
   when (io.task.fire() && io.task.bits.putData) {
     busy := true.B

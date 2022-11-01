@@ -69,6 +69,18 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
     })
   }
 
+  val bufferLeakCnt = RegInit(0.U(12.W)) // check buffer leak for index 0
+  dontTouch(bufferLeakCnt)
+  when(bufVals(0)) {
+    bufferLeakCnt := bufferLeakCnt + 1.U
+  }.otherwise {
+    bufferLeakCnt := 0.U
+  }
+
+  when(bufferLeakCnt === 800.U) {
+    assert(false.B, "buffer leak at index 0")
+  }
+
   val (tag, set, offset) = parseAddress(a.bits.address)
 
   io.alloc.valid := a.valid && first && !noSpace
@@ -89,7 +101,7 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
   allocInfo.isPrefetch.foreach(_ := a.bits.opcode === TLMessages.Hint)
   allocInfo.isBop.foreach(_ := false.B)
   allocInfo.alias.foreach(_ := a.bits.user.lift(AliasKey).getOrElse(0.U))
-  allocInfo.preferCache := a.bits.user.lift(PreferCacheKey).getOrElse(true.B)
+  allocInfo.preferCache := Mux((a.bits.opcode === TLMessages.Get || a.bits.opcode(2,1) === 0.U), true.B, a.bits.user.lift(PreferCacheKey).getOrElse(true.B))
   allocInfo.dirty := false.B // ignored
   allocInfo.fromProbeHelper := false.B
   allocInfo.fromCmoHelper := false.B

@@ -1,7 +1,6 @@
 package huancun.tlctest
 
 import chiseltest._
-import chiseltest.experimental.TestOptionBuilder.ChiselScalatestOptionBuilder
 import huancun.{DumpVCD, UseVerilatorBackend}
 import tltest._
 import tltest.TLMessagesBigInt._

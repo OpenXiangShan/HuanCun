@@ -181,7 +181,7 @@ class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends
       .map(banks => Cat(banks).orR())
       .zip(stackRdy)
       .foreach {
-        case (accessed, rdy) => rdy := !accessed && !cycleCnt._1(0)
+        case (accessed, rdy) => rdy := !accessed && cycleCnt._1(0)
       }
   }
 

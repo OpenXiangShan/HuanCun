@@ -154,12 +154,12 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.bs_wdata.corrupt := false.B
 
   io.release.valid := busy && task_r.release && beatValsThrough(task_r.bufIdx)(w_counter_through) && !w_through_done_r
-  io.release.bits.address := Cat(task_r.tag, task_r.set, task_r.off)
+  io.release.bits.address := Cat(task_r.tag, task_r.set, 0.U(offsetBits.W))
   io.release.bits.data := buffer(task_r.bufIdx)(w_counter_through)
   io.release.bits.opcode := task_r.opcode
   io.release.bits.param := task_r.param
   io.release.bits.source := task_r.source
-  io.release.bits.size := task_r.size
+  io.release.bits.size := offsetBits.U
   io.release.bits.corrupt := false.B
   io.release.bits.user.lift(PreferCacheKey).foreach(_ := true.B)
   io.release.bits.echo.lift(DirtyKey).foreach(_ := task_r.dirty)
