@@ -34,7 +34,7 @@ class MBISTClockGateCell extends Module{
   val dft = IO(new CGBroadcastSignals)
   val out_clock = IO(Output(Clock()))
 
-  val cg_en_reg = RegInit(true.B)
+  val cg_en_reg = RegInit(false.B)
   cg_en_reg := !cg_en_reg
 
   val E = Mux(mbist.req, mbist.readen | mbist.writeen, cg_en_reg)
