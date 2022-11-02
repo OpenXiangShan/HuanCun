@@ -106,7 +106,7 @@ class SubDirectory[T <: Data]
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
   val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, parentName = parentName + "metaArray_"))
-  val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
+  val clk_div_by_2 = false
 
   val clkGate = Module(new STD_CLKGT_func)
   val clk_en = RegInit(false.B)
