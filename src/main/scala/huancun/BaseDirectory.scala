@@ -105,16 +105,9 @@ class SubDirectory[T <: Data]
 
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, parentName = parentName + "metaArray_"))
   val clk_div_by_2 = false
-
-  val clkGate = Module(new STD_CLKGT_func)
-  val clk_en = RegInit(false.B)
-  clk_en := ~clk_en
-  clkGate.io.TE := false.B
-  clkGate.io.E := clk_en
-  clkGate.io.CK := clock
-  val masked_clock = clkGate.io.Q
+  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true,
+    clk_div_by_2 = clk_div_by_2, parentName = parentName + "metaArray_"))
 
   val tag_wen = io.tag_w.valid
   val dir_wen = io.dir_w.valid
@@ -130,18 +123,17 @@ class SubDirectory[T <: Data]
   println(s"Tag ECC bits:$eccBits")
   val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, parentName = parentName + "tagArray_"))
+  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true,
+    clk_div_by_2 = clk_div_by_2, parentName = parentName + "tagArray_"))
   if(eccBits > 0){
-    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, parentName = parentName + "eccArray_"))
+    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true,
+      clk_div_by_2 = clk_div_by_2, parentName = parentName + "eccArray_"))
     eccArray.io.w(
       io.tag_w.fire(),
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
       io.tag_w.bits.set,
       UIntToOH(io.tag_w.bits.way)
     )
-    if (clk_div_by_2) {
-      eccArray.clock := masked_clock
-    }
     eccRead := eccArray.io.r(io.read.fire(), io.read.bits.set).resp.data
   } else {
     eccRead.foreach(_ := 0.U)
@@ -154,11 +146,6 @@ class SubDirectory[T <: Data]
     UIntToOH(io.tag_w.bits.way)
   )
   tagRead := tagArray.io.r(io.read.fire(), io.read.bits.set).resp.data
-
-  if (clk_div_by_2) {
-    metaArray.clock := masked_clock
-    tagArray.clock := masked_clock
-  }
 
   val reqReg = RegEnable(io.read.bits, enable = io.read.fire())
   val reqValidReg = RegInit(false.B)

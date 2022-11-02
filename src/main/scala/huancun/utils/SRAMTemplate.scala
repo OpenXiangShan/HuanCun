@@ -556,11 +556,12 @@ class SRAMTemplate[T <: Data]
   val mbistDataWidth1toN = wayNumForEachNode * gen.getWidth
   val maskWidth1toN = wayNumForEachNode
   /**************************************add nodes to global************************************/
+  val sramClk = Wire(Clock())
   val myNodeNum = if (isNto1) mbistNodeNumNto1 else mbistNodeNum1toN
   val myDataWidth = if (isNto1) mbistDataWidthNto1 else mbistDataWidth1toN
   val myMaskWidth = if (isNto1) maskWidthNto1 else maskWidth1toN
   val myArrayIds = Seq.tabulate(myNodeNum)(idx => SRAMTemplate.getID(!isRF) + idx)
-  val (array,vname) = SRAMArray(clock, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist,sramType = myRamType,hasRepair = hasRepair,selectedLen = myNodeNum)
+  val (array,vname) = SRAMArray(sramClk, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2, hasMbist = hasMbist,sramType = myRamType,hasRepair = hasRepair,selectedLen = myNodeNum)
   val myNodeParam = RAM2MBISTParams(set, myDataWidth,myMaskWidth,implementSinglePort,vname,parentName,myRamType,myNodeNum,myArrayIds.max,bitWrite,foundry,sramInst)
   val sram_prefix = "sram_" + uniqueId + "_"
   val myMbistBundle = Wire(new RAM2MBIST(myNodeParam))
@@ -570,6 +571,25 @@ class SRAMTemplate[T <: Data]
     MBIST.addRamNode(myMbistBundle,sram_prefix,myArrayIds, !isRF,hasRepair)
     MBIST.noDedup(this)
   }
+
+  val realSramClk = if(clk_div_by_2){
+    val CG = Module(new MBISTClockGateCell)
+    CG.clock := clock
+    CG.reset := reset
+    if(hasMbist){
+      CG.fscan_clkungate := myMbistBundle.clkungate
+      CG.mbist.req := myMbistBundle.ack
+      CG.mbist.writeen := myMbistBundle.we
+      CG.mbist.readen := myMbistBundle.re
+    } else {
+      CG.fscan_clkungate := false.B
+      CG.mbist.req := false.B
+      CG.mbist.writeen := false.B
+      CG.mbist.readen := false.B
+    }
+    CG.out_clock
+  } else clock
+  sramClk := realSramClk
 
   val PWR_MGNT_IN0 = if(hasMbist) Some(Wire(UInt(1.W))) else None
   val PWR_MGNT_OUT = if(hasMbist) Some(Wire(UInt(1.W))) else None
@@ -597,7 +617,7 @@ class SRAMTemplate[T <: Data]
   }
 
   /*******************************connection between mbist and sram*******************************/
-  val mbistSelected       = RegNext(myMbistBundle.selectedOH.orR,0.U)
+  val mbistSelected       = RegEnable(myMbistBundle.selectedOH.orR, 0.U, myMbistBundle.ack)
   val mbistArray          = RegEnable(myMbistBundle.array,0.U,myMbistBundle.selectedOH.orR)
   val mbistAddr           = myMbistBundle.addr
   val mbistAddrRead       = myMbistBundle.addr_rd
@@ -730,7 +750,13 @@ class SRAMTemplate[T <: Data]
 
   /*************************************mbist rdata output**************************************************/
   val nodeSelected = myArrayIds.map(_.U === mbistArray)
-  val rdataInUIntHold = RegEnable(rdata.asUInt, 0.U, mbistSelected(0) && RegNext(toSRAMRen, false.B))
+  val rdata_en = mbistSelected(0) && RegNext(toSRAMRen, false.B)
+  val rdataInUIntHold = if(clk_div_by_2){
+    val rdata_en_delay1 = RegNext(rdata_en, false.B)
+    RegEnable(rdata.asUInt, 0.U, rdata_en_delay1)
+  } else {
+    RegEnable(rdata.asUInt, 0.U, rdata_en)
+  }
   val rdataFitToNodes = Seq.tabulate(myNodeNum)(idx => {
     val highIdx = Seq(idx * myDataWidth + myDataWidth - 1, rdata.getWidth - 1).min
     rdataInUIntHold(highIdx, idx * myDataWidth)
