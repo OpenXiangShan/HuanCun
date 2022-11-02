@@ -90,16 +90,17 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val conflict_b = b_match_vec.asUInt().orR()
   val conflict_a = a_match_vec.asUInt().orR()
 
-  val may_nestC = (c_match_vec.asUInt() & nestC_vec.asUInt()).orR()
+  val abc_mshr_status = io.status.init.init
+  val bc_mshr_status = io.status.init.last
+  val c_mshr_status = io.status.last
+
+  val double_nest = Cat(c_match_vec.init.init).orR() && c_match_vec.init.last
+  val may_nestC = (c_match_vec.asUInt() & nestC_vec.asUInt()).orR() && !(double_nest && !bc_mshr_status.bits.nestC)
   val may_nestB = (b_match_vec.asUInt() & nestB_vec.asUInt()).orR()
 
   val abc_mshr_alloc = io.alloc.init.init
   val bc_mshr_alloc = io.alloc.init.last
   val c_mshr_alloc = io.alloc.last
-
-  val abc_mshr_status = io.status.init.init
-  val bc_mshr_status = io.status.init.last
-  val c_mshr_status = io.status.last
 
   val nestC = may_nestC && !c_mshr_status.valid
   val nestB = may_nestB && !bc_mshr_status.valid && !c_mshr_status.valid
