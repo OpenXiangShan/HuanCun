@@ -750,12 +750,12 @@ class SRAMTemplate[T <: Data]
 
   /*************************************mbist rdata output**************************************************/
   val nodeSelected = myArrayIds.map(_.U === mbistArray)
-  val rdata_en = mbistSelected(0) && RegNext(toSRAMRen, false.B)
+  val rdata_valid = mbistSelected(0) && RegNext(toSRAMRen, false.B)
   val rdataInUIntHold = if(clk_div_by_2){
-    val rdata_en_delay1 = RegNext(rdata_en, false.B)
-    RegEnable(rdata.asUInt, 0.U, rdata_en_delay1)
+    val rdata_valid_delay1 = RegNext(rdata_valid, false.B)
+    RegEnable(rdata.asUInt, 0.U, rdata_valid_delay1 & mbistFuncSel)
   } else {
-    RegEnable(rdata.asUInt, 0.U, rdata_en)
+    RegEnable(rdata.asUInt, 0.U, rdata_valid & mbistFuncSel)
   }
   val rdataFitToNodes = Seq.tabulate(myNodeNum)(idx => {
     val highIdx = Seq(idx * myDataWidth + myDataWidth - 1, rdata.getWidth - 1).min
