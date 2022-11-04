@@ -13,36 +13,37 @@ import huancun.MetaData._
 import huancun.noninclusive.MSHR
 
 class DebugMSHR()(implicit p: Parameters) extends noninclusive.MSHR {
-  println("hello MSHR, now let's start our test!")
 
   when(io.alloc.valid) {
-    print_req_info()
+    // print_req_info()
+    print_req_csv()
   }
-
   when(io.dirResult.valid) {
-    print_dir_result()
+    // print_dir_result()
+    print_dir_res_csv()
   }
-
   when(meta_valid) {
-    print_sw_flags()
-    print_new_self_dir()
+    // print_sw_flags()
+    // print_new_dir()
+    print_sw_flags_csv()
+    print_new_dir_csv()
   }
 
-  when(io.tasks.source_a.valid) {
-    print_sourceA_tasks()
-  }
+  val otasks = io.tasks
+  val any_source_valid = otasks.source_a.valid || otasks.source_b.valid || otasks.source_c.valid || otasks.source_d.valid || otasks.source_e.valid
 
-  when(io.tasks.source_b.valid) {
-    print_sourceB_tasks()
-  }
-
-  when(io.tasks.source_c.valid) {
-    print_sourceC_tasks()
-  }
-
-  when(io.tasks.source_d.valid) {
-    print_sourceD_tasks()
-  }
+  // when(io.tasks.source_a.valid) {
+  //   print_sourceA_tasks()
+  // }
+  // when(io.tasks.source_b.valid) {
+  //   print_sourceB_tasks()
+  // }
+  // when(io.tasks.source_c.valid) {
+  //   print_sourceC_tasks()
+  // }
+  // when(io.tasks.source_d.valid) {
+  //   print_sourceD_tasks()
+  // }
 
 
 
@@ -70,6 +71,23 @@ class DebugMSHR()(implicit p: Parameters) extends noninclusive.MSHR {
     printf(p"fromCmoHelper    = ${req.fromCmoHelper}\n")
     printf(p"needProbeAckData = ${req.needProbeAckData}\n\n")
   }
+  def print_req_csv() = {
+    val req = io.alloc.bits
+    printf(p"${req.channel},")
+    printf(p"${req.opcode},")
+    printf(p"${req.param},")
+    printf(p"${req.source},")
+    printf(p"${req.tag},")
+    printf(p"${req.set},")
+    printf(p"${req.off},")
+    printf(p"${req.mask},")
+    printf(p"${req.dirty},")
+    printf(p"${req.preferCache},")
+    printf(p"${req.fromProbeHelper},")
+    printf(p"${req.fromCmoHelper},")
+    req.needProbeAckData.map(printf("%d,",_))
+  }
+
 
   def print_dir_result() = {
     val meta = io.dirResult.bits
@@ -89,7 +107,6 @@ class DebugMSHR()(implicit p: Parameters) extends noninclusive.MSHR {
       case(s, i) => printf(p"self_clientstates_$i = $s\n")
     }
     meta.self.prefetch.map(printf("self_prefetch = %b\n",_))
-
     printf(p"clients_tag          = ${meta.clients.tag}\n")
     printf(p"clients_way          = ${meta.clients.way}\n")
     printf(p"clients_error        = ${meta.clients.error}\n")
@@ -98,6 +115,15 @@ class DebugMSHR()(implicit p: Parameters) extends noninclusive.MSHR {
       case (s, i) => printf(p"clientstates_state_$i = ${s.state}, alias = ${s.alias}, hit = ${s.hit}\n")
     }
     printf("\n")
+  }
+  def print_dir_res_csv() = {
+    val meta = io.dirResult.bits
+    printf(p"${meta.self.hit},")
+    printf(p"${meta.self.state},")
+    printf(p"${meta.clients.states(0).hit},")
+    printf(p"${meta.clients.states(0).state},")
+    printf(p"${meta.clients.states(1).hit},")
+    printf(p"${meta.clients.states(1).state},")
   }
 
 
@@ -129,80 +155,148 @@ class DebugMSHR()(implicit p: Parameters) extends noninclusive.MSHR {
     printf(p"w_grantack         = $w_grantack\n")
     printf(p"w_putwritten       = $w_putwritten\n\n")
   }
+  def print_sw_flags_csv() = {
+    printf(p"$s_acquire,")
+    printf(p"$s_probe,")
+    printf(p"$s_release,")
+    printf(p"$s_probeack,")
+    printf(p"$s_execute,")
+    printf(p"$s_grantack,")
+    printf(p"$s_wbselfdir,")
+    printf(p"$s_wbselftag,")
+    printf(p"$s_wbclientsdir,")
+    printf(p"$s_wbclientstag,")
+    printf(p"$s_transferput,")
+    printf(p"$s_writerelease,")
+    printf(p"$s_writeprobe,")
+    s_triggerprefetch.map(printf("%b,",_))
+    s_prefetchack.map(printf("%b,",_))
+    printf(p"$w_probeackfirst,")
+    printf(p"$w_probeacklast,")
+    printf(p"$w_probeack,")
+    printf(p"$w_grantfirst,")
+    printf(p"$w_grantlast,")
+    printf(p"$w_grant,")
+    printf(p"$w_releaseack,")
+    printf(p"$w_grantack,")
+    printf(p"$w_putwritten,")
+  }
+
+
+  def print_new_dir() = {
+    val meta = new_self_meta
+    printf("================ NEW META ================\n")
+    printf(p"new_self_state    = ${meta.state}\n")
+    printf(p"new_self_dirty    = ${meta.dirty}\n")
+    meta.clientStates.zipWithIndex.foreach { case (m, i) =>
+      printf(p"new_self_clientStates_$i   = $m\n")
+    }
+    new_clients_meta.zipWithIndex.foreach { case (m, i) =>
+      printf(p"new_clients_meta_$i    = $m\n\n")
+    }
+  }
+  def print_new_dir_csv() = {
+    val meta = new_self_meta
+    printf(p"${meta.state},")
+    printf(p"${meta.dirty},")
+    meta.clientStates.foreach { case m => printf(p"$m,") }
+    new_clients_meta.foreach { case m => printf(p"${m.hit},${m.state},") }
+  }
+
+
+
+  def print_new_self_tag() = {
+    printf("================ NEW SELF TAG ================\n")
+
+  }
 
   def print_sourceA_tasks() = {
     val oa = io.tasks.source_a.bits
     printf("================ SourceA TASKS ================\n")
-    when(io.tasks.source_a.valid) {
-      printf("#### SourceA valid ####\n")
-      printf(p"source_a_source    = ${oa.source}\n")
-      printf(p"source_a_tag       = ${oa.tag}\n")
-      printf(p"source_a_set       = ${oa.set}\n")
-      printf(p"source_a_off       = ${oa.off}\n")
-      printf(p"source_a_mask      = ${oa.mask}\n")
-      printf(p"source_a_opcode    = ${oa.opcode}\n")
-      printf(p"source_a_param     = ${oa.param}\n")
-      printf(p"source_a_bufIdx    = ${oa.bufIdx}\n")
-      printf(p"source_a_size      = ${oa.size}\n")
-      printf(p"source_a_needData  = ${oa.needData}\n")
-      printf(p"source_a_putData   = ${oa.putData}\n\n")
-    }
+    printf("#### SourceA valid ####\n")
+    printf(p"source_a_source    = ${oa.source}\n")
+    printf(p"source_a_tag       = ${oa.tag}\n")
+    printf(p"source_a_set       = ${oa.set}\n")
+    printf(p"source_a_off       = ${oa.off}\n")
+    printf(p"source_a_mask      = ${oa.mask}\n")
+    printf(p"source_a_opcode    = ${oa.opcode}\n")
+    printf(p"source_a_param     = ${oa.param}\n")
+    printf(p"source_a_bufIdx    = ${oa.bufIdx}\n")
+    printf(p"source_a_size      = ${oa.size}\n")
+    printf(p"source_a_needData  = ${oa.needData}\n")
+    printf(p"source_a_putData   = ${oa.putData}\n\n")
+  }
+  def print_oa_csv() = {
+    val oa = io.tasks.source_a.bits
+    printf(p"${oa.opcode},")
+    printf(p"${oa.param},")
+    printf(p"${oa.tag},")
+    printf(p"${oa.set},")
+    printf(p"${oa.off},")
+    printf(p"${oa.source},")
+    printf(p"${oa.needData},")
+    printf(p"${oa.putData},")
+    printf(p"${oa.bufIdx},")
+    printf(p"${oa.size},")
   }
 
   def print_sourceB_tasks() = {
     val ob = io.tasks.source_b.bits
     printf("================ SourceB TASKS ================\n")
-    when(io.tasks.source_b.valid) {
-      printf("#### SourceB valid ####\n")
-      printf(p"source_b_tag       = ${ob.tag}\n")
-      printf(p"source_b_set       = ${ob.set}\n")
-      printf(p"source_b_param     = ${ob.param}\n")
-      printf(p"source_b_clients   = ${ob.clients}\n")
-      printf(p"source_b_needData  = ${ob.needData}\n\n")
-    }
+    printf("#### SourceB valid ####\n")
+    printf(p"source_b_tag       = ${ob.tag}\n")
+    printf(p"source_b_set       = ${ob.set}\n")
+    printf(p"source_b_param     = ${ob.param}\n")
+    printf(p"source_b_clients   = ${ob.clients}\n")
+    printf(p"source_b_needData  = ${ob.needData}\n\n")
+  }
+  def print_ob_csv() = {
+    val ob = io.tasks.source_b.bits
+    printf(p"${ob.param}\n")
+    printf(p"${ob.tag}\n")
+    printf(p"${ob.set}\n")
+    printf(p"${ob.clients}\n")
+    printf(p"${ob.needData}\n\n")
   }
 
   def print_sourceC_tasks() = {
     val oc = io.tasks.source_c.bits
     printf("================ SourceC TASKS ================\n")
-    when(io.tasks.source_c.valid) {
-      printf("#### SourceC valid ####\n")
-      printf(p"souce_c_source     = ${oc.source}\n")
-      printf(p"source_c_tag       = ${oc.tag}\n")
-      printf(p"source_c_set       = ${oc.set}\n")
-      printf(p"source_c_way       = ${oc.way}\n")
-      printf(p"source_c_opcode    = ${oc.opcode}\n")
-      printf(p"source_c_param     = ${oc.param}\n")
-      printf(p"source_c_dirty     = ${oc.dirty}\n\n")
-    }
+    printf("#### SourceC valid ####\n")
+    printf(p"souce_c_source     = ${oc.source}\n")
+    printf(p"source_c_tag       = ${oc.tag}\n")
+    printf(p"source_c_set       = ${oc.set}\n")
+    printf(p"source_c_way       = ${oc.way}\n")
+    printf(p"source_c_opcode    = ${oc.opcode}\n")
+    printf(p"source_c_param     = ${oc.param}\n")
+    printf(p"source_c_dirty     = ${oc.dirty}\n\n")
   }
 
   def print_sourceD_tasks() = {
     val od = io.tasks.source_d.bits
     printf("================ SourceD TASKS ================\n")
-    when(io.tasks.source_d.valid) {
-      printf("#### SourceD valid ####\n")
-      printf(p"source_d_size      = ${od.size}\n")
-      printf(p"source_d_way       = ${od.way}\n")
-      printf(p"source_d_off       = ${od.off}\n")
-      printf(p"source_d_opcode    = ${od.opcode}\n")
-      printf(p"source_d_param     = ${od.param}\n")
-      printf(p"source_d_useBypass = ${od.useBypass}\n")
-      printf(p"source_d_bufIdx    = ${od.bufIdx}\n")
-      printf(p"source_d_denied    = ${od.denied}\n")
-      printf(p"source_d_sinkId    = ${od.sinkId}\n")
-      printf(p"source_d_bypassPut = ${od.bypassPut}\n")
-      printf(p"source_d_dirty     = ${od.dirty}\n\n")
-    }
+    printf("#### SourceD valid ####\n")
+    printf(p"source_d_sourceId  = ${od.sourceId}\n")
+    printf(p"source_d_tag       = ${od.tag}\n")
+    printf(p"source_d_set       = ${od.set}\n")
+    printf(p"source_d_way       = ${od.way}\n")
+    printf(p"source_d_off       = ${od.off}\n")
+    printf(p"source_d_opcode    = ${od.opcode}\n")
+    printf(p"source_d_param     = ${od.param}\n")
+    printf(p"source_d_size      = ${od.size}\n")
+    printf(p"source_d_useBypass = ${od.useBypass}\n")
+    printf(p"source_d_bufIdx    = ${od.bufIdx}\n")
+    printf(p"source_d_denied    = ${od.denied}\n")
+    printf(p"source_d_sinkId    = ${od.sinkId}\n")
+    printf(p"source_d_bypassPut = ${od.bypassPut}\n")
+    printf(p"source_d_dirty     = ${od.dirty}\n\n")
   }
 
   def print_sourceE_tasks() = {
     val oe = io.tasks.source_e.bits
     printf("================ SourceE TASKS ================\n")
-    when(io.tasks.source_e.valid) {
-      printf("#### SourceE valid ####\n")
-      printf(p"source_e_sink      = ${oe.sink}\n\n")
-    }
+    printf("#### SourceE valid ####\n")
+    printf(p"source_e_sink      = ${oe.sink}\n\n")
   }
 
 
@@ -231,23 +325,6 @@ class DebugMSHR()(implicit p: Parameters) extends noninclusive.MSHR {
     printf(p"probeAckDataThrough = $probeAckDataThrough\n")
     printf(p"probeAckDataDrop = $probeAckDataDrop\n")
     printf(p"probeAckDataSave = $probeAckDataSave\n\n")
-  }
-
-  def print_new_self_dir() = {
-    val meta = new_self_meta
-    printf("================ NEW META ================\n")
-    printf(p"new_self_dirty    = ${meta.dirty}\n")
-    printf(p"new_self_state    = ${meta.state}\n")
-    meta.clientStates.zipWithIndex.foreach { case (m, i) =>
-      printf(p"new_self_clientStates_$i   = $m\n")
-    }
-    new_clients_meta.zipWithIndex.foreach { case (m, i) =>
-      printf(p"new_clients_meta_$i    = $m\n\n")
-    }
-  }
-  def print_new_self_tag() = {
-    printf("================ NEW SELF TAG ================\n")
-
   }
 
 }

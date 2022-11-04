@@ -124,7 +124,7 @@ class SubDirectory[T <: Data](
 
   val eccTagBits = tagCode.width(tagBits)
   val eccBits = eccTagBits - tagBits
-  println(s"Tag ECC bits:$eccBits")
+  // println(s"Tag ECC bits:$eccBits")
   val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
   val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))

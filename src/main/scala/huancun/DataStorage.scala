@@ -58,7 +58,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   def dataCode: Code = Code.fromString(p(HCCacheParamsKey).dataECC)
 
   val eccBits = dataCode.width(8 * bankBytes) - 8 * bankBytes
-  println(s"Data ECC bits:$eccBits")
+  // println(s"Data ECC bits:$eccBits")
 
   val bankedData = Seq.fill(nrBanks) {
     Module(

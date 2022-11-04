@@ -121,33 +121,6 @@ class TestProbe extends L2Tester {
 //  self miss.
 //  client0: B; client1: INV
 //-----------------------------------------------------------
-      ms.clock.step(10)
-      ms.io.dirResult.valid.poke(true.B)
-      val dirr = ms.io.dirResult.bits
-      dirr.sourceId.poke(0.U)
-      dirr.self.dirty.poke(0.U)
-      dirr.self.state.poke(INVALID)
-      dirr.self.clientStates.foreach { _.poke(INVALID) }
-      // dirr.self.prefetch.poke(Some(false.B))
-      dirr.self.hit.poke(0.U)
-      dirr.self.way.poke(0.U)
-      dirr.self.tag.poke(0x1.U)
-      dirr.self.error.poke(0.U)
-      dirr.clients.states(0).state.poke(BRANCH)
-      dirr.clients.states(0).hit.poke(1.U)
-      dirr.clients.states(1).state.poke(INVALID)
-      dirr.clients.states(1).hit.poke(0.U)
-      dirr.clients.tag.poke(1.U)
-      dirr.clients.way.poke(0.U)
-      dirr.clients.error.poke(0.U)
-      ms.clock.step(1)
-      ms.io.dirResult.valid.poke(false.B)
-
-//-----------------------------------------------------------
-// input dir result: 
-//  self miss.
-//  client0: B; client1: B
-//-----------------------------------------------------------
       // ms.clock.step(10)
       // ms.io.dirResult.valid.poke(true.B)
       // val dirr = ms.io.dirResult.bits
@@ -162,13 +135,68 @@ class TestProbe extends L2Tester {
       // dirr.self.error.poke(0.U)
       // dirr.clients.states(0).state.poke(BRANCH)
       // dirr.clients.states(0).hit.poke(1.U)
-      // dirr.clients.states(1).state.poke(BRANCH)
-      // dirr.clients.states(1).hit.poke(1.U)
+      // dirr.clients.states(1).state.poke(INVALID)
+      // dirr.clients.states(1).hit.poke(0.U)
       // dirr.clients.tag.poke(1.U)
       // dirr.clients.way.poke(0.U)
       // dirr.clients.error.poke(0.U)
       // ms.clock.step(1)
       // ms.io.dirResult.valid.poke(false.B)
+
+//-----------------------------------------------------------
+// input dir result: 
+//  self miss.
+//  client0: T; client1: INV
+//-----------------------------------------------------------
+      // ms.clock.step(10)
+      // ms.io.dirResult.valid.poke(true.B)
+      // val dirr = ms.io.dirResult.bits
+      // dirr.sourceId.poke(0.U)
+      // dirr.self.dirty.poke(0.U)
+      // dirr.self.state.poke(INVALID)
+      // dirr.self.clientStates.foreach { _.poke(INVALID) }
+      // // dirr.self.prefetch.poke(Some(false.B))
+      // dirr.self.hit.poke(0.U)
+      // dirr.self.way.poke(0.U)
+      // dirr.self.tag.poke(0x1.U)
+      // dirr.self.error.poke(0.U)
+      // dirr.clients.states(0).state.poke(TIP)
+      // dirr.clients.states(0).hit.poke(1.U)
+      // dirr.clients.states(1).state.poke(INVALID)
+      // dirr.clients.states(1).hit.poke(0.U)
+      // dirr.clients.tag.poke(1.U)
+      // dirr.clients.way.poke(0.U)
+      // dirr.clients.error.poke(0.U)
+      // ms.clock.step(1)
+      // ms.io.dirResult.valid.poke(false.B)
+
+
+//-----------------------------------------------------------
+// input dir result: 
+//  self miss.
+//  client0: B; client1: B
+//-----------------------------------------------------------
+      ms.clock.step(10)
+      ms.io.dirResult.valid.poke(true.B)
+      val dirr = ms.io.dirResult.bits
+      dirr.sourceId.poke(0.U)
+      dirr.self.dirty.poke(0.U)
+      dirr.self.state.poke(INVALID)
+      dirr.self.clientStates.foreach { _.poke(INVALID) }
+      // dirr.self.prefetch.poke(Some(false.B))
+      dirr.self.hit.poke(0.U)
+      dirr.self.way.poke(0.U)
+      dirr.self.tag.poke(0x1.U)
+      dirr.self.error.poke(0.U)
+      dirr.clients.states(0).state.poke(BRANCH)
+      dirr.clients.states(0).hit.poke(1.U)
+      dirr.clients.states(1).state.poke(BRANCH)
+      dirr.clients.states(1).hit.poke(1.U)
+      dirr.clients.tag.poke(1.U)
+      dirr.clients.way.poke(0.U)
+      dirr.clients.error.poke(0.U)
+      ms.clock.step(1)
+      ms.io.dirResult.valid.poke(false.B)
 
       print("#11  meta_valid is set, should send tasks.\n")
       ms.clock.step(1)
