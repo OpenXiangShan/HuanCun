@@ -175,10 +175,16 @@ class SubDirectory[T <: Data](
     }
     0.U
   } else {
+    val next_state_s2 = Reg(UInt(repl.nBits.W))
     val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
     val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
-    val next_state = repl.get_next_state(repl_state, way_s1)
-    replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqReg.set), 1.U)
+    val next_state_s1 = repl.get_next_state(repl_state, way_s1)
+    next_state_s2 := next_state_s1
+    if (clk_div_by_2) {
+      replacer_sram.io.w(replacer_wen, RegNext(next_state_s2), RegNext(reqReg.set), 1.U)
+    } else {
+      replacer_sram.io.w(replacer_wen, RegNext(next_state_s1), RegNext(reqReg.set), 1.U)
+    }
     repl_state
   }
 
