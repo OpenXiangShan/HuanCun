@@ -175,7 +175,7 @@ class SubDirectory[T <: Data](
     }
     0.U
   } else {
-    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
+    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, shouldReset = true))
     val repl_sram_r = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
     val repl_state_hold = WireInit(0.U(repl.nBits.W))
     repl_state_hold := HoldUnless(repl_sram_r, RegNext(io.read.fire(), false.B))
