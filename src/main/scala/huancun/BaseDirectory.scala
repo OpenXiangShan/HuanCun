@@ -192,10 +192,12 @@ class SubDirectory[T <: Data](
       hasMbist = p(HCCacheParamsKey).hasMbist,
       hasShareBus = p(HCCacheParamsKey).hasShareBus,
       parentName = parentName + "replacer_"))
-    val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
-    val next_state = repl.get_next_state(repl_state, way_s1)
+    val repl_sram_r = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
+    val repl_state_hold = WireInit(0.U(repl.nBits.W))
+    repl_state_hold := HoldUnless(repl_sram_r, RegNext(io.read.fire(), false.B))
+    val next_state = repl.get_next_state(repl_state_hold, way_s1)
     replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqReg.set), 1.U)
-    repl_state
+    repl_state_hold
   }
   val mbistReplPipeline = if(p(HCCacheParamsKey).hasMbist && p(HCCacheParamsKey).hasShareBus && replacement != "random") {
     Some(Module(new MBISTPipeline(1,s"${parentName}_mbistReplPipe")))
