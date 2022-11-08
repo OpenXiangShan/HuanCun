@@ -5,7 +5,14 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import huancun._
-import huancun.utils.{Pipeline, RegNextN, ValidIODelay}
+import huancun.utils.{Pipeline, RegNextN, ValidIODelay, XSPerfAccumulate}
+
+class L1MissTrace extends Bundle {
+  val vaddr = UInt(39.W)
+  val paddr = UInt(36.W)
+  val source = UInt(4.W)
+  val pc = UInt(39.W)
+}
 
 class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val tag = UInt(fullTagBits.W)
@@ -116,6 +123,12 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       bop.io.req.ready := true.B
       pipe.io.in <> pftQueue.io.deq
       io.req <> pipe.io.out
+      XSPerfAccumulate(cacheParams, "pf_enqueue", pftQueue.io.enq.fire)
+      XSPerfAccumulate(cacheParams, "pf_enqueue_bop", pftQueue.io.enq.fire && pftQueue.io.enq.bits.isBOP)
+      XSPerfAccumulate(cacheParams, "pf_enqueue_l1", pftQueue.io.enq.fire && !pftQueue.io.enq.bits.isBOP)
+      XSPerfAccumulate(cacheParams, "pf_dequeue", pftQueue.io.deq.fire)
+      XSPerfAccumulate(cacheParams, "pf_dequeue_bop", pftQueue.io.deq.fire && pftQueue.io.deq.bits.isBOP)
+      XSPerfAccumulate(cacheParams, "pf_dequeue_l1", pftQueue.io.deq.fire && !pftQueue.io.deq.bits.isBOP)
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }
