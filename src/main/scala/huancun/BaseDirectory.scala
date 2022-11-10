@@ -189,6 +189,7 @@ class SubDirectory[T <: Data](
     0.U
   } else {
     val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true,
+      shouldReset = true,
       hasMbist = p(HCCacheParamsKey).hasMbist,
       hasShareBus = p(HCCacheParamsKey).hasShareBus,
       parentName = parentName + "replacer_"))
