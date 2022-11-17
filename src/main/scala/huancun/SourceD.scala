@@ -220,7 +220,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   s3_d.bits.source := s3_req.sourceId
   s3_d.bits.denied := s3_req.denied
   s3_d.bits.data := s3_rdata
-  s3_d.bits.corrupt := s3_req.denied || s3_queue.io.deq.bits.corrupt
+  s3_d.bits.corrupt := s3_req.denied ||
+    (s3_req.opcode =/= TLMessages.AccessAck && s3_req.opcode =/= TLMessages.Grant && s3_queue.io.deq.bits.corrupt)
   s3_d.bits.echo.lift(DirtyKey).foreach(_ := s3_req.dirty)
 
   s3_queue.io.enq.valid := RegNextN(
