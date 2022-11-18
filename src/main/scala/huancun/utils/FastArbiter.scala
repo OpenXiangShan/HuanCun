@@ -6,12 +6,7 @@ import chisel3.util._
 abstract class FastArbiterBase[T <: Data](val gen: T, val n: Int) extends MultiIOModule {
   val io = IO(new ArbiterIO[T](gen, n))
 
-  def maskToOH(seq: Seq[Bool]) = {
-    seq.zipWithIndex.map{
-      case (b, 0) => b
-      case (b, i) => b && !Cat(seq.take(i)).orR()
-    }
-  }
+  def maskToOH(x: UInt) = x & (~x + 1.U)
 }
 
 class FastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen, n) {
@@ -20,7 +15,7 @@ class FastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen, n) 
   val valids = VecInit(io.in.map(_.valid)).asUInt()
   // the reqs that we didn't choose in last cycle
   val pendingMask = RegEnable(
-    valids & (~chosenOH).asUInt(), // make IDEA happy ...
+    valids & (~chosenOH).asUInt(),  // make IDEA happy...
     0.U(n.W),
     io.out.fire()
   )
@@ -32,8 +27,8 @@ class FastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen, n) 
   val rrGrantMask = RegEnable(VecInit((0 until n) map { i =>
     if(i == 0) false.B else chosenOH(i - 1, 0).orR()
   }).asUInt(), 0.U(n.W), io.out.fire())
-  val rrSelOH = VecInit(maskToOH((rrGrantMask & pendingMask).asBools())).asUInt()
-  val firstOneOH = VecInit(maskToOH(valids.asBools())).asUInt()
+  val rrSelOH = maskToOH(rrGrantMask & pendingMask)
+  val firstOneOH = maskToOH(valids)
   val rrValid = (rrSelOH & valids).orR()
   chosenOH := Mux(rrValid, rrSelOH, firstOneOH)
 
@@ -66,8 +61,8 @@ class LatchFastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen
   val rrGrantMask = RegEnable(VecInit((0 until n) map { i =>
     if(i == 0) false.B else chosenOH(i - 1, 0).orR()
   }).asUInt(), 0.U(n.W), latch_result)
-  val rrSelOH = VecInit(maskToOH((rrGrantMask & pendingMask).asBools())).asUInt()
-  val firstOneOH = VecInit(maskToOH(valids.asBools())).asUInt()
+  val rrSelOH = maskToOH(rrGrantMask & pendingMask)
+  val firstOneOH = maskToOH(valids)
   val rrValid = (rrSelOH & valids).orR()
   chosenOH := Mux(rrValid, rrSelOH, firstOneOH)
 
