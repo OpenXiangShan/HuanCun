@@ -88,3 +88,33 @@ class LatchFastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen
   io.out.bits <> out_bits_reg
   io.chosen := OHToUInt(chosen_reg)
 }
+
+class PipeFastArbiter[T <: Data](gen: T, n: Int) extends FastArbiterBase[T](gen, n) {
+
+  val valids = VecInit(io.in.map(_.valid)).asUInt()
+  val wait_fire = RegInit(false.B)
+  val chosenOH_valid = !wait_fire && valids.orR()
+  val firstOneOH = VecInit(maskToOH(valids.asBools())).asUInt()
+  val chosenOH = WireInit(0.U(n.W))
+  val chosenOH_reg = RegInit(0.U(n.W))
+
+  val rrGrantMask = VecInit((0 until n) map { i =>
+    if (i == 0) 0.U else chosenOH_reg(i - 1, 0).orR() }).asUInt()
+  val rrSelOH = VecInit(maskToOH((rrGrantMask & valids).asBools())).asUInt()
+  val rrValid = (rrGrantMask & valids).orR()
+  chosenOH := Mux(rrValid, rrSelOH, firstOneOH)
+  // when some valids, chosenOH_reg can update;
+  // once update, chosenOH_reg can't update until out.fire
+  when(chosenOH_valid || io.out.fire()) { chosenOH_reg := chosenOH }
+
+  when(chosenOH_valid) { wait_fire := true.B }
+  when(io.out.fire() && !(~chosenOH_reg & valids).orR()) { wait_fire := false.B }
+
+  io.in.map(_.ready).zip(chosenOH_reg.asBools()).foreach {
+    case (rdy, grant) => rdy := grant && io.out.ready
+  }
+  io.out.valid := (chosenOH_reg & valids).orR().asBool()
+  io.out.bits := Mux1H(chosenOH_reg, io.in.map(_.bits))
+  io.chosen := OHToUInt(chosenOH_reg)
+
+}
