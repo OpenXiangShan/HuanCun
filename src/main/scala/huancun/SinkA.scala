@@ -35,6 +35,7 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
     // SourceA
     val a_pb_pop = Flipped(DecoupledIO(new PutBufferPop))
     val a_pb_beat = Output(new PutBufferBeatEntry)
+    val func_ctrl = if (cacheParams.ctrl != None) Some(Input(new FuncCtrl)) else None
   })
 
   // TODO: Does task for SinkA necessary?
@@ -105,7 +106,11 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
   if (cacheParams.level == 2) {
     allocInfo.preferCache := a.bits.user.lift(PreferCacheKey).getOrElse(true.B)
   } else {
-    allocInfo.preferCache := Mux((a.bits.opcode === TLMessages.Get || a.bits.opcode(2,1) === 0.U), true.B, a.bits.user.lift(PreferCacheKey).getOrElse(true.B))
+    if (io.func_ctrl != None) {
+      allocInfo.preferCache := Mux((a.bits.opcode === TLMessages.Get || a.bits.opcode(2,1) === 0.U), io.func_ctrl.get.dma_prefercache(0), a.bits.user.lift(PreferCacheKey).getOrElse(true.B))
+    } else {
+      allocInfo.preferCache := Mux((a.bits.opcode === TLMessages.Get || a.bits.opcode(2,1) === 0.U), true.B, a.bits.user.lift(PreferCacheKey).getOrElse(true.B))
+    }
   }
   allocInfo.dirty := false.B // ignored
   allocInfo.fromProbeHelper := false.B

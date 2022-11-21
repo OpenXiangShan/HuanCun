@@ -36,6 +36,7 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
+    val ctl_func = Input(new FuncCtrl())
   })
   println(s"clientBits: $clientBits")
 
@@ -604,6 +605,7 @@ class Slice(parentName:String = "Unknown")(implicit p: Parameters) extends HuanC
   if (ctrl.nonEmpty) {
     ctrl.get.io.req <> io.ctl_req
     io.ctl_resp <> ctrl.get.io.resp
+    sinkA.io.func_ctrl.map(_ := io.ctl_func)
   } else {
     io.ctl_req <> DontCare
     io.ctl_resp <> DontCare

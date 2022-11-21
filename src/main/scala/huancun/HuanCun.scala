@@ -28,6 +28,7 @@ import freechips.rocketchip.util.{BundleFieldBase, UIntToOH1}
 import huancun.mbist._
 import huancun.mbist.MBISTPipeline.placePipelines
 import huancun.prefetch._
+import huancun.utils.RegNextN
 import utils.{DFTResetGen, FastArbiter, Pipeline, ResetGen}
 
 import scala.collection.mutable
@@ -401,6 +402,9 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
         s.valid := c.module.io_req.valid && bank_match(i)
         s.bits := c.module.io_req.bits
       }
+      for (s <- slices.map(_.io.ctl_func)) {
+        s := RegNextN(c.module.io_func, 2)
+      }
       val arb = Module(new Arbiter(new CtrlResp, slices.size))
       arb.io.in <> ctl_resps
       c.module.io_resp <> arb.io.out
@@ -411,6 +415,7 @@ class HuanCun(parentName:String = "Unknown")(implicit p: Parameters) extends Laz
       slices.foreach(_.io.ctl_req <> DontCare)
       slices.foreach(_.io.ctl_req.valid := false.B)
       slices.foreach(_.io.ctl_resp.ready := false.B)
+      slices.foreach(_.io.ctl_func := DontCare)
       ecc_arb.io.out.ready := true.B
     }
     node.edges.in.headOption.foreach { n =>

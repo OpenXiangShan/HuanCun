@@ -34,10 +34,12 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val io_req = IO(DecoupledIO(new CtrlReq()))
   val io_resp = IO(Flipped(DecoupledIO(new CtrlResp())))
   val io_ecc = IO(Flipped(DecoupledIO(new EccInfo())))
+  val io_func = IO(Output(new FuncCtrl()))
 
   val req = io_req
   val resp = io_resp
   val ecc = io_ecc
+  val func = io_func
 
   val node = wrapper.node
   val ctlnode = wrapper.ctlnode
@@ -79,6 +81,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   val ctl_data = Seq.fill(cacheParams.blockBytes / 8){ RegInit(0.U(64.W)) }
   val ctl_cmd = RegInit(0.U(64.W))
   val ctl_rdy = RegInit(1.U(64.W))
+  val ctl_dma_prefercache = RegInit(1.U(64.W))
 
   val ecc_code = RegInit(0.U(64.W)) // assume non-zero as ECC error
   // for data error: ecc_addr = {set, way, beat}
@@ -117,6 +120,10 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     Seq(ctl_rdy)
   ).map(reg => RegField(64, RegReadFn(reg), RegWriteFn(reg)))
 
+  val ctl_func_regs = (
+    Seq(ctl_dma_prefercache)
+  ).map(reg => RegField(64, reg, RegWriteFn(reg)))
+
   ctlnode.regmap(
     0x0000 -> RegFieldGroup(
       "Config", Some("Information about cache configuration"),
@@ -138,6 +145,10 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
       }
       (!cmd_in_valid, cmd_out_valid)
     }))),
+    0x0280 -> RegFieldGroup(
+      "Func", Some("Functional control registers"),
+      ctl_func_regs
+    ),
     0x1000 -> RegFieldGroup(
       "CoreReset", desc = Some("core reset registers"),
       regs = reset_regs
@@ -163,6 +174,8 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   req.bits.set := ctl_set
   req.bits.way := ctl_way
   req.bits.dir := ctl_dir
+
+  func.dma_prefercache := ctl_dma_prefercache
 
   when(resp.fire()) {
     switch(resp.bits.cmd){
@@ -214,6 +227,10 @@ object EccInfo {
   def ERR_SELF_DIR = 1.U(8.W)
   def ERR_CLIENT_DIR = 2.U(8.W)
   def ERR_DATA = 3.U(8.W)
+}
+
+class FuncCtrl extends Bundle {
+  val dma_prefercache = UInt(64.W)
 }
 
 object CacheCMD {
