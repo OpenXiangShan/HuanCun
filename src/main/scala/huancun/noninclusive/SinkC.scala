@@ -104,12 +104,12 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     })
   }
 
-  when(c.fire() && first && isResp) {
+  when(c.fire() && first && isProbeAckData) {
     setMatchVec := Cat(bufferSet.zip(bufferSetVals).map{
       case (s, v) => (s === set) && v
     }.reverse)
   }
-  when(setMatchVec.orR() && isProbeAckData) {
+  when(setMatchVec.orR()) {
     assert(PopCount(setMatchVec) === 1.U, "SinkC: ProbeAckData cleaner detects multiple data")
     val bufIdx = OHToUInt(setMatchVec)
     beatValsSave(bufIdx).foreach(_ := false.B)
