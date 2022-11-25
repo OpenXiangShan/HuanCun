@@ -333,7 +333,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       Mux(!self_meta.hit,
         Mux(
           transmit_from_other_client || cache_alias, // For cache alias, !promoteT is granteed
-          highest_perm_reg,
+          Mux(gotT, Mux(req_acquire && promoteT_safe, TRUNK, TIP), highest_perm_reg),
           Mux(gotT,
             Mux(req_acquire && promoteT_safe, TRUNK, TIP),
             // for prefetch, if client already hit, self meta won't update,
