@@ -3,6 +3,8 @@ package huancun
 import chisel3._
 import chisel3.util._
 import huancun.utils.TLClientsMerger
+import huancun.debug._
+import huancun.utils.ChiselDB
 import chipsalliance.rocketchip.config._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import freechips.rocketchip.util._
@@ -42,14 +44,15 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
   }
 
   val l1d_nodes = (0 until 2) map( i => createClientNode(s"l1d$i", 32))
+  val l1d_l2_tllog_nodes = (0 until 2) map(i => TLLogger(s"l1d_l2_tllog_$i"))
   val master_nodes = l1d_nodes
 
   val l2 = LazyModule(new HuanCun())
   val xbar = TLXbar()
   val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
 
-  for(l1d <- l1d_nodes){
-    xbar := TLBuffer() := l1d
+  for(i <- 0 until 2) {
+    xbar :=* l1d_l2_tllog_nodes(i) := TLBuffer() := l1d_nodes(i)
   }
 
   ram.node :=
@@ -100,6 +103,8 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
   }
 
   val l1d_nodes = (0 until 2) map( i => createClientNode(s"l1d$i", 32))
+  val l1d_l2_tllog_nodes = (0 until 2) map( i => TLLogger(s"l1d_l2_tllog_$i"))
+  val l2_l3_tllog_nodes = (0 until 2) map(i => TLLogger(s"l2_l3_tllog_$i"))
   val master_nodes = l1d_nodes
 
   val l2_nodes = (0 until 2) map( i => LazyModule(new HuanCun()(new Config((_, _, _) => {
@@ -128,12 +133,17 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
   val xbar = TLXbar()
   val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
 
-  l1d_nodes.zip(l2_nodes).map {
-    case (l1d,l2) => l2 := TLBuffer() := l1d
+  for (i <- 0 until 2) {
+    l2_l3_tllog_nodes(i) :=
+      TLBuffer() :=
+      l2_nodes(i) := 
+      l1d_l2_tllog_nodes(i) :=
+      TLBuffer() :=
+      l1d_nodes(i)
   }
 
-  for(l2 <- l2_nodes){
-    xbar := TLBuffer() := l2
+  for(tllogger <- l2_l3_tllog_nodes){
+    xbar :=* tllogger
   }
 
   ram.node :=
@@ -291,7 +301,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
   }
 }
 
-object TestTop_L2 extends App {
+object TestTop_L2 extends App with HasRocketChipStageUtils {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
@@ -305,9 +315,17 @@ object TestTop_L2 extends App {
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
+  ChiselDB.addToElaborationArtefacts
+  ElaborationArtefacts.files.foreach{
+    case (extension, contents) =>
+      val prefix = extension match {
+        case "h" | "cpp" => "chisel_db"
+      }
+      writeOutputFile("./build", s"$prefix.${extension}", contents())
+  }
 }
 
-object TestTop_L2L3 extends App {
+object TestTop_L2L3 extends App with HasRocketChipStageUtils {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
@@ -321,9 +339,17 @@ object TestTop_L2L3 extends App {
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
+  ChiselDB.addToElaborationArtefacts
+  ElaborationArtefacts.files.foreach{
+    case (extension, contents) =>
+      val prefix = extension match {
+        case "h" | "cpp" => "chisel_db"
+      }
+      writeOutputFile("./build", s"$prefix.${extension}", contents())
+  }
 }
 
-object TestTop_FullSys extends App {
+object TestTop_FullSys extends App with HasRocketChipStageUtils {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
@@ -336,4 +362,12 @@ object TestTop_FullSys extends App {
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
+  ChiselDB.addToElaborationArtefacts
+  ElaborationArtefacts.files.foreach{
+    case (extension, contents) =>
+      val prefix = extension match {
+        case "h" | "cpp" => "chisel_db"
+      }
+      writeOutputFile("./build", s"$prefix.${extension}", contents())
+  }
 }
