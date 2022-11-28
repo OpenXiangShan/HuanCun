@@ -44,7 +44,7 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
   }
 
   val l1d_nodes = (0 until 2) map( i => createClientNode(s"l1d$i", 32))
-  val l1d_l2_tllog_nodes = (0 until 2) map(i => TLLogger(s"l1d_l2_tllog_$i"))
+  val l1d_l2_tllog_nodes = (0 until 2) map(i => TLLogger(s"L1D_L2_$i"))
   val master_nodes = l1d_nodes
 
   val l2 = LazyModule(new HuanCun())
@@ -103,8 +103,8 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
   }
 
   val l1d_nodes = (0 until 2) map( i => createClientNode(s"l1d$i", 32))
-  val l1d_l2_tllog_nodes = (0 until 2) map( i => TLLogger(s"l1d_l2_tllog_$i"))
-  val l2_l3_tllog_nodes = (0 until 2) map(i => TLLogger(s"l2_l3_tllog_$i"))
+  val l1d_l2_tllog_nodes = (0 until 2) map( i => TLLogger(s"L1D_L2_$i"))
+  val l2_l3_tllog_nodes = (0 until 2) map(i => TLLogger(s"L2_L3_$i"))
   val master_nodes = l1d_nodes
 
   val l2_nodes = (0 until 2) map( i => LazyModule(new HuanCun()(new Config((_, _, _) => {
@@ -133,6 +133,17 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
   val xbar = TLXbar()
   val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
 
+  ram.node :=
+    TLXbar() :=*
+      TLFragmenter(32, 64) :=*
+      TLCacheCork() :=*
+      TLDelayer(delayFactor) :=*
+      l3.node :=* xbar
+
+  for(tllogger <- l2_l3_tllog_nodes){
+    xbar :=* tllogger
+  }
+
   for (i <- 0 until 2) {
     l2_l3_tllog_nodes(i) :=
       TLBuffer() :=
@@ -141,17 +152,6 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       TLBuffer() :=
       l1d_nodes(i)
   }
-
-  for(tllogger <- l2_l3_tllog_nodes){
-    xbar :=* tllogger
-  }
-
-  ram.node :=
-    TLXbar() :=*
-      TLFragmenter(32, 64) :=*
-      TLCacheCork() :=*
-      TLDelayer(delayFactor) :=*
-      l3.node :=* xbar
 
   lazy val module = new LazyModuleImp(this){
     master_nodes.zipWithIndex.foreach{
@@ -162,6 +162,15 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
 }
 
 class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
+
+//      l1d   l1d
+//       |     |
+//       l2    l2     dma
+//       |     |       |
+//  ----- L3_banded_xbar -----
+//             |
+//             l3
+
   val cacheParams: HCCacheParameters = p(HCCacheParamsKey)
   val nrL2 = 1
   val L2NBanks = 1
@@ -246,6 +255,8 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
   val core_to_l3_ports = Array.fill(nrL2) { TLTempNode() }
   val l2_binder = BankBinder(L2NBanks, 64)
   val l2_xbar = TLXbar()
+  val l1_l2_tllog_nodes = (0 until 2) map(i => TLLogger(s"L1_L2_$i"))
+  val l2_l3_tllog_nodes = (0 until 2) map(i => TLLogger(s"L2_L3_$i"))
 
   ram.node :=
     TLBuffer.chainNode(100) :=
@@ -283,14 +294,19 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
       TLBuffer.chainNode(2) :=
       TLClientsMerger() :=
       TLXbar() :=*
-      l2_binder :*=
+      l2_binder :*=*
+      l2_l3_tllog_nodes(i) :=
       l2_nodes(i)
   }
 
   require(nrL2 == 1)
   l2_nodes.head :=* l2_xbar
-  for (l1d <- l1d_nodes) {
-    l2_xbar := TLBuffer() := l1d
+  for (tllogger <- l1_l2_tllog_nodes) {
+    l2_xbar :=* tllogger
+  }
+
+  for (i <- 0 until 2) {
+    l1_l2_tllog_nodes(i) := TLBuffer() := l1d_nodes(i)
   }
 
   lazy val module = new LazyModuleImp(this) {
