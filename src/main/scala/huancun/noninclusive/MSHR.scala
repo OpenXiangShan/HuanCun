@@ -187,6 +187,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val probeAckDataDrop = RegInit(false.B)
   val probeAckDataSave = RegInit(false.B)
 
+  val someClientHasProbeAckData = RegInit(false.B)
+
   // Which clients should be probed?
   // a req:
   // 1. cache alias
@@ -331,7 +333,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       Mux(!self_meta.hit,
         Mux(
           transmit_from_other_client || cache_alias, // For cache alias, !promoteT is granteed
-          highest_perm_reg,
+          Mux(gotT, Mux(req_acquire && promoteT_safe, TRUNK, TIP), highest_perm_reg),
           Mux(gotT,
             Mux(req_acquire && promoteT_safe, TRUNK, TIP),
             // for prefetch, if client already hit, self meta won't update,
@@ -937,7 +939,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   val can_start = Mux(client_dir_conflict, probe_helper_finish, true.B)
-  io.tasks.source_a.valid := io.enable && (!s_acquire || !s_transferput) && s_release && s_probe && can_start
+  io.tasks.source_a.valid := io.enable && (!s_acquire || !s_transferput) && s_release && s_probe && w_probeacklast && can_start
   io.tasks.source_b.valid := io.enable && !s_probe && s_release
   io.tasks.source_c.valid := io.enable && (!s_release || !s_probeack && s_writerelease && w_probeack)
   io.tasks.source_d.valid := io.enable && !s_execute && can_start && w_grant && s_writeprobe && w_probeacklast && s_transferput // TODO: is there dependency between s_writeprobe and w_probeack?
@@ -1286,18 +1288,25 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val sink_c_resp_valid = io.resps.sink_c.valid && !w_probeacklast
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
-  val probeack_last = (probes_done | probeack_bit) === probe_clients // This is the last client sending probeack
+  // ! This is the last client sending probeack
+  val probeack_last = (probes_done | probeack_bit) === probe_clients
 
   // Update client_probeack_param_vec according to the param of ProbeAck
   client_probeack_param_vec := client_probeack_param_vec_reg
-  when(req_valid && sink_c_resp_valid && io.resps.sink_c.bits.last) {
+
+  val sinkc_resp_last = sink_c_resp_valid && io.resps.sink_c.bits.last
+  // update for each client
+  when(req_valid && sinkc_resp_last) {
     val client = OHToUInt(getClientBitOH(io.resps.sink_c.bits.source))
     client_probeack_param_vec_reg(client) := io.resps.sink_c.bits.param
     client_probeack_param_vec(client) := io.resps.sink_c.bits.param
   }
+  when(req_valid && sinkc_resp_last && io.resps.sink_c.bits.hasData) {
+    someClientHasProbeAckData := true.B
+  }
 
-  when(req_valid && sink_c_resp_valid && probeack_last && io.resps.sink_c.bits.last) {
-    when(io.resps.sink_c.bits.hasData){
+  when(req_valid && sinkc_resp_last && probeack_last) {
+    when(someClientHasProbeAckData || io.resps.sink_c.bits.hasData){
       // TODO: this is slow, optimize this
       s_writeprobe := false.B
       when(req.fromB && req.fromProbeHelper && probeAckDataThrough || req.fromCmoHelper && probeAckDataThrough){
@@ -1398,6 +1407,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probeAckDataDrop := false.B
     probeAckDataSave := false.B
     probe_helper_finish := false.B
+    someClientHasProbeAckData := false.B
   }
 
   def Hold[T <: Data](x: T, l2Only: Boolean): T = {

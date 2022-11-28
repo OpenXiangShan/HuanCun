@@ -10,6 +10,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   val beats = blockBytes / beatBytes
   val buffer = Reg(Vec(bufBlocks, Vec(beats, UInt((beatBytes * 8).W))))
+  val bufferTag = Reg(Vec(bufBlocks, UInt(tagBits.W)))
   val bufferSet = Reg(Vec(bufBlocks, UInt(setBits.W)))
   val bufferSetVals = RegInit(VecInit(Seq.fill(bufBlocks)(false.B)))
   val beatValsSave = RegInit(VecInit(Seq.fill(bufBlocks) {
@@ -96,6 +97,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
       when(isProbeAckData) {
         bufferSetVals(insertIdx) := true.B
         bufferSet(insertIdx) := set
+        bufferTag(insertIdx) := tag
       }
     }.otherwise({
       buffer(insertIdxReg)(count) := c.bits.data
@@ -104,9 +106,9 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     })
   }
 
-  when(c.fire() && first && isResp) {
-    setMatchVec := Cat(bufferSet.zip(bufferSetVals).map{
-      case (s, v) => (s === set) && v
+  when(c.fire() && first && isProbeAckData) {
+    setMatchVec := Cat(bufferSetVals.zip(bufferSet.zip(bufferTag)).map{
+      case (v, (s, t)) => (t === tag) && (s === set) && v
     }.reverse)
   }
   when(setMatchVec.orR()) {
