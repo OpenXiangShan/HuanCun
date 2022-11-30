@@ -3,6 +3,8 @@ package huancun
 import chisel3._
 import chisel3.util._
 import huancun.utils.TLClientsMerger
+import huancun.debug._
+import huancun.utils.ChiselDB
 import chipsalliance.rocketchip.config._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import freechips.rocketchip.util._
@@ -42,14 +44,15 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
   }
 
   val l1d_nodes = (0 until 2) map( i => createClientNode(s"l1d$i", 32))
+  val l1d_l2_tllog_nodes = (0 until 2) map(i => TLLogger(s"L1D_L2_$i"))
   val master_nodes = l1d_nodes
 
   val l2 = LazyModule(new HuanCun())
   val xbar = TLXbar()
   val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
 
-  for(l1d <- l1d_nodes){
-    xbar := TLBuffer() := l1d
+  for(i <- 0 until 2) {
+    xbar :=* l1d_l2_tllog_nodes(i) := TLBuffer() := l1d_nodes(i)
   }
 
   ram.node :=
@@ -100,6 +103,8 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
   }
 
   val l1d_nodes = (0 until 2) map( i => createClientNode(s"l1d$i", 32))
+  val l1d_l2_tllog_nodes = (0 until 2) map( i => TLLogger(s"L1D_L2_$i"))
+  val l2_l3_tllog_nodes = (0 until 2) map(i => TLLogger(s"L2_L3_$i"))
   val master_nodes = l1d_nodes
 
   val l2_nodes = (0 until 2) map( i => LazyModule(new HuanCun()(new Config((_, _, _) => {
@@ -128,20 +133,25 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
   val xbar = TLXbar()
   val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
 
-  l1d_nodes.zip(l2_nodes).map {
-    case (l1d,l2) => l2 := TLBuffer() := l1d
-  }
-
-  for(l2 <- l2_nodes){
-    xbar := TLBuffer() := l2
-  }
-
   ram.node :=
     TLXbar() :=*
       TLFragmenter(32, 64) :=*
       TLCacheCork() :=*
       TLDelayer(delayFactor) :=*
       l3.node :=* xbar
+
+  for(tllogger <- l2_l3_tllog_nodes){
+    xbar :=* tllogger
+  }
+
+  for (i <- 0 until 2) {
+    l2_l3_tllog_nodes(i) :=
+      TLBuffer() :=
+      l2_nodes(i) := 
+      l1d_l2_tllog_nodes(i) :=
+      TLBuffer() :=
+      l1d_nodes(i)
+  }
 
   lazy val module = new LazyModuleImp(this){
     master_nodes.zipWithIndex.foreach{
@@ -152,6 +162,15 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
 }
 
 class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
+
+//      l1d   l1d
+//       |     |
+//       l2    l2     dma
+//       |     |       |
+//  ----- L3_banded_xbar -----
+//             |
+//             l3
+
   val cacheParams: HCCacheParameters = p(HCCacheParamsKey)
   val nrL2 = 1
   val L2NBanks = 1
@@ -227,7 +246,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
   val dma_node = createDMANode(s"dma", 16)
   val master_nodes = l1d_nodes ++ Seq(dma_node)
 
-  val ram = LazyModule(new TLRAM(AddressSet(0, 0xFFFFFL), beatBytes = 32))
+  val ram = LazyModule(new TLRAM(AddressSet(0, 0xFFFFL), beatBytes = 32))
   val l3_binder = BankBinder(L3NBanks, L3BlockSize)
   val mem_xbar = TLXbar()
   val l3_banked_xbar = TLXbar()
@@ -236,6 +255,8 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
   val core_to_l3_ports = Array.fill(nrL2) { TLTempNode() }
   val l2_binder = BankBinder(L2NBanks, 64)
   val l2_xbar = TLXbar()
+  val l1_l2_tllog_nodes = (0 until 2) map(i => TLLogger(s"L1_L2_$i"))
+  val l2_l3_tllog_nodes = (0 until 2) map(i => TLLogger(s"L2_L3_$i"))
 
   ram.node :=
     TLBuffer.chainNode(100) :=
@@ -273,14 +294,19 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
       TLBuffer.chainNode(2) :=
       TLClientsMerger() :=
       TLXbar() :=*
-      l2_binder :*=
+      l2_binder :*=*
+      l2_l3_tllog_nodes(i) :=
       l2_nodes(i)
   }
 
   require(nrL2 == 1)
   l2_nodes.head :=* l2_xbar
-  for (l1d <- l1d_nodes) {
-    l2_xbar := TLBuffer() := l1d
+  for (tllogger <- l1_l2_tllog_nodes) {
+    l2_xbar :=* tllogger
+  }
+
+  for (i <- 0 until 2) {
+    l1_l2_tllog_nodes(i) := TLBuffer() := l1d_nodes(i)
   }
 
   lazy val module = new LazyModuleImp(this) {
@@ -291,7 +317,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
   }
 }
 
-object TestTop_L2 extends App {
+object TestTop_L2 extends App with HasRocketChipStageUtils {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
@@ -305,9 +331,17 @@ object TestTop_L2 extends App {
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
+  ChiselDB.addToElaborationArtefacts
+  ElaborationArtefacts.files.foreach{
+    case (extension, contents) =>
+      val prefix = extension match {
+        case "h" | "cpp" => "chisel_db"
+      }
+      writeOutputFile("./build", s"$prefix.${extension}", contents())
+  }
 }
 
-object TestTop_L2L3 extends App {
+object TestTop_L2L3 extends App with HasRocketChipStageUtils {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
@@ -321,9 +355,17 @@ object TestTop_L2L3 extends App {
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
+  ChiselDB.addToElaborationArtefacts
+  ElaborationArtefacts.files.foreach{
+    case (extension, contents) =>
+      val prefix = extension match {
+        case "h" | "cpp" => "chisel_db"
+      }
+      writeOutputFile("./build", s"$prefix.${extension}", contents())
+  }
 }
 
-object TestTop_FullSys extends App {
+object TestTop_FullSys extends App with HasRocketChipStageUtils {
   val config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
@@ -336,4 +378,12 @@ object TestTop_FullSys extends App {
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
+  ChiselDB.addToElaborationArtefacts
+  ElaborationArtefacts.files.foreach{
+    case (extension, contents) =>
+      val prefix = extension match {
+        case "h" | "cpp" => "chisel_db"
+      }
+      writeOutputFile("./build", s"$prefix.${extension}", contents())
+  }
 }
