@@ -54,7 +54,7 @@ jobs:
             make test-top-l2
             cd ./tl-test
             mkdir build && cd build
-            cmake .. -DDUT_DIR=../../build
+            cmake .. -DDUT_DIR=../../build -DTLLOG=1
             make
             ./tlc_test -s $RANDOM
 
@@ -96,6 +96,6 @@ jobs:
           make test-top-l2l3
           cd ./tl-test
           mkdir build && cd build
-          cmake .. -DDUT_DIR=../../build
+          cmake .. -DDUT_DIR=../../build -DTLLOG=1
           make
           ./tlc_test -s $RANDOM
