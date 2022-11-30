@@ -246,7 +246,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
   val dma_node = createDMANode(s"dma", 16)
   val master_nodes = l1d_nodes ++ Seq(dma_node)
 
-  val ram = LazyModule(new TLRAM(AddressSet(0, 0xFFFFFL), beatBytes = 32))
+  val ram = LazyModule(new TLRAM(AddressSet(0, 0xFFFFL), beatBytes = 32))
   val l3_binder = BankBinder(L3NBanks, L3BlockSize)
   val mem_xbar = TLXbar()
   val l3_banked_xbar = TLXbar()
