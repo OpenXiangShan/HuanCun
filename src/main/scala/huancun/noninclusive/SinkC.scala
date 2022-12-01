@@ -85,6 +85,9 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.resp.bits.set := set
   io.resp.bits.bufIdx := Mux(first, insertIdx, insertIdxReg)
 
+  val task = io.task.bits
+  val task_r = RegEnable(io.task.bits, io.task.fire())
+  val busy = RegInit(false.B) // busy also serve as task_r.valid
   val setMatchVec = RegInit(0.U(bufBlocks.W))
 
   // buffer write
@@ -107,8 +110,9 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   }
 
   when(c.fire() && first && isProbeAckData) {
-    setMatchVec := Cat(bufferSetVals.zip(bufferSet.zip(bufferTag)).map{
-      case (v, (s, t)) => (t === tag) && (s === set) && v
+    setMatchVec := Cat((bufferSetVals.zipWithIndex).zip(bufferSet.zip(bufferTag)).map{
+      case ((v, i), (s, t)) => 
+        Mux(busy && i.U === task_r.bufIdx, false.B, (t === tag) && (s === set) && v) // do not clean buffer of ongoing task
     }.reverse)
   }
   when(setMatchVec.orR()) {
@@ -121,9 +125,6 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     setMatchVec := 0.U
   }
 
-  val task = io.task.bits
-  val task_r = RegEnable(io.task.bits, io.task.fire())
-  val busy = RegInit(false.B)
   val w_counter_save = RegInit(0.U(beatBits.W))
   val w_counter_through = RegInit(0.U(beatBits.W))
   val task_w_safe = !(io.sourceD_r_hazard.valid &&
