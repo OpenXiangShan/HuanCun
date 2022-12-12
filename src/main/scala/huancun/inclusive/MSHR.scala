@@ -600,4 +600,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
 
   io.ecc := DontCare
   io.ecc.valid := false.B
+  io.pf_stats.valid := false.B
+  io.pf_stats.bits := DontCare
 }

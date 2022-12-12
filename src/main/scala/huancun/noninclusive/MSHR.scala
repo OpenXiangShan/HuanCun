@@ -1506,4 +1506,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData &&
     req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
+
+  io.pf_stats.valid := req.fromA && io.dirResult.valid
+  val pf_stats = io.pf_stats.bits
+  val req_is_pf = req.isPrefetch.getOrElse(false.B)
+  pf_stats.pf_issued := req_is_pf && prefetch_miss_need_acquire && !self_meta.hit
+  pf_stats.pf_useful := !req_is_pf && self_meta.hit && self_meta.prefetch.getOrElse(false.B)
+  pf_stats.pf_usefulButMiss := pf_stats.pf_useful && prefetch_miss
+  pf_stats.demand_miss := !req_is_pf && !self_meta.hit
 }

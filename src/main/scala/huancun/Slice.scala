@@ -36,6 +36,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
+    val pf_stats = Output(new MSHRPfStats)
   })
   println(s"clientBits: $clientBits")
 
@@ -636,6 +637,15 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     pftReq.ready := mshrReq.ready
     mshrReq
   }
+
+  val pf_stats_vals = Cat(abc_mshr.map(_.io.pf_stats.valid))
+  io.pf_stats := Mux(pf_stats_vals.orR,
+    Mux1H(abc_mshr.map(m => {
+      m.io.pf_stats.valid -> m.io.pf_stats.bits
+    })),
+    0.U.asTypeOf(io.pf_stats)
+  )
+  assert(PopCount(pf_stats_vals) < 2.U)
 
   val perfinfo = IO(Output(Vec(numPCntHc, (UInt(6.W)))))
   perfinfo := DontCare

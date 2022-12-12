@@ -315,7 +315,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         Cat(high, idx(bankBits - 1, 0), low)
       }
     }
-
+    val stats_unit = Module(new StatsUnit(node.in.size)(cacheParams))
     val slices = node.in.zip(node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
@@ -394,6 +394,10 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       slices.foreach(_.io.ctl_resp.ready := false.B)
       ecc_arb.io.out.ready := true.B
     }
+    stats_unit.io.pf_received := prefetcher.map(_.io.req.fire).getOrElse(false.B)
+    stats_unit.io.mshr_stats.zip(slices).foreach({
+      case (stats, slice) => stats := slice.io.pf_stats
+    })
     node.edges.in.headOption.foreach { n =>
       n.client.clients.zipWithIndex.foreach {
         case (c, i) =>
