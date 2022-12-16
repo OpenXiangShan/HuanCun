@@ -247,22 +247,22 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val bankBits = if(banks == 1) 0 else log2Up(banks)
     val inclusion = if (cacheParams.inclusive) "Inclusive" else "Non-inclusive"
     val prefetch = "prefetch: " + cacheParams.prefetch
-    println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) $prefetch ======")
-    println(s"bankBits: ${bankBits}")
-    println(s"sets:${cacheParams.sets} ways:${cacheParams.ways} blockBytes:${cacheParams.blockBytes}")
-    if(!cacheParams.inclusive){
-      val clientParam = cacheParams.clientCaches.head
-      println(s"[client] size:${sizeBytesToStr(clientParam.capacity.toDouble)}")
-      println(s"[client] sets:${clientParam.sets} ways:${clientParam.ways} blockBytes:${clientParam.blockBytes}")
-    }
-    println(s"blockGranularityBits: ${block_granularity}")
-    def print_bundle_fields(fs: Seq[BundleFieldBase], prefix: String) = {
-      if(fs.nonEmpty){
-        println(fs.map{f => s"$prefix/${f.key.name}: (${f.data.getWidth}-bit)"}.mkString("\n"))
-      }
-    }
-    print_bundle_fields(node.in.head._2.bundle.requestFields, "usr")
-    print_bundle_fields(node.in.head._2.bundle.echoFields, "echo")
+    // println(s"====== ${inclusion} ${cacheParams.name} ($sizeStr * $banks-bank) $prefetch ======")
+    // println(s"bankBits: ${bankBits}")
+    // println(s"sets:${cacheParams.sets} ways:${cacheParams.ways} blockBytes:${cacheParams.blockBytes}")
+    // if(!cacheParams.inclusive){
+    //   val clientParam = cacheParams.clientCaches.head
+    //   println(s"[client] size:${sizeBytesToStr(clientParam.capacity.toDouble)}")
+    //   println(s"[client] sets:${clientParam.sets} ways:${clientParam.ways} blockBytes:${clientParam.blockBytes}")
+    // }
+    // println(s"blockGranularityBits: ${block_granularity}")
+    // def print_bundle_fields(fs: Seq[BundleFieldBase], prefix: String) = {
+    //   if(fs.nonEmpty){
+    //     println(fs.map{f => s"$prefix/${f.key.name}: (${f.data.getWidth}-bit)"}.mkString("\n"))
+    //   }
+    // }
+    // print_bundle_fields(node.in.head._2.bundle.requestFields, "usr")
+    // print_bundle_fields(node.in.head._2.bundle.echoFields, "echo")
 
     val pftParams: Parameters = p.alterPartial {
       case EdgeInKey => node.in.head._2
@@ -394,12 +394,12 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       slices.foreach(_.io.ctl_resp.ready := false.B)
       ecc_arb.io.out.ready := true.B
     }
-    node.edges.in.headOption.foreach { n =>
-      n.client.clients.zipWithIndex.foreach {
-        case (c, i) =>
-          println(s"\t${i} <= ${c.name}")
-      }
-    }
+    // node.edges.in.headOption.foreach { n =>
+    //   n.client.clients.zipWithIndex.foreach {
+    //     case (c, i) =>
+    //       println(s"\t${i} <= ${c.name}")
+    //   }
+    // }
   }
 
 }

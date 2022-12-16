@@ -1,0 +1,571 @@
+sets:128 ways:4 blockBytes:64
+[client] size:16.0KB
+[client] sets:32 ways:8 blockBytes:64
+blockGranularityBits: 5
+usr/needHint: (1-bit)
+usr/preferCache: (1-bit)
+usr/alias: (2-bit)
+clientBits: 2
+Data ECC bits:0
+Tag ECC bits:0
+Tag ECC bits:0
+	0 <= l1d0
+	1 <= l1d1
+hello MSHR, now let's start our test!
+AcquireBlock, self miss, clients hit, should probe!
+#1   alloc req
+================ REQ INFO ================
+channel          =  1
+opcode           =  6
+param            =  1
+size             =  6
+source           =   0
+set              =    0
+tag              =  1
+off              =   0
+mask =                 1111111111111111
+bufIdx           =  0
+needHint         = Some(DebugMSHR.io.alloc.bits.needHint: IO[Bool])
+isPrefetch       = Some(DebugMSHR.io.alloc.bits.isPrefetch: IO[Bool])
+alias            = None
+preferCache      =  1
+dirty            =  0
+fromProbeHelper  =  0
+fromCmoHelper    =  0
+needProbeAckData = Some(DebugMSHR.io.alloc.bits.needProbeAckData: IO[Bool])
+
+#10  get dirResult.
+================ DIR RESULT ================
+sourceId             =   0
+set                  =    0
+replacerInfo_channel =  0
+replacerInfo_opcode  =  0
+self_dir_hit         =  0
+self_dir_way         =  0
+self_dir_tag         =  1
+self_dir_dirty       =  0
+self_dir_state       =  0
+self_dir_error       =  0
+self_clientstates_0 =  0
+self_clientstates_1 =  0
+self_prefetch = 0
+clients_tag          =   1
+clients_way          =  0
+clients_error        =  0
+clients_tag_match    =  0
+clientstates_state_0 =  0, alias = None, hit =  0
+clientstates_state_1 =  1, alias = None, hit =  1
+
+#11  meta_valid is set, should send tasks.
+================ SW FLAGS ================
+s_acquire          =  0
+s_probe            =  1
+s_release          =  1
+s_probeack         =  1
+
+s_execute          =  0
+s_grantack         =  0
+s_wbselfdir        =  0
+s_wbselftag        =  0
+
+s_wbclientsdir     =  0
+s_wbclientstag     =  1
+s_transferput      =  1
+s_writerelease     =  1
+
+s_writeprobe       =  1
+s_triggerprefetch   = 1
+s_prefetchack     = 1
+w_probeackfirst    =  1
+
+w_probeacklast     =  1
+w_probeack         =  1
+w_grantfirst       =  0
+w_grantlast        =  0
+
+w_grant            =  0
+w_releaseack       =  1
+w_grantack         =  0
+w_putwritten       =  1
+
+================ NEW META ================
+new_self_dirty    =  0
+new_self_state    =  2
+new_self_clientStates_0   =  0
+new_self_clientStates_1   =  3
+new_clients_meta_0    = AnonymousBundle(state ->  0, hit ->  0)
+new_clients_meta_1    = AnonymousBundle(state ->  3, hit ->  1)
+
+================ SourceA TASKS ================
+#### SourceA valid ####
+source_a_source    =   0
+source_a_tag       =  1
+source_a_set       =    0
+source_a_off       =   0
+source_a_mask      =       65535
+source_a_opcode    =  6
+source_a_param     =  1
+source_a_bufIdx    =  0
+source_a_size      =  6
+source_a_needData  =  1
+source_a_putData   =  0
+
+
+[32m- should AcquireBlock, self miss, clients hit[0m
+
+
+====== Non-inclusive L2 (32.0KB * 1-bank) prefetch: Some(BOPParameters(256,12,5,50,1,List(-32, -30, -27, -25, -24, -20, -18, -16, -15, -12, -10, -9, -8, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30))) ======
+bankBits: 0
+sets:128 ways:4 blockBytes:64
+[client] size:16.0KB
+[client] sets:32 ways:8 blockBytes:64
+blockGranularityBits: 5
+usr/needHint: (1-bit)
+usr/preferCache: (1-bit)
+usr/alias: (2-bit)
+clientBits: 2
+Data ECC bits:0
+Tag ECC bits:0
+Tag ECC bits:0
+	0 <= l1d0
+	1 <= l1d1
+hello MSHR, now let's start our test!
+AcquireBlock, self miss, clients hit, should probe!
+#1   alloc req
+================ REQ INFO ================
+channel          =  1
+opcode           =  6
+param            =  1
+size             =  6
+source           =   0
+set              =    0
+tag              =  1
+off              =   0
+mask =                 1111111111111111
+bufIdx           =  0
+needHint         = Some(DebugMSHR.io.alloc.bits.needHint: IO[Bool])
+isPrefetch       = Some(DebugMSHR.io.alloc.bits.isPrefetch: IO[Bool])
+alias            = None
+preferCache      =  1
+dirty            =  0
+fromProbeHelper  =  0
+fromCmoHelper    =  0
+needProbeAckData = Some(DebugMSHR.io.alloc.bits.needProbeAckData: IO[Bool])
+
+#10  get dirResult.
+================ DIR RESULT ================
+sourceId             =   0
+set                  =    0
+replacerInfo_channel =  0
+replacerInfo_opcode  =  0
+self_dir_hit         =  0
+self_dir_way         =  0
+self_dir_tag         =  1
+self_dir_dirty       =  0
+self_dir_state       =  0
+self_dir_error       =  0
+self_clientstates_0 =  0
+self_clientstates_1 =  0
+self_prefetch = 0
+clients_tag          =   1
+clients_way          =  0
+clients_error        =  0
+clients_tag_match    =  0
+clientstates_state_0 =  0, alias = None, hit =  0
+clientstates_state_1 =  3, alias = None, hit =  1
+
+#11  meta_valid is set, should send tasks.
+================ SW FLAGS ================
+s_acquire          =  0
+s_probe            =  1
+s_release          =  1
+s_probeack         =  1
+
+s_execute          =  0
+s_grantack         =  0
+s_wbselfdir        =  0
+s_wbselftag        =  0
+
+s_wbclientsdir     =  0
+s_wbclientstag     =  1
+s_transferput      =  1
+s_writerelease     =  1
+
+s_writeprobe       =  1
+s_triggerprefetch   = 1
+s_prefetchack     = 1
+w_probeackfirst    =  1
+
+w_probeacklast     =  1
+w_probeack         =  1
+w_grantfirst       =  0
+w_grantlast        =  0
+
+w_grant            =  0
+w_releaseack       =  1
+w_grantack         =  0
+w_putwritten       =  1
+
+================ NEW META ================
+new_self_dirty    =  0
+new_self_state    =  2
+new_self_clientStates_0   =  0
+new_self_clientStates_1   =  3
+new_clients_meta_0    = AnonymousBundle(state ->  0, hit ->  0)
+
+new_clients_meta_1    = AnonymousBundle(state ->  3, hit ->  1)
+
+================ SourceA TASKS ================
+#### SourceA valid ####
+source_a_source    =   0
+source_a_tag       =  1
+source_a_set       =    0
+source_a_off       =   0
+source_a_mask      =       65535
+source_a_opcode    =  6
+source_a_param     =  1
+source_a_bufIdx    =  0
+source_a_size      =  6
+source_a_needData  =  1
+source_a_putData   =  0
+
+[32m- should AcquireBlock, self miss, clients hit[0m
+mill -i HuanCun.test.testOnly -o -s huancun.debugmshr.TestProbe
+====== Non-inclusive L2 (32.0KB * 1-bank) prefetch: Some(BOPParameters(256,12,5,50,1,List(-32, -30, -27, -25, -24, -20, -18, -16, -15, -12, -10, -9, -8, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30))) ======
+bankBits: 0
+sets:128 ways:4 blockBytes:64
+[client] size:16.0KB
+[client] sets:32 ways:8 blockBytes:64
+blockGranularityBits: 5
+usr/needHint: (1-bit)
+usr/preferCache: (1-bit)
+usr/alias: (2-bit)
+clientBits: 2
+Data ECC bits:0
+Tag ECC bits:0
+Tag ECC bits:0
+	0 <= l1d0
+	1 <= l1d1
+[32mTestProbe:[0m
+[32mL2[0m
+hello MSHR, now let's start our test!
+AcquireBlock, self miss, clients hit, should probe!
+#1   alloc req
+================ REQ INFO ================
+channel          =  1
+opcode           =  6
+param            =  1
+size             =  6
+source           =   0
+set              =    0
+tag              =  1
+off              =   0
+mask =                 1111111111111111
+bufIdx           =  0
+needHint         = Some(DebugMSHR.io.alloc.bits.needHint: IO[Bool])
+isPrefetch       = Some(DebugMSHR.io.alloc.bits.isPrefetch: IO[Bool])
+alias            = None
+preferCache      =  1
+dirty            =  0
+fromProbeHelper  =  0
+fromCmoHelper    =  0
+needProbeAckData = Some(DebugMSHR.io.alloc.bits.needProbeAckData: IO[Bool])
+
+#10  get dirResult.
+================ DIR RESULT ================
+sourceId             =   0
+set                  =    0
+replacerInfo_channel =  0
+replacerInfo_opcode  =  0
+self_dir_hit         =  0
+self_dir_way         =  0
+self_dir_tag         =  1
+self_dir_dirty       =  0
+self_dir_state       =  0
+self_dir_error       =  0
+self_clientstates_0 =  0
+self_clientstates_1 =  0
+self_prefetch = 0
+clients_tag          =   1
+clients_way          =  0
+clients_error        =  0
+clients_tag_match    =  0
+clientstates_state_0 =  1, alias = None, hit =  1
+clientstates_state_1 =  0, alias = None, hit =  0
+
+#11  meta_valid is set, should send tasks.
+================ SW FLAGS ================
+s_acquire          =  0
+s_probe            =  0
+s_release          =  1
+s_probeack         =  1
+
+s_execute          =  0
+s_grantack         =  0
+s_wbselfdir        =  0
+s_wbselftag        =  0
+
+s_wbclientsdir     =  0
+s_wbclientstag     =  0
+s_transferput      =  1
+s_writerelease     =  1
+
+s_writeprobe       =  1
+s_triggerprefetch   = 1
+s_prefetchack     = 1
+w_probeackfirst    =  0
+
+w_probeacklast     =  0
+w_probeack         =  0
+w_grantfirst       =  0
+w_grantlast        =  0
+
+w_grant            =  0
+w_releaseack       =  1
+w_grantack         =  0
+w_putwritten       =  1
+
+================ NEW META ================
+new_self_dirty    =  0
+new_self_state    =  2
+new_self_clientStates_0   =  0
+new_self_clientStates_1   =  3
+new_clients_meta_0    = AnonymousBundle(state ->  0, hit ->  1)
+
+new_clients_meta_1    = AnonymousBundle(state ->  3, hit ->  0)
+
+================ SourceB TASKS ================
+#### SourceB valid ####
+source_b_tag       =  1
+source_b_set       =    0
+source_b_param     =  2
+source_b_clients   =  1
+source_b_needData  = Some(DebugMSHR.io.tasks.source_b.bits.needData: IO[Bool])
+
+[32m- should AcquireBlock, self miss, clients hit[0m
+mill -i HuanCun.test.testOnly -o -s huancun.debugmshr.TestProbe
+====== Non-inclusive L2 (32.0KB * 1-bank) prefetch: Some(BOPParameters(256,12,5,50,1,List(-32, -30, -27, -25, -24, -20, -18, -16, -15, -12, -10, -9, -8, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30))) ======
+bankBits: 0
+sets:128 ways:4 blockBytes:64
+[client] size:16.0KB
+[client] sets:32 ways:8 blockBytes:64
+blockGranularityBits: 5
+usr/needHint: (1-bit)
+usr/preferCache: (1-bit)
+usr/alias: (2-bit)
+clientBits: 2
+Data ECC bits:0
+Tag ECC bits:0
+Tag ECC bits:0
+	0 <= l1d0
+	1 <= l1d1
+[32mTestProbe:[0m
+[32mL2[0m
+hello MSHR, now let's start our test!
+AcquireBlock, self miss, clients hit, should probe!
+#1   alloc req
+================ REQ INFO ================
+channel          =  1
+opcode           =  6
+param            =  1
+size             =  6
+source           =   0
+set              =    0
+tag              =  1
+off              =   0
+mask =                 1111111111111111
+bufIdx           =  0
+needHint         = Some(DebugMSHR.io.alloc.bits.needHint: IO[Bool])
+isPrefetch       = Some(DebugMSHR.io.alloc.bits.isPrefetch: IO[Bool])
+alias            = None
+preferCache      =  1
+dirty            =  0
+fromProbeHelper  =  0
+fromCmoHelper    =  0
+needProbeAckData = Some(DebugMSHR.io.alloc.bits.needProbeAckData: IO[Bool])
+
+#10  get dirResult.
+================ DIR RESULT ================
+sourceId             =   0
+set                  =    0
+replacerInfo_channel =  0
+replacerInfo_opcode  =  0
+self_dir_hit         =  0
+self_dir_way         =  0
+self_dir_tag         =  1
+self_dir_dirty       =  0
+self_dir_state       =  0
+self_dir_error       =  0
+self_clientstates_0 =  0
+self_clientstates_1 =  0
+self_prefetch = 0
+clients_tag          =   1
+clients_way          =  0
+clients_error        =  0
+clients_tag_match    =  0
+clientstates_state_0 =  3, alias = None, hit =  1
+clientstates_state_1 =  0, alias = None, hit =  0
+
+#11  meta_valid is set, should send tasks.
+================ SW FLAGS ================
+s_acquire          =  1
+s_probe            =  0
+s_release          =  1
+s_probeack         =  1
+
+s_execute          =  0
+s_grantack         =  1
+s_wbselfdir        =  0
+s_wbselftag        =  0
+
+s_wbclientsdir     =  0
+s_wbclientstag     =  0
+s_transferput      =  1
+s_writerelease     =  1
+
+s_writeprobe       =  1
+s_triggerprefetch   = 1
+s_prefetchack     = 1
+w_probeackfirst    =  0
+
+w_probeacklast     =  0
+w_probeack         =  0
+w_grantfirst       =  1
+w_grantlast        =  1
+
+w_grant            =  1
+w_releaseack       =  1
+w_grantack         =  0
+w_putwritten       =  1
+
+================ NEW META ================
+new_self_dirty    =  0
+new_self_state    =  2
+new_self_clientStates_0   =  0
+new_self_clientStates_1   =  3
+new_clients_meta_0    = AnonymousBundle(state ->  0, hit ->  1)
+
+new_clients_meta_1    = AnonymousBundle(state ->  3, hit ->  0)
+
+================ SourceB TASKS ================
+#### SourceB valid ####
+source_b_tag       =  1
+source_b_set       =    0
+source_b_param     =  2
+source_b_clients   =  1
+source_b_needData  = Some(DebugMSHR.io.tasks.source_b.bits.needData: IO[Bool])
+
+[32m- should AcquireBlock, self miss, clients hit[0m
+mill -i HuanCun.test.testOnly -o -s huancun.debugmshr.TestProbe
+====== Non-inclusive L2 (32.0KB * 1-bank) prefetch: Some(BOPParameters(256,12,5,50,1,List(-32, -30, -27, -25, -24, -20, -18, -16, -15, -12, -10, -9, -8, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30))) ======
+bankBits: 0
+sets:128 ways:4 blockBytes:64
+[client] size:16.0KB
+[client] sets:32 ways:8 blockBytes:64
+blockGranularityBits: 5
+usr/needHint: (1-bit)
+usr/preferCache: (1-bit)
+usr/alias: (2-bit)
+clientBits: 2
+Data ECC bits:0
+Tag ECC bits:0
+Tag ECC bits:0
+	0 <= l1d0
+	1 <= l1d1
+[32mTestProbe:[0m
+[32mL2[0m
+hello MSHR, now let's start our test!
+AcquireBlock, self miss, clients hit, should probe!
+#1   alloc req
+================ REQ INFO ================
+channel          =  1
+opcode           =  6
+param            =  1
+size             =  6
+source           =   0
+set              =    0
+tag              =  1
+off              =   0
+mask =                 1111111111111111
+bufIdx           =  0
+needHint         = Some(DebugMSHR.io.alloc.bits.needHint: IO[Bool])
+isPrefetch       = Some(DebugMSHR.io.alloc.bits.isPrefetch: IO[Bool])
+alias            = None
+preferCache      =  1
+dirty            =  0
+fromProbeHelper  =  0
+fromCmoHelper    =  0
+needProbeAckData = Some(DebugMSHR.io.alloc.bits.needProbeAckData: IO[Bool])
+
+#10  get dirResult.
+================ DIR RESULT ================
+sourceId             =   0
+set                  =    0
+replacerInfo_channel =  0
+replacerInfo_opcode  =  0
+self_dir_hit         =  0
+self_dir_way         =  0
+self_dir_tag         =  1
+self_dir_dirty       =  0
+self_dir_state       =  0
+self_dir_error       =  0
+self_clientstates_0 =  0
+self_clientstates_1 =  0
+self_prefetch = 0
+clients_tag          =   1
+clients_way          =  0
+clients_error        =  0
+clients_tag_match    =  0
+clientstates_state_0 =  1, alias = None, hit =  1
+clientstates_state_1 =  1, alias = None, hit =  1
+
+#11  meta_valid is set, should send tasks.
+================ SW FLAGS ================
+s_acquire          =  0
+s_probe            =  0
+s_release          =  1
+s_probeack         =  1
+
+s_execute          =  0
+s_grantack         =  0
+s_wbselfdir        =  0
+s_wbselftag        =  0
+
+s_wbclientsdir     =  0
+s_wbclientstag     =  1
+s_transferput      =  1
+s_writerelease     =  1
+
+s_writeprobe       =  1
+s_triggerprefetch   = 1
+s_prefetchack     = 1
+w_probeackfirst    =  0
+
+w_probeacklast     =  0
+w_probeack         =  0
+w_grantfirst       =  0
+w_grantlast        =  0
+
+w_grant            =  0
+w_releaseack       =  1
+w_grantack         =  0
+w_putwritten       =  1
+
+================ NEW META ================
+new_self_dirty    =  0
+new_self_state    =  2
+new_self_clientStates_0   =  0
+new_self_clientStates_1   =  3
+new_clients_meta_0    = AnonymousBundle(state ->  0, hit ->  1)
+
+new_clients_meta_1    = AnonymousBundle(state ->  3, hit ->  1)
+
+================ SourceB TASKS ================
+#### SourceB valid ####
+source_b_tag       =  1
+source_b_set       =    0
+source_b_param     =  2
+source_b_clients   =  1
+source_b_needData  = Some(DebugMSHR.io.tasks.source_b.bits.needData: IO[Bool])
+
+[32m- should AcquireBlock, self miss, clients hit[0m

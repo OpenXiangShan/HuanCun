@@ -1,0 +1,127 @@
+mill -i HuanCun.test.testOnly -o -s huancun.debugmshr.TestAcquireBlock
+====== Non-inclusive L2 (32.0KB * 1-bank) prefetch: Some(BOPParameters(256,12,5,50,1,List(-32, -30, -27, -25, -24, -20, -18, -16, -15, -12, -10, -9, -8, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30))) ======
+bankBits: 0
+sets:128 ways:4 blockBytes:64
+[client] size:16.0KB
+[client] sets:32 ways:8 blockBytes:64
+blockGranularityBits: 5
+usr/needHint: (1-bit)
+usr/preferCache: (1-bit)
+usr/alias: (2-bit)
+clientBits: 2
+Data ECC bits:0
+Tag ECC bits:0
+Tag ECC bits:0
+	0 <= l1d0
+	1 <= l1d1
+AcquireBlock.
+[32mTestAcquireBlock:[0m
+[32mL2[0m
+hello MSHR, now let's start our test!
+#1   alloc req
+================ REQ INFO ================
+channel          =  1
+opcode           =  6
+param            =  1
+size             =  6
+source           =   0
+set              =    0
+tag              =  1
+off              =   0
+mask =                 1111111111111111
+bufIdx           =  0
+needHint         = Some(DebugMSHR.io.alloc.bits.needHint: IO[Bool])
+isPrefetch       = Some(DebugMSHR.io.alloc.bits.isPrefetch: IO[Bool])
+alias            = None
+preferCache      =  1
+dirty            =  0
+fromProbeHelper  =  0
+fromCmoHelper    =  0
+needProbeAckData = Some(DebugMSHR.io.alloc.bits.needProbeAckData: IO[Bool])
+
+#10    get dirResult: self miss but not INVALID, may release first.
+================ DIR RESULT ================
+sourceId             =   0
+set                  =    0
+replacerInfo_channel =  0
+replacerInfo_opcode  =  0
+self_dir_hit         =  0
+self_dir_way         =  0
+self_dir_tag         =  0
+self_dir_dirty       =  0
+self_dir_state       =  3
+self_dir_error       =  0
+self_clientstates_0 =  0
+self_clientstates_1 =  0
+self_prefetch = 0
+clients_tag          =   0
+clients_way          =  0
+clients_error        =  0
+clients_tag_match    =  0
+clientstates_state_0 =  0, alias = None, hit =  0
+clientstates_state_1 =  0, alias = None, hit =  0
+
+================ SW FLAGS ================
+s_acquire          =  1
+s_probe            =  1
+s_release          =  1
+s_probeack         =  1
+s_execute          =  1
+s_grantack         =  1
+s_wbselfdir        =  1
+s_wbselftag        =  1
+s_wbclientsdir     =  1
+s_wbclientstag     =  1
+s_transferput      =  1
+s_writerelease     =  1
+s_writeprobe       =  1
+s_triggerprefetch   = 1
+s_prefetchack     = 1
+w_probeackfirst    =  1
+w_probeacklast     =  1
+w_probeack         =  1
+w_grantfirst       =  1
+w_grantlast        =  1
+w_grant            =  1
+w_releaseack       =  1
+w_grantack         =  1
+w_putwritten       =  1
+
+#11    meta_valid is set
+================ SW FLAGS ================
+s_acquire          =  0
+s_probe            =  1
+s_release          =  0
+s_probeack         =  1
+s_execute          =  0
+s_grantack         =  0
+s_wbselfdir        =  0
+s_wbselftag        =  0
+s_wbclientsdir     =  0
+s_wbclientstag     =  0
+s_transferput      =  1
+s_writerelease     =  1
+s_writeprobe       =  1
+s_triggerprefetch   = 1
+s_prefetchack     = 1
+w_probeackfirst    =  1
+w_probeacklast     =  1
+w_probeack         =  1
+w_grantfirst       =  0
+w_grantlast        =  0
+w_grant            =  0
+w_releaseack       =  0
+w_grantack         =  0
+w_putwritten       =  1
+
+================ SourceC TASKS ================
+#### SourceC valid ####
+souce_c_source     =   0
+source_c_tag       =  0
+source_c_set       =    0
+source_c_way       =  0
+source_c_opcode    =  6
+source_c_param     =  1
+source_c_dirty     =  0
+
+[32m- should AcquireBlock, both miss[0m

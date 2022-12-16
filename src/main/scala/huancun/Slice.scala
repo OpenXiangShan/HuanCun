@@ -37,7 +37,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
   })
-  println(s"clientBits: $clientBits")
+  // println(s"clientBits: $clientBits")
 
   val ctrl = cacheParams.ctrl.map(_ => Module(new SliceCtrl()))
 
@@ -648,9 +648,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
     for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(huancun_perf).zipWithIndex) {
       perf_out := perf
-      if(print_hcperfcounter){
-        println(s"Huancun perf $i: $perf_name")
-      }
+      // if(print_hcperfcounter){
+      //   println(s"Huancun perf $i: $perf_name")
+      // }
     }
   }
 }
