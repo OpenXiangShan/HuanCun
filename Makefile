@@ -13,6 +13,10 @@ test-top-l2:
 	mill -i HuanCun.test.runMain huancun.TestTop_L2 -td build
 	mv build/TestTop_L2.v build/TestTop.v
 
+test-top-l2standalone:
+	mill -i HuanCun.test.runMain huancun.TestTop_L2_Standalone -td build
+	mv build/TestTop_L2_Standalone.v build/TestTop.v
+
 test-top-l2l3:
 	mill -i HuanCun.test.runMain huancun.TestTop_L2L3 -td build
 	mv build/TestTop_L2L3.v build/TestTop.v
