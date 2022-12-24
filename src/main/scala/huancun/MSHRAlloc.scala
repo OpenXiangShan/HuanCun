@@ -22,7 +22,8 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import utils._
+import huancun.utils._
+import utility.{ParallelOR, ParallelPriorityMux}
 import freechips.rocketchip.tilelink._
 
 class MSHRSelector(implicit p: Parameters) extends HuanCunModule {

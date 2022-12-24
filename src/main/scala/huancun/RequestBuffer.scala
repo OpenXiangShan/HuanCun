@@ -3,7 +3,8 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.utils.{FastArbiter, XSPerfAccumulate}
+import huancun.utils.XSPerfAccumulate
+import utility.FastArbiter
 
 class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Parameters) extends HuanCunModule {
 
