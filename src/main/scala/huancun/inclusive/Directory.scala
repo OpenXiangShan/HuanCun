@@ -6,6 +6,7 @@ import chisel3.util._
 import freechips.rocketchip.util.SetAssocLRU
 import huancun._
 import huancun.utils._
+import utility.{ParallelMax, ParallelPriorityMux}
 
 // TODO: inclusive may have cache aliase too
 

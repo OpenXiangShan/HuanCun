@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import huancun._
-import huancun.utils.Pipeline
+import utility.Pipeline
 
 case class PrefetchReceiverParams(n: Int = 32) extends PrefetchParameters {
   override val hasPrefetchBit: Boolean = true

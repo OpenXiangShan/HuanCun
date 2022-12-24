@@ -9,6 +9,7 @@ import freechips.rocketchip.tilelink.TLHints._
 import huancun._
 import huancun.utils._
 import huancun.MetaData._
+import utility.ParallelMax
 
 class C_Status(implicit p: Parameters) extends HuanCunBundle {
   // When C nest A, A needs to know the status of C and tells C to release through to next level
