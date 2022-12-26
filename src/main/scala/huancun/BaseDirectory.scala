@@ -24,8 +24,9 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.random.LFSR
 import freechips.rocketchip.tilelink.TLMessages
-import freechips.rocketchip.util.Pow2ClockDivider
+import freechips.rocketchip.util.{Pow2ClockDivider, ReplacementPolicy}
 import huancun.utils._
+import utility.{Code}
 
 trait BaseDirResult extends HuanCunBundle {
   val idOH = UInt(mshrsAll.W) // which mshr the result should be sent to

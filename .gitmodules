@@ -2,3 +2,6 @@
 	path = rocket-chip
 	url = https://github.com/OpenXiangShan/rocket-chip.git
 	branch = 86a2f2cca699f149bcc082ef2828654a0a4e3f4b
+[submodule "Utility"]
+	path = Utility
+	url = https://github.com/OpenXiangShan/Utility

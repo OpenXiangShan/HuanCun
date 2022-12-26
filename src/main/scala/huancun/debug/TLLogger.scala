@@ -6,7 +6,7 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.BundleMap
-import huancun.utils.ChiselDB
+import utility.ChiselDB
 
 trait HasCLikeTypes {
   // c++ firendly data types

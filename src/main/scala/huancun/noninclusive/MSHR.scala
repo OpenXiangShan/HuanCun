@@ -9,6 +9,7 @@ import freechips.rocketchip.tilelink.TLHints._
 import huancun._
 import huancun.utils._
 import huancun.MetaData._
+import utility.ParallelMax
 
 class C_Status(implicit p: Parameters) extends HuanCunBundle {
   // When C nest A, A needs to know the status of C and tells C to release through to next level
@@ -1506,4 +1507,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData &&
     req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
+
+  val read_miss = !self_meta.hit || self_meta.state === INVALID
 }

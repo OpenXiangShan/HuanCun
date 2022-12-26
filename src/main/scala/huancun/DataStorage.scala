@@ -22,7 +22,8 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.utils._
+import huancun.utils.{SRAMWrapper, XSPerfAccumulate}
+import utility._
 
 class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {

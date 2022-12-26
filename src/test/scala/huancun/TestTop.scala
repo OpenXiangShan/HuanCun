@@ -2,9 +2,8 @@ package huancun
 
 import chisel3._
 import chisel3.util._
-import huancun.utils.TLClientsMerger
+import utility.{TLClientsMerger, ChiselDB}
 import huancun.debug._
-import huancun.utils.ChiselDB
 import chipsalliance.rocketchip.config._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import freechips.rocketchip.util._
