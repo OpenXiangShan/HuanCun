@@ -154,10 +154,13 @@ class SRAMTemplate[T <: Data]
 
   // hold read data for SRAMs
   val rdata = (
-    if(clk_div_by_2){
-      // DelayTwoCycle(mem_rdata, realRen)
-      // Now we assume rdata will not change during two cycles
-      mem_rdata
+    if(clk_div_by_2 || input_clk_div_by_2){
+      if (ClockGating.useFullClkForClkDiv2) {
+        DelayTwoCycle(mem_rdata, realRen)
+      }
+      else {
+        mem_rdata
+      }
     } else if (holdRead) {
       HoldUnless(mem_rdata, RegNext(realRen))
     } else {

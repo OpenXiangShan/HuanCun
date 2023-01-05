@@ -17,9 +17,13 @@ class STD_CLKGT_func extends BlackBox with HasBlackBoxResource {
 
 object ClockGating {
   var needClockDiv2Source: Boolean = false
+  val useFullClkForClkDiv2: Boolean = true
 
   def apply(E: Bool, CK: Clock, useBlackBox: Boolean = false): Clock = {
-    if (useBlackBox) {
+    if (useFullClkForClkDiv2) {
+      CK
+    }
+    else if (useBlackBox) {
       val clkGate = Module(new STD_CLKGT_func)
       clkGate.io.E := E
       clkGate.io.TE := false.B
