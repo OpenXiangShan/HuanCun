@@ -92,7 +92,8 @@ case class RAM2MBISTParams
   val arrayWidth = log2Up(maxArrayId + 1)
   def getAllNodesParams():Seq[RAM2MBISTParams] = {
     val res = Seq.tabulate(nodeNum)(idx => {
-      RAM2MBISTParams(set,dataWidth,maskWidth,singlePort,vname,hierarchyName + s"node${idx}", nodeNum, maxArrayId, bitWrite, foundry, sramInst)
+      val nodeName = if(nodeNum > 1) hierarchyName + s"node${idx}" else hierarchyName.dropRight(1)
+      RAM2MBISTParams(set, dataWidth, maskWidth, singlePort, vname, nodeName, nodeNum, maxArrayId, bitWrite, foundry, sramInst)
     })
     res
   }
