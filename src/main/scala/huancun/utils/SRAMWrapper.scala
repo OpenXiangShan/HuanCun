@@ -43,7 +43,8 @@ object ClockGating {
 class SRAMWrapper[T <: Data]
 (
   gen: T, set: Int, n: Int = 1,
-  clk_div_by_2: Boolean = false
+  clk_div_by_2: Boolean = false,
+  clock_gating: Boolean = false
 ) extends Module {
 
   val io = IO(new Bundle() {
@@ -70,7 +71,7 @@ class SRAMWrapper[T <: Data]
     clk_en := ~clk_en
     val masked_clock = ClockGating(clk_en, clock)
 
-    if (clk_div_by_2) {
+    if (clock_gating) {
       sram.clock := masked_clock
     }
     sram.io.r.req.valid := io.r.req.valid && ren

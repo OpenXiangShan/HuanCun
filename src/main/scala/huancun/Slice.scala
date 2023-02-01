@@ -123,7 +123,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val mshrAlloc = Module(new MSHRAlloc)
   val a_req_buffer = Module(new RequestBuffer(entries = 4))
   val probeHelperOpt = if(cacheParams.inclusive) None else {
-    Some(Module(new ProbeHelper(enqDelay = if (cacheParams.sramClkDivBy2) 3 else (if(cacheParams.dirReg) 2 else 1))))
+    val delay = 1 + (if (cacheParams.sramMulticycle) 1 else 0) + (if (cacheParams.sramPortReg) 1 else 0)
+    Some(Module(new ProbeHelper(enqDelay = delay)))
   }
 
   val a_req = Wire(DecoupledIO(new MSHRRequest()))
@@ -465,7 +466,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       val abc = in.init.init
       val bc = in.init.last
       val c = in.last
-      val arbiter = Module(if (latch) new LatchFastArbiter[T](chiselTypeOf(out.bits), abc.size) 
+      val arbiter = Module(if (latch) new LatchFastArbiter[T](chiselTypeOf(out.bits), abc.size)
                            else new FastArbiter[T](chiselTypeOf(out.bits), abc.size))
       if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
       for ((arb, req) <- arbiter.io.in.zip(abc)) {
@@ -536,16 +537,16 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   c_mshr.io.resps.sink_c.valid := false.B
 
   // Directory read results to MSHRs (deprecated)
-  def regFn[T <: Data](x: Valid[T]): Valid[T] = {
-    if (cacheParams.dirReg) {
-      val v = RegNext(x.valid, false.B)
-      val bits = RegEnable(x.bits, x.valid)
-      val ret = Wire(x.cloneType)
-      ret.valid := v
-      ret.bits := bits
-      ret
-    } else x
-  }
+  // def regFn[T <: Data](x: Valid[T]): Valid[T] = {
+  //   if (cacheParams.dirReg) {
+  //     val v = RegNext(x.valid, false.B)
+  //     val bits = RegEnable(x.bits, x.valid)
+  //     val ret = Wire(x.cloneType)
+  //     ret.valid := v
+  //     ret.bits := bits
+  //     ret
+  //   } else x
+  // }
 
   val is_ctrl_dir_res = directory.io.result.bits.idOH(1, 0) === "b11".U
   val dirReg = directory.io.result

@@ -66,7 +66,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         gen = UInt((8 * bankBytes).W),
         set = nrRows,
         n = cacheParams.sramDepthDiv,
-        clk_div_by_2 = cacheParams.sramClkDivBy2
+        clk_div_by_2 = cacheParams.sramMulticycle,
+        clock_gating = cacheParams.sramClkDivBy2
       )
     )
   }
@@ -76,7 +77,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         gen = UInt((eccBits * stackSize).W),
         set = nrRows,
         n = cacheParams.sramDepthDiv,
-        clk_div_by_2 = cacheParams.sramClkDivBy2
+        clk_div_by_2 = cacheParams.sramMulticycle,
+        clock_gating = cacheParams.sramClkDivBy2
       ))
     }
   } else null
@@ -174,7 +176,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     val selectedReq = PriorityMux(reqs.map(_.bankSel(i)), reqs)
     bank_en(i) := en
     sel_req(i) := selectedReq
-    if (cacheParams.sramClkDivBy2) {
+    if (cacheParams.sramPortReg) {
       // Write
       val wen = en && selectedReq.wen
       val wen_latch = RegNext(wen, false.B)

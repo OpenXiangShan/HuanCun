@@ -101,9 +101,10 @@ class SubDirectory[T <: Data](
   })
 
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
+  val sram_multicycle = p(HCCacheParamsKey).sramMulticycle
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = sram_multicycle))
 
   val clk_en = RegInit(false.B)
   clk_en := ~clk_en
@@ -123,9 +124,9 @@ class SubDirectory[T <: Data](
   println(s"Tag ECC bits:$eccBits")
   val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = sram_multicycle))
   if(eccBits > 0){
-    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = sram_multicycle))
     eccArray.io.w(
       io.tag_w.fire(),
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
@@ -155,7 +156,7 @@ class SubDirectory[T <: Data](
 
   val reqReg = RegEnable(io.read.bits, enable = io.read.fire())
   val reqValidReg = RegInit(false.B)
-  if (clk_div_by_2) {
+  if (sram_multicycle) {
     reqValidReg := RegNext(io.read.fire())
   } else {
     reqValidReg := io.read.fire()
