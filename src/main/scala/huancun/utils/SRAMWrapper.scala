@@ -64,7 +64,7 @@ class SRAMWrapper[T <: Data]
     val ren = if(n == 1) true.B else i.U === r_sel
     val wen = if(n == 1) true.B else i.U === w_sel
     val sram = Module(new SRAMTemplate[T](
-      gen, innerSet, 1, singlePort = true, input_clk_div_by_2 = clk_div_by_2
+      gen, innerSet, 1, singlePort = true, input_clk_div_by_2 = clk_div_by_2, clock_gating = clock_gating
     ))
 
     val clk_en = RegInit(false.B)

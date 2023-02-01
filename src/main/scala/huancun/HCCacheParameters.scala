@@ -126,7 +126,7 @@ case class HCCacheParameters
   ctrl: Option[CacheCtrl] = None,
   sramClkDivBy2: Boolean = true,
   sramMulticycle: Boolean = false,
-  sramPortReg: Boolean = false,
+  sramPortReg: Boolean = true,
   sramDepthDiv: Int = 1,
   simulation: Boolean = false,
   innerBuf: TLBufferParams = TLBufferParams(),
