@@ -67,7 +67,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         set = nrRows,
         n = cacheParams.sramDepthDiv,
         clk_div_by_2 = cacheParams.sramMulticycle,
-        clock_gating = cacheParams.sramClkDivBy2
+        clock_gating = cacheParams.sramClkDivBy2Data
       )
     )
   }
@@ -78,12 +78,12 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         set = nrRows,
         n = cacheParams.sramDepthDiv,
         clk_div_by_2 = cacheParams.sramMulticycle,
-        clock_gating = cacheParams.sramClkDivBy2
+        clock_gating = cacheParams.sramClkDivBy2Data
       ))
     }
   } else null
 
-  val stackRdy = if (cacheParams.sramClkDivBy2) {
+  val stackRdy = if (cacheParams.sramClkDivBy2Data) {
     RegInit(VecInit(Seq.fill(nrStacks) {
       true.B
     }))
@@ -162,7 +162,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   val cycleCnt = Counter(true.B, 2)
   // mark accessed banks as busy
-  if (cacheParams.sramClkDivBy2) {
+  if (cacheParams.sramClkDivBy2Data) {
     bank_en.grouped(stackSize).toList
       .map(banks => Cat(banks).orR())
       .zip(stackRdy)

@@ -124,7 +124,8 @@ case class HCCacheParameters
   reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey), // slave
   respField: Seq[BundleFieldBase] = Nil,
   ctrl: Option[CacheCtrl] = None,
-  sramClkDivBy2: Boolean = true,
+  sramClkDivBy2Data: Boolean = true,
+  sramClkDivBy2Meta: Boolean = false,
   sramMulticycle: Boolean = false,
   sramPortReg: Boolean = true,
   sramDepthDiv: Int = 1,

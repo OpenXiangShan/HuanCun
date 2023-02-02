@@ -217,7 +217,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
       sets = 256,
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 128, ways = 4, blockGranularity = log2Ceil(128), name = "L2")),
-      sramClkDivBy2 = true,
+      // sramClkDivBy2 = true,
       sramDepthDiv = 4,
       simulation = true,
     )
@@ -297,7 +297,7 @@ object TestTop_L2 extends App {
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2", aliasBitsOpt = Some(2))),
       echoField = Seq(DirtyField()),
-      sramClkDivBy2 = true,
+      // sramClkDivBy2 = true,
     )
   })
   val top = DisableMonitors(p => LazyModule(new TestTop_L2()(p)) )(config)
@@ -316,7 +316,7 @@ object TestTop_L2L3 extends App {
     )
   })
   val top = DisableMonitors(p => LazyModule(new TestTop_L2L3()(p)) )(config)
-   
+
 
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
