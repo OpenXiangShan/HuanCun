@@ -549,6 +549,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_releaseack = RegInit(true.B)
   val w_grantack = RegInit(true.B)
   val w_putwritten = RegInit(true.B)
+  val w_sinkcack = RegInit(true.B)
 
   val acquire_flag = RegInit(false.B)
 
@@ -579,6 +580,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_releaseack := true.B
     w_grantack := true.B
     w_putwritten := true.B
+    w_sinkcack := true.B
 
     promoteT_safe := true.B
     gotT := false.B
@@ -645,6 +647,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // schedule sinkC task to write bankedstore or outer cache(release through)
     when(req.opcode(0)) {
       s_writerelease := false.B // including drop and release-through
+      w_sinkcack := false.B
     }
     /*
       for c mshr:
@@ -919,7 +922,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
-  val no_wait = w_probeacklast && w_grantlast && w_releaseack && w_grantack && w_putwritten
+  val no_wait = w_probeacklast && w_grantlast && w_releaseack && w_grantack && w_putwritten && w_sinkcack
 
   val clients_meta_busy = Cat(clients_meta.map(s => !s.hit && s.state =/= INVALID)).orR()
   val client_dir_conflict = RegEnable(
@@ -941,8 +944,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val can_start = Mux(client_dir_conflict, probe_helper_finish, true.B)
   io.tasks.source_a.valid := io.enable && (!s_acquire || !s_transferput) && s_release && s_probe && w_probeacklast && can_start
   io.tasks.source_b.valid := io.enable && !s_probe && s_release
-  io.tasks.source_c.valid := io.enable && (!s_release || !s_probeack && s_writerelease && w_probeack)
-  io.tasks.source_d.valid := io.enable && !s_execute && can_start && w_grant && s_writeprobe && w_probeacklast && s_transferput // TODO: is there dependency between s_writeprobe and w_probeack?
+  io.tasks.source_c.valid := io.enable && w_sinkcack && (!s_release || !s_probeack && s_writerelease && w_probeack)
+  io.tasks.source_d.valid := io.enable && !s_execute && can_start && w_grant && s_writeprobe && w_sinkcack && w_probeacklast && s_transferput // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
   io.tasks.dir_write.valid := io.enable && !s_wbselfdir && no_wait && can_start
   io.tasks.tag_write.valid := io.enable && !s_wbselftag && no_wait && can_start
@@ -1309,6 +1312,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     when(someClientHasProbeAckData || io.resps.sink_c.bits.hasData){
       // TODO: this is slow, optimize this
       s_writeprobe := false.B
+      w_sinkcack := false.B
       when(req.fromB && req.fromProbeHelper && probeAckDataThrough || req.fromCmoHelper && probeAckDataThrough){
         w_releaseack := false.B // inner ProbeAck -> outer Release
       }
@@ -1390,6 +1394,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_putwritten := true.B
   }
 
+  when(io.resps.sink_c_ack.valid) {
+    w_sinkcack := true.B
+  }
+
   // Release MSHR
   val no_schedule = s_probeack && s_execute && s_grantack &&
     RegNext(s_wbselfdir && s_wbselftag && s_wbclientsdir && s_wbclientstag && meta_valid, true.B) &&
@@ -1467,7 +1475,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // if we are waitting for probeack,
   // we should not let B req in (avoid multi-probe to client)
   io.status.bits.nestB := meta_valid &&
-    (w_releaseack && w_probeacklast) && s_writeprobe &&
+    (w_releaseack && w_probeacklast) && s_writeprobe && w_sinkcack &&
     (!w_grantfirst || (client_dir_conflict && !probe_helper_finish))
   io.status.bits.blockC := true.B
   // C nest B | C nest A

@@ -31,6 +31,7 @@ abstract class BaseSinkC(implicit p: Parameters) extends HuanCunModule {
     val alloc = DecoupledIO(new MSHRRequest)
     val resp = ValidIO(new SinkCResp)
     val task = Flipped(DecoupledIO(new SinkCReq))
+    val taskack = ValidIO(new SinkCAck)
     val bs_waddr = DecoupledIO(new DSAddress)
     val bs_wdata = Output(new DSData)
     val sourceD_r_hazard = Flipped(ValidIO(new SourceDHazard))

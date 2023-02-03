@@ -192,4 +192,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     w_save_done_r := false.B
     w_through_done_r := false.B
   }
+
+  io.taskack.bits.sink := RegNext(task_r.source)
+  io.taskack.valid := RegNext(busy && (w_done || busy && task_r.drop), false.B)
 }
