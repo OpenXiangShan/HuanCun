@@ -18,7 +18,7 @@ abstract class L2Tester extends AnyFlatSpec with ChiselScalatestTester with Matc
       prefetch = Some(BOPParameters()),// None,
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2")),
-      // sramClkDivBy2 = true
+      sramClkDivBy2 = true
     )
   })
 }

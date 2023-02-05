@@ -249,7 +249,7 @@ class Directory(implicit p: Parameters)
     }
   }
 
-  val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2Meta
+  val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val cycleCnt = Counter(true.B, 2)
   val readyMask = if (clk_div_by_2) cycleCnt._1(0) else true.B
   req.ready := Cat(rports.map(_.ready)).andR() && readyMask

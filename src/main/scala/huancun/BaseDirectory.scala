@@ -100,7 +100,7 @@ class SubDirectory[T <: Data](
     }))
   })
 
-  val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2Meta
+  val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val sram_multicycle = p(HCCacheParamsKey).sramMulticycle
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
