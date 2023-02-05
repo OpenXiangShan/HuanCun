@@ -102,8 +102,7 @@ class SRAMTemplate[T <: Data]
   gen: T, set: Int, way: Int = 1,
   shouldReset: Boolean = false, holdRead: Boolean = false,
   singlePort: Boolean = false, bypassWrite: Boolean = false,
-  clk_div_by_2: Boolean = false, input_clk_div_by_2: Boolean = false,
-  clock_gating: Boolean = false
+  clk_div_by_2: Boolean = false, input_clk_div_by_2: Boolean = false
 ) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
@@ -123,8 +122,7 @@ class SRAMTemplate[T <: Data]
     resetSet := _resetSet
   }
 
-  val gatedEn = if (clock_gating) Counter(true.B, 2)._1(0) else true.B
-  val (ren, wen) = (io.r.req.valid && gatedEn, io.w.req.valid && gatedEn || resetState)
+  val (ren, wen) = (io.r.req.valid, io.w.req.valid || resetState)
   val realRen = (if (singlePort) ren && !wen else ren)
 
   val setIdx = Mux(resetState, resetSet, io.w.req.bits.setIdx)
