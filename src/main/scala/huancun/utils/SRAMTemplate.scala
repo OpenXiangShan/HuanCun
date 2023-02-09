@@ -471,8 +471,9 @@ class SRAMTemplate[T <: Data]
       resetState := _resetState
       resetSet := _resetSet
     }
-
-    val (ren, wen) = (io.r.req.valid, io.w.req.valid || resetState)
+    val needBypass = io.w.req.valid && io.r.req.valid && (io.w.req.bits.setIdx === io.r.req.bits.setIdx)
+    val ren = if(implementSinglePort) io.r.req.valid else (!needBypass) & io.r.req.valid
+    val wen = io.w.req.valid || resetState
     //  val realRen = (if (implementSinglePort) ren && !wen else ren)
 
     val setIdx = Mux(resetState, resetSet, io.w.req.bits.setIdx)
