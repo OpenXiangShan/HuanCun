@@ -37,8 +37,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
-    //cls: add cpio
-    val cp = Flipped(new CPToHuanCunIO())
+    val waymask = Input(UInt((cacheParams.ways).W))
   })
   println(s"clientBits: $clientBits")
 
@@ -456,16 +455,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
           ctrl.map(_.io.c_tag_w)
         )
       )
-      if(cacheParams.level==3){  // only shared l3 has cat control
-        dir.io.waymask := io.cp.waymask
-        io.cp.dsid := dir.io.read.bits.dsid
-        io.cp.capacity := DontCare
-      } else {
-        dir.io.waymask := DontCare
-        io.cp.dsid := DontCare
-        io.cp.capacity := DontCare
-      }
-    case (_: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
+      dir.io.waymask := io.waymask 
+    case (dir: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
+      dir.io.waymask := io.waymask 
     // skip
     case _ =>
       assert(false)

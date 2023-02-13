@@ -106,11 +106,10 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val dirRead = io.dirRead
   val mshrFree = Cat(abc_mshr_status.map(s => !s.valid)).orR()
 
-  //val can_accept_c = (mshrFree && !conflict_c) || nestC
-  val can_accept_c = (!conflict_c && (mshrFree || !c_mshr_status.valid)) || nestC
+  val can_accept_c = (mshrFree && !conflict_c) || nestC
   val accept_c = io.c_req.valid && can_accept_c
 
-  val can_accept_b = (!conflict_b && (mshrFree || !bc_mshr_status.valid) || nestB) && !io.c_req.valid
+  val can_accept_b = ((mshrFree && !conflict_b) || nestB) && !io.c_req.valid
   val accept_b = io.b_req.valid && can_accept_b
 
   val can_accept_a = mshrFree && !conflict_a && !io.c_req.valid && !io.b_req.valid
@@ -142,13 +141,11 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   }
 
   val nestB_valid = io.b_req.valid && nestB && !io.c_req.valid
-  val tmpB_valid = io.b_req.valid && !mshrFree && !conflict_b && !bc_mshr_status.valid && !io.c_req.valid
   val nestC_valid = io.c_req.valid && nestC
-  val tmpC_valid = io.c_req.valid && !mshrFree && !conflict_c && !c_mshr_status.valid
 
-  bc_mshr_alloc.valid := (nestB_valid || tmpB_valid) && dirRead.ready
+  bc_mshr_alloc.valid := nestB_valid && dirRead.ready
   bc_mshr_alloc.bits := io.b_req.bits
-  c_mshr_alloc.valid := (nestC_valid || tmpC_valid) && dirRead.ready
+  c_mshr_alloc.valid := nestC_valid && dirRead.ready
   c_mshr_alloc.bits := io.c_req.bits
 
   io.bc_mask.valid := bc_mshr_alloc.valid
@@ -161,15 +158,15 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   dirRead.bits.tag := request.bits.tag
   dirRead.bits.set := request.bits.set
   dirRead.bits.idOH := Cat(
-    nestC_valid || tmpC_valid,
-    nestB_valid || tmpB_valid,
-    Mux(nestC_valid || tmpC_valid || nestB_valid || tmpB_valid, 0.U(mshrs.W), selectedMSHROH)
+    nestC_valid,
+    nestB_valid,
+    Mux(nestC_valid || nestB_valid, 0.U(mshrs.W), selectedMSHROH)
   )
   dirRead.bits.replacerInfo.channel := request.bits.channel
   dirRead.bits.replacerInfo.opcode := request.bits.opcode
   dirRead.bits.wayMode := false.B
   dirRead.bits.way := DontCare
-  dirRead.bits.dsid := request.bits.dsid   //cls
+  dirRead.bits.dsid := request.bits.dsid
 
   val cntStart = RegInit(false.B)
   when(dirRead.ready) {

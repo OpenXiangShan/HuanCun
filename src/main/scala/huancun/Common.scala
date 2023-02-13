@@ -145,7 +145,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val fromProbeHelper = Bool()
   val fromCmoHelper = Bool()
   val needProbeAckData = if (cacheParams.inclusive) None else Some(Bool())
-  val dsid = UInt(1.W) //???dsidBitsOpt.map(_ => UInt(1.W))
+  val dsid = UInt(1.W)
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {

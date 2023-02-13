@@ -297,10 +297,6 @@ class Directory(implicit p: Parameters)
     selfDir.io.curr_waymask := 0.U
   }
   clientDir.io.curr_waymask := DontCare
-  /*Luoshan: for test
-  when(io.read.fire()){
-    printf(s"${cacheParams.name}  dir_read: dsid=%d\n",io.read.bits.dsid)
-  }*/
   val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
   val sourceIdReg = RegEnable(req.bits.source, req.fire())
   val setReg = RegEnable(req.bits.set, req.fire())

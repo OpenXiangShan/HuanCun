@@ -74,7 +74,7 @@ class DirLogWriter(prefix: String)
       |endmodule
       |""".stripMargin
 
-  setInline("DirLogWriter", verilog)
+  setInline("DirLogWriter.v", verilog)
 }
 
 object DirectoryLogger {

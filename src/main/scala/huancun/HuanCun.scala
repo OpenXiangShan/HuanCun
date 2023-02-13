@@ -233,6 +233,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       val cp = Flipped(new CPToHuanCunIO())
       //val autocat = IO(Flipped(new AutoCatIOInternal))
       val ecc_error = Valid(UInt(64.W))
+      val waymask = Input(UInt((cacheParams.ways).W))
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -347,8 +348,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             }
         }
         io.perfEvents(i) := slice.perfinfo
-        // cls: add cpio from here
-        slice.io.cp <> io.cp
+        slice.io.waymask := io.waymask
         slice
     }
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))

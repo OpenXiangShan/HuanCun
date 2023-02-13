@@ -65,7 +65,7 @@ class SubDirectory[T <: Data](
   tagBits:     Int,
   dir_init_fn: () => T,
   dir_hit_fn: T => Bool,
-  invalid_way_sel: (Seq[T], UInt, UInt) => (Bool, UInt),
+  invalid_way_sel: (Seq[T], UInt,UInt) => (Bool, UInt),
   replacement: String)(implicit p: Parameters)
     extends MultiIOModule {
 
@@ -158,9 +158,6 @@ class SubDirectory[T <: Data](
     val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true))
     val repl_state = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
     val next_state = repl.get_next_state(repl_state, io.resp.bits.way, io.resp.bits.hit, waymasks(io.read.bits.dsid))
-    when(replacer_wen){
-      printf("repl_state=%x, next_state=%x\n",repl_state,next_state)
-    }
     replacer_sram.io.w(replacer_wen, next_state, reqReg.set, 1.U)
     repl_state
   } else {
@@ -216,11 +213,6 @@ class SubDirectory[T <: Data](
     waymasks(0) := io.curr_waymask
     waymasks(1) := io.curr_waymask ^ (((1L << ways) - 1).U)
   }
-  /*if(replacement == "rrip"){
-    when(io.resp.fire() && !io.resp.bits.hit){
-      printf("waymask=%x, L3 resp_way=%d, replaceWay=%d, invalidWay=%d, chosenWay=%d\n",waymasks(io.read.bits.dsid),io.resp.bits.way,replaceWay,invalidWay,chosenWay)
-    }
-  }*/
 }
 
 trait HasUpdate {

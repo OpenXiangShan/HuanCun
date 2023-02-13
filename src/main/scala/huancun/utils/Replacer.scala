@@ -319,51 +319,39 @@ class StaticRRIP(n_ways: Int) extends ReplacementPolicy {
   def access(touch_ways: Seq[Valid[UInt]]) = {}
   def get_next_state(state: UInt, touch_way: UInt) = 0.U //DontCare
 
-  override def get_next_state(state: UInt, touch_way: UInt, hit: Bool, waymask: UInt): UInt = {
+  override def get_next_state(state: UInt, touch_way: UInt, hit: Bool): UInt = {
     val State  = Wire(Vec(n_ways, UInt(2.W)))
     val nextState  = Wire(Vec(n_ways, UInt(2.W)))
     State.zipWithIndex.map { case (e, i) =>
       e := state(2*i+1,2*i)
     }
-    when(hit){
-      nextState.zipWithIndex.map { case (e, i) =>
-        e := Mux(i.U === touch_way, 0.U(2.W), State(i))
-      }
-    } .otherwise {
-      val increcement = 3.U(2.W) - State(touch_way)
-      nextState.zipWithIndex.map { case (e, i) =>
-        e := Mux(i.U === touch_way, 2.U(2.W),
-                  Mux(waymask(i),State(i)+increcement, State(i))
-                )
-      }
+    // hit-Promotion, miss-Insertion & Aging
+    val increcement = 3.U(2.W) - State(touch_way)
+    nextState.zipWithIndex.map { case (e, i) =>
+      e := Mux(i.U === touch_way, 
+              Mux(hit, 0.U(2.W), 2.U(2.W)), 
+              Mux(hit, State(i), State(i)+increcement) 
+            )
     }
     Cat(nextState.map(x=>x).reverse)
   }
 
-  override def get_replace_way(state: UInt, waymask: UInt): UInt = {
+  def get_replace_way(state: UInt): UInt = {
     val RRPVVec  = Wire(Vec(n_ways, UInt(2.W)))
     RRPVVec.zipWithIndex.map { case (e, i) =>
         e := state(2*i+1,2*i)
     }
-    // scan each way's rrpv under waymask, find the least re-referenced way
+    // scan each way's rrpv, find the least re-referenced way
     val lrrWayVec = Wire(Vec(n_ways,Bool()))
     lrrWayVec.zipWithIndex.map { case (e, i) =>
-      when (waymask(i)){
-        val isLarger = Wire(Vec(n_ways,Bool()))
-        for (j <- 0 until n_ways) {
-          isLarger(j) := Mux(waymask(j), RRPVVec(j)>RRPVVec(i), false.B)
-        }
-        e := !(isLarger.contains(true.B))
-      } .otherwise {
-        e := false.B
+      val isLarger = Wire(Vec(n_ways,Bool()))
+      for (j <- 0 until n_ways) {
+        isLarger(j) := RRPVVec(j) > RRPVVec(i)
       }
+      e := !(isLarger.contains(true.B))
     }
-    Mux(waymask.orR, PriorityEncoder(lrrWayVec), 0.U)
-    /*Mux((curr_state & io.read.curr_waymask).orR,
-                                PriorityEncoder(curr_state & io.read.curr_waymask),
-                                Mux(io.read.curr_waymask.orR, PriorityEncoder(io.read.curr_waymask), UInt(0)))*/
+    PriorityEncoder(lrrWayVec)
   }
-  def get_replace_way(state: UInt) = 0.U //DontCare
 
   def way = get_replace_way(state_reg)
   def miss = access(way)
