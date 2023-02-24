@@ -26,7 +26,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.leftOR
 import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl}
 import huancun.prefetch._
-import huancun.utils.{FastArbiter, LatchFastArbiter, Pipeline}
+import huancun.utils.{FastArbiter, LatchFastArbiter, Pipeline, XSPerfAccumulate, XSPerfHistogram}
 
 class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
@@ -519,6 +519,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io.tasks.prefetch_train.foreach(_.ready := true.B)
       mshr.io.tasks.prefetch_resp.foreach(_.ready := true.B)
     }
+    XSPerfAccumulate(cacheParams, "prefetch_trains", pft.train.fire())
   }
 
   // Resps to MSHRs
@@ -654,5 +655,26 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
         println(s"Huancun perf $i: $perf_name")
       }
     }
+  }
+
+  if (cacheParams.enablePerf) {
+    val sourceIdAll = 1 << sourceIdBits
+    val a_begin_times = RegInit(VecInit(Seq.fill(sourceIdAll)(0.U(64.W))))
+    val timer = RegInit(0.U(64.W))
+    timer := timer + 1.U
+    a_begin_times.zipWithIndex.foreach {
+      case (r, i) =>
+        when (sinkA.io.a.fire() && sinkA.io.a.bits.source === i.U) {
+          r := timer
+        }
+    }
+    val d_source = sourceD.io.d.bits.source
+    val delay = timer - a_begin_times(d_source)
+    val (first, _, _, _) = edgeIn.count(sourceD.io.d)
+    val delay_sample = sourceD.io.d.fire() && first
+    XSPerfHistogram(cacheParams, "a_to_d_delay", delay, delay_sample, 0, 20, 1, true, true)
+    XSPerfHistogram(cacheParams, "a_to_d_delay", delay, delay_sample, 20, 300, 10, true, false)
+    XSPerfHistogram(cacheParams, "a_to_d_delay", delay, delay_sample, 300, 500, 20, true, false)
+    XSPerfHistogram(cacheParams, "a_to_d_delay", delay, delay_sample, 500, 1000, 100, true, false)
   }
 }

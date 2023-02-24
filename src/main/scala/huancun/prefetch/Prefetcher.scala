@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import huancun._
-import huancun.utils.{Pipeline, RegNextN, ValidIODelay}
+import huancun.utils.{Pipeline, RegNextN, ValidIODelay, XSPerfAccumulate, XSPerfHistogram}
 
 class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val tag = UInt(fullTagBits.W)
@@ -75,6 +75,16 @@ class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
   io.enq.ready := true.B
   io.deq.valid := !empty || io.enq.valid
   io.deq.bits := Mux(empty, io.enq.bits, queue(head))
+
+  // The reqs that are discarded = enq - deq
+  XSPerfAccumulate(cacheParams, "prefetch_queue_enq", io.enq.fire())
+  XSPerfAccumulate(cacheParams, "prefetch_queue_fromL1_enq", io.enq.fire() && !io.enq.bits.isBOP)
+  XSPerfAccumulate(cacheParams, "prefetch_queue_fromL2_enq", io.enq.fire() && io.enq.bits.isBOP)
+  XSPerfAccumulate(cacheParams, "prefetch_queue_deq", io.deq.fire())
+  XSPerfAccumulate(cacheParams, "prefetch_queue_fromL1_deq", io.deq.fire() && !io.enq.bits.isBOP)
+  XSPerfAccumulate(cacheParams, "prefetch_queue_fromL2_enq", io.deq.fire() && io.enq.bits.isBOP)
+  XSPerfHistogram(cacheParams, "prefetch_queue_entry", PopCount(valids.asUInt),
+    true.B, 0, inflightEntries, 1)
 }
 
 class Prefetcher(implicit p: Parameters) extends PrefetchModule {
@@ -116,6 +126,9 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       bop.io.req.ready := true.B
       pipe.io.in <> pftQueue.io.deq
       io.req <> pipe.io.out
+      XSPerfAccumulate(cacheParams, "prefetch_req_fromL1", l1_pf.io.req.valid)
+      XSPerfAccumulate(cacheParams, "prefetch_req_fromL2", bop_en && bop.io.req.valid)
+      XSPerfAccumulate(cacheParams, "prefetch_req_L1L2_overlapped", l1_pf.io.req.valid && bop_en && bop.io.req.valid)
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }

@@ -1,6 +1,6 @@
 package huancun.prefetch
 
-import huancun.utils.SRAMTemplate
+import huancun.utils.{SRAMTemplate, XSPerfAccumulate}
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
@@ -224,6 +224,15 @@ class OffsetScoreTable(implicit p: Parameters) extends BOPModule {
   io.test.req.bits.ptr := ptr
   io.test.resp.ready := true.B
 
+  for (off <- offsetList) {
+    if (off < 0) {
+      XSPerfAccumulate(cacheParams, "best_offset_neg_" + (-off).toString + "_learning_phases",
+        Mux(state === s_idle, (bestOffset === off.S(offsetWidth.W).asUInt).asUInt, 0.U))
+    } else {
+      XSPerfAccumulate(cacheParams, "best_offset_pos_" + off.toString + "_learning_phases",
+        Mux(state === s_idle, (bestOffset === off.U).asUInt, 0.U))
+    }
+  }
 }
 
 class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
@@ -265,4 +274,17 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
   io.req.bits.isBOP := true.B
   io.train.ready := scoreTable.io.req.ready && (!req_valid || io.req.ready)
   io.resp.ready := rrTable.io.w.ready
+
+  for (off <- offsetList) {
+    if (off < 0) {
+      XSPerfAccumulate(cacheParams, "best_offset_neg_" + (-off).toString, prefetchOffset === off.S(offsetWidth.W).asUInt)
+    } else {
+      XSPerfAccumulate(cacheParams, "best_offset_pos_" + off.toString, prefetchOffset === off.U)
+    }
+  }
+  XSPerfAccumulate(cacheParams, "bop_req", io.req.fire())
+  XSPerfAccumulate(cacheParams, "bop_train", io.train.fire())
+  XSPerfAccumulate(cacheParams, "bop_train_stall_for_st_not_ready", io.train.valid && !scoreTable.io.req.ready)
+  XSPerfAccumulate(cacheParams, "bop_cross_page", scoreTable.io.req.fire() && crossPage)
+
 }

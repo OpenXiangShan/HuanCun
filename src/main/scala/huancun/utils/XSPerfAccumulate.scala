@@ -35,7 +35,9 @@ object XSPerfHistogram {
     enable:   Bool,
     start:    Int,
     stop:     Int,
-    step:     Int
+    step:     Int,
+    left_strict: Boolean = false,
+    right_strict: Boolean = false
   ) = {
     if (params.enablePerf) {
       val logTimestamp = WireInit(0.U(64.W))
@@ -57,9 +59,15 @@ object XSPerfHistogram {
         val inRange = perfCnt >= binRangeStart.U && perfCnt < binRangeStop.U
 
         // if perfCnt < start, it will go to the first bin
-        val leftOutOfRange = perfCnt < start.U && i.U === 0.U
+        val leftOutOfRange = if(left_strict)
+          false.B
+        else
+          perfCnt < start.U && i.U === 0.U
         // if perfCnt >= stop, it will go to the last bin
-        val rightOutOfRange = perfCnt >= stop.U && i.U === (nBins - 1).U
+        val rightOutOfRange = if(right_strict)
+          false.B
+        else
+          perfCnt >= stop.U && i.U === (nBins - 1).U
         val inc = inRange || leftOutOfRange || rightOutOfRange
 
         val counter = RegInit(0.U(64.W))
