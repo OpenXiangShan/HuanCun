@@ -63,6 +63,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.off := off
   io.alloc.bits.mask := 0.U // DontCare
   io.alloc.bits.bufIdx := insertIdx
+  io.alloc.bits.isBop.foreach(_ := false.B)
   io.alloc.bits.needHint.foreach(_ := false.B)
   io.alloc.bits.alias.foreach(_ := 0.U)
   io.alloc.bits.preferCache := true.B
@@ -146,4 +147,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.resp.bits.last := last
   io.resp.bits.set := set
   io.resp.bits.bufIdx := DontCare // not used in inclusive cache
+
+  io.taskack := DontCare
+  io.taskack.valid := false.B
 }

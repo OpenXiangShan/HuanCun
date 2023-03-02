@@ -64,15 +64,17 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   val req_acquire = req.opcode === AcquireBlock || req.opcode === AcquirePerm
   val req_needT = needT(req.opcode, req.param)
   val gotT = RegInit(false.B) // L3 might return T even though L2 wants B
+  val gotDirty = RegInit(false.B) // L3 might return a dirty block if L3 is non-inclusive
   val meta_no_client = !meta.clients.orR
   val req_promoteT = req_acquire && Mux(meta.hit, meta_no_client && meta.state === TIP, gotT)
   val req_realBtoT = meta.hit && (meta.clients & getClientBitOH(req.source)).orR
   val prefetch_miss = hintMiss(meta.state, req.param)
   val probes_toN = RegInit(0.U(clientBits.W))
   val probes_done = RegInit(0.U(clientBits.W))
+  val cache_alias = aliasBitsOpt.map(_ => meta.hit && req.opcode =/= Hint && (meta.clients & VecInit(meta.alias.get.map(_ =/= req.alias.get)).asUInt()).orR())
   val probe_exclude =
     Mux(
-      req.fromA && meta.hit && skipProbeN(req.opcode),
+      req.fromA && meta.hit && skipProbeN(req.opcode) && !cache_alias.getOrElse(false.B),
       getClientBitOH(req.source),
       0.U
     ) // Client acquiring the block does not need to be probed
@@ -95,7 +97,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     new_meta.hit := false.B
   }.otherwise {
     // Acquire / Intent / Put / Get / Atomics
-    new_meta.dirty := meta.hit && meta.dirty || !req.opcode(2) // Put / Atomics
+    new_meta.dirty := gotDirty || meta.hit && meta.dirty || !req.opcode(2) // Put / Atomics
     new_meta.state := Mux(
       req_needT,
       Mux(
@@ -131,6 +133,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   new_dir.state := new_meta.state
   new_dir.clients := new_meta.clients
   new_dir.prefetch.foreach(_ := prefetch_miss && req.opcode === Hint || meta.prefetch.get)
+  new_dir.alias.foreach(_ := new_meta.alias.get)
+  when (req_acquire) { new_dir.alias.foreach(a => a(OHToUInt(getClientBitOH(req.source))) := req.alias.get) }
 
   val sink = Reg(UInt(edgeOut.bundle.sinkBits.W))
 
@@ -158,6 +162,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   val s_acquire = RegInit(true.B) // source_a
   val s_rprobe = RegInit(true.B) // source_b
   val s_pprobe = RegInit(true.B)
+  val s_alias_probe = aliasBitsOpt.map(_ => RegInit(true.B))
   val s_release = RegInit(true.B) // source_c
   val s_probeack = RegInit(true.B)
   val s_execute = RegInit(true.B) // source_d
@@ -186,6 +191,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     s_acquire := true.B
     s_rprobe := true.B
     s_pprobe := true.B
+    s_alias_probe.foreach(_ := true.B)
     s_release := true.B
     s_probeack := true.B
     s_execute := true.B
@@ -212,6 +218,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     probes_toN := 0.U
     probes_done := 0.U
     bad_grant := false.B
+    gotDirty := false.B
 
     assert(!io.dirResult.bits.hit || !io.dirResult.bits.error)
 
@@ -302,6 +309,17 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
         w_pprobeack := false.B
         s_writebackdir := false.B
       }
+      // need anti-alias
+      aliasBitsOpt.foreach {
+        _ =>
+          when (cache_alias.get) {
+            s_alias_probe.foreach(_ := false.B)
+            w_pprobeackfirst := false.B
+            w_pprobeacklast := false.B
+            w_pprobeack := false.B
+            s_writebackdir := false.B
+          }
+      }
       // need grantack
       when(req_acquire) {
         w_grantack := false.B
@@ -348,7 +366,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
    */
   val no_wait = w_rprobeacklast && w_pprobeacklast && w_grantlast && w_releaseack && w_grantack
   io.tasks.source_a.valid := (!s_acquire || !s_transferput) && s_release && s_pprobe
-  io.tasks.source_b.valid := !s_rprobe || !s_pprobe
+  io.tasks.source_b.valid := !s_rprobe || !s_pprobe || !s_alias_probe.getOrElse(true.B)
   io.tasks.source_c.valid := !s_release && w_rprobeackfirst || !s_probeack && w_pprobeackfirst
   io.tasks.source_d.valid := !s_execute && w_grant && w_pprobeack
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
@@ -384,6 +402,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   ob.set := req.set
   ob.param := Mux(!s_rprobe, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
   ob.clients := meta.clients & ~probe_exclude // TODO: Provides all clients needing probe
+  ob.alias.foreach(_ := meta.alias.get)
 
   oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), meta.dirty.asUInt))
   oc.tag := meta.tag
@@ -491,6 +510,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   when(io.tasks.source_b.fire()) {
     s_rprobe := true.B
     s_pprobe := true.B
+    s_alias_probe.foreach(_ := true.B)
   }
   when(io.tasks.source_c.fire()) {
     s_release := true.B
@@ -551,6 +571,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
       w_grant := req.off === 0.U || io.resps.sink_d.bits.last
       bad_grant := io.resps.sink_d.bits.denied
       gotT := io.resps.sink_d.bits.param === toT
+      gotDirty := gotDirty || io.resps.sink_d.bits.dirty
       sink := io.resps.sink_d.bits.sink
     }
     when(io.resps.sink_d.bits.opcode === ReleaseAck) {

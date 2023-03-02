@@ -116,4 +116,13 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
     perf_out := RegNext(perf)
   }
+
+  // if (cacheParams.level == 2) {
+  //   when (io.in.fire() && io.in.bits.isPrefetch.getOrElse(false.B)) {
+  //     printf("*pref* %x %x\n", io.in.bits.tag, io.in.bits.set)
+  //   }
+  //   when (io.in.fire() && !io.in.bits.isPrefetch.getOrElse(false.B)) {
+  //     printf("*norm* %x %x\n", io.in.bits.tag, io.in.bits.set)
+  //   }
+  // }
 }
