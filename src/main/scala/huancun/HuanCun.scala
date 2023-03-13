@@ -35,6 +35,8 @@ trait HasHuanCunParameters {
   val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
   val hasAliasBits = if(cacheParams.clientCaches.isEmpty) false
     else cacheParams.clientCaches.head.needResolveAlias
+  val hasDsid = cacheParams.LvnaEnable
+  val dsidWidth = cacheParams.dsidWidth
 
   val blockBytes = cacheParams.blockBytes
   val beatBytes = cacheParams.channelBytes.d.get

@@ -54,4 +54,7 @@ class SinkB(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.alloc.bits.fromProbeHelper := false.B
   io.alloc.bits.fromCmoHelper := false.B
   io.alloc.bits.needProbeAckData.foreach(_ := io.b.bits.data(0))
+  if (hasDsid) {
+    io.alloc.bits.dsid.get := 0.U // ignored
+  }
 }

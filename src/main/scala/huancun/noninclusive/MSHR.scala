@@ -231,6 +231,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         self_meta.state),
       INVALID
     )
+    if (hasDsid) {
+      new_self_meta.dsid.get := req.dsid.get
+    }
     new_self_meta.clientStates.zipWithIndex.foreach {
       case (state, i) =>
         state := Mux(self_meta.hit, Mux(self_meta.clientStates(i) =/= INVALID && req.param === 1.U, BRANCH, INVALID), self_meta.clientStates(i))
@@ -256,6 +259,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         // NtoN -> self_meta.state
       )
     )
+    if (hasDsid) {
+      new_self_meta.dsid.get := req.dsid.get
+    }
     new_self_meta.clientStates.zipWithIndex.foreach {
       case (state, i) =>
         state := Mux(
@@ -355,6 +361,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         ))
       )
     )
+    if (hasDsid) {
+      new_self_meta.dsid.get := req.dsid.get
+    }
     when(inv_self_dir){
       new_self_meta.state := INVALID
     }
@@ -443,6 +452,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val new_self_dir = Wire(new SelfDirEntry)
   new_self_dir.dirty := new_self_meta.dirty
   new_self_dir.state := new_self_meta.state
+  if (hasDsid) new_self_dir.dsid.get := new_self_meta.dsid.get
   new_self_dir.clientStates := new_self_meta.clientStates
   new_self_dir.prefetch.foreach(_ := self_meta.prefetch.get || prefetch_miss)
   new_clients_dir.zip(new_clients_meta).foreach {
@@ -984,6 +994,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.set := req.set
   oa.off := req.off
   oa.mask := req.mask
+  if (hasDsid) {
+    oa.dsid.get := req.dsid.get
+  }
   // full overwrite, we can always acquire perm, no need to acquire block
   val acquire_perm_NtoT = req.opcode === AcquirePerm && req.param === NtoT
 
@@ -1094,6 +1107,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
   oc.tag := Mux(req.fromB, req.tag, self_meta.tag)
   oc.set := req.set
+  if (hasDsid) {
+    oc.dsid.get := self_meta.dsid.get
+  }
 
   val probeack_param = MuxLookup( // TODO: optimize this
     Cat(highest_perm, probe_next_state(highest_perm, req.param)),
@@ -1210,6 +1226,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req.dirty || self_meta.hit && self_meta.dirty,
     probe_dirty || self_meta.hit && self_meta.dirty
   )
+  if (hasDsid){
+    ic.dsid.get := req.dsid.get
+  }
 
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := meta_reg.self.way

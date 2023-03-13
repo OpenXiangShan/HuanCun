@@ -65,6 +65,16 @@ case class AliasField(width: Int) extends BundleField(AliasKey) {
   }
 }
 
+case object DsidKey extends ControlKey[UInt](name = "dsid")
+
+case class  DsidField(width: Int) extends BundleField(DsidKey) {
+  override def data: UInt = Output(UInt(width.W))
+
+  override def default(x: UInt): Unit = {
+    x := 0.U(width.W)
+  }
+}
+
 // try to keep data in cache is true
 // now it only works for non-inclusive cache (ignored in inclusive cache)
 case object PreferCacheKey extends ControlKey[Bool](name = "preferCache")
@@ -124,6 +134,9 @@ case class HCCacheParameters
   reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey), // slave
   respField: Seq[BundleFieldBase] = Nil,
   ctrl: Option[CacheCtrl] = None,
+  //for lvna use
+  LvnaEnable: Boolean = false,
+  dsidWidth: Int = 5,
   sramClkDivBy2: Boolean = false,
   sramDepthDiv: Int = 1,
   simulation: Boolean = false,

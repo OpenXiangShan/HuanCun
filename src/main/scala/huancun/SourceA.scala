@@ -58,6 +58,9 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_acquire.bits.corrupt := false.B
   a_acquire.bits.user.lift(PreferCacheKey).foreach(_ := false.B)
   a_acquire.bits.echo.lift(DirtyKey).foreach(_ := true.B)
+  if (hasDsid) {
+    a_acquire.bits.user.lift(DsidKey).foreach(_ := io.task.bits.dsid.get)
+  }
   a_acquire.valid := io.task.valid && !io.task.bits.putData
 
   val s1_ready = Wire(Bool())
@@ -106,6 +109,9 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_put.bits.corrupt := false.B
   a_put.bits.user.lift(PreferCacheKey).foreach(_ := false.B)
   a_put.bits.echo.lift(DirtyKey).foreach(_ := true.B)
+  if (hasDsid) {
+    a_put.bits.user.lift(DsidKey).foreach(_ := s1_task.dsid.get)
+  }
   a_put.valid := s1_full
 
   TLArbiter.lowest(edgeIn, io.a, a_put, a_acquire)

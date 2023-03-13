@@ -27,6 +27,7 @@ class SelfDirEntry(implicit p: Parameters) extends HuanCunBundle {
   val state = UInt(stateBits.W)
   val clientStates = Vec(clientBits, UInt(stateBits.W))
   val prefetch = if (hasPrefetchBit) Some(Bool()) else None // whether the block is prefetched
+  val dsid = if (hasDsid) Some(UInt(dsidWidth.W)) else None // dsid of the block
 }
 
 class ClientDirEntry(implicit p: Parameters) extends HuanCunBundle {
@@ -169,6 +170,7 @@ class Directory(implicit p: Parameters)
     this.reset
   )
 
+  //TODO: add waymask invalid boundary
   def client_invalid_way_fn(metaVec: Seq[Vec[ClientDirEntry]], repl: UInt): (Bool, UInt) = {
     val invalid_vec = metaVec.map(states => Cat(states.map(_.state === INVALID)).andR())
     val has_invalid_way = Cat(invalid_vec).orR()
@@ -286,6 +288,13 @@ class Directory(implicit p: Parameters)
       s.alias.foreach(_ := dir.alias.get)
   }
   resp.bits.clients.tag_match := clientResp.bits.hit
+
+  if (hasDsid) {
+    resp.bits.self.dsid.get := selfResp.bits.dir.dsid.get
+    // resp.bits.clients.states.zip(clientResp.bits.dir).foreach{
+    //   case (s, dir) =>
+    // }
+  }
 
   // Self Tag Write
   selfDir.io.tag_w.valid := io.tagWReq.valid
