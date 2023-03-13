@@ -168,12 +168,32 @@ class SubDirectory[T <: Data](
   val hit_s1 = Wire(Bool())
   val way_s1 = Wire(UInt(wayBits.W))
 
+  // lvna: add waymask control here
+  val waymask = Wire(UInt(ways.W))
+  waymask := 0.U
+
   val repl = ReplacementPolicy.fromString(replacement, ways)
   val repl_state = if(replacement == "random"){
     when(io.tag_w.fire()){
       repl.miss
     }
     0.U
+  } else if(replacement == "srrip"){
+    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, shouldReset = true))
+    val repl_sram_r = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
+    val repl_state_hold = WireInit(0.U(repl.nBits.W))
+    repl_state_hold := HoldUnless(repl_sram_r, RegNext(io.read.fire(), false.B))
+    val next_state = repl.get_next_state(repl_state_hold, way_s1, hit_s1, waymask)
+    
+    val repl_init = Wire(Vec(ways, UInt(2.W)))
+    repl_init.foreach(_ := 2.U(2.W))
+    replacer_sram.io.w(
+      !resetFinish || replacer_wen,
+      Mux(resetFinish, RegNext(next_state), repl_init.asUInt),
+      Mux(resetFinish, RegNext(reqReg.set), resetIdx),
+      1.U
+    )
+    repl_state_hold
   } else {
     val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, shouldReset = true))
     val repl_sram_r = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
@@ -190,7 +210,8 @@ class SubDirectory[T <: Data](
   val metaValidVec = metas.map(dir_hit_fn)
   val hitVec = tagMatchVec.zip(metaValidVec).map(x => x._1 && x._2)
   val hitWay = OHToUInt(hitVec)
-  val replaceWay = repl.get_replace_way(repl_state)
+  val replaceWay = if(replacement == "srrip"){ repl.get_replace_way(repl_state,waymask) }
+                   else { repl.get_replace_way(repl_state) }
   val (inv, invalidWay) = invalid_way_sel(metas, replaceWay)
   val chosenWay = Mux(inv, invalidWay, replaceWay)
 
