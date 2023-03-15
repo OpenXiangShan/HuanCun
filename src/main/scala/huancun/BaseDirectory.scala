@@ -22,11 +22,10 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import chisel3.util.random.LFSR
 import freechips.rocketchip.tilelink.TLMessages
-import freechips.rocketchip.util.Pow2ClockDivider
-import huancun.mbist.MBISTPipeline
-import huancun.utils._
+import xs.utils._
+import xs.utils.mbist.MBISTPipeline
+import xs.utils.sram._
 
 trait BaseDirResult extends HuanCunBundle {
   val idOH = UInt(mshrsAll.W) // which mshr the result should be sent to

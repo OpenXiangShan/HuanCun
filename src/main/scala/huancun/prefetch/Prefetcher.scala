@@ -3,9 +3,8 @@ package huancun.prefetch
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.tilelink._
 import huancun._
-import huancun.utils.{Pipeline, RegNextN, ValidIODelay}
+import xs.utils.{Pipeline, RegNextN, ValidIODelay}
 
 class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val tag = UInt(fullTagBits.W)

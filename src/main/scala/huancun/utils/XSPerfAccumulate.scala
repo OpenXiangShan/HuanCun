@@ -3,6 +3,7 @@ package huancun.utils
 import chisel3._
 import chisel3.util.experimental.BoringUtils
 import huancun.HCCacheParameters
+import xs.utils.GTimer
 
 object XSPerfAccumulate {
   def apply(params: HCCacheParameters, perfName: String, perfCnt: UInt) = {
@@ -117,13 +118,5 @@ object XSPerfPrint {
   def apply(pable: Printable): Any = {
     val commonInfo = p"[PERF ][time=${GTimer()}] 9527: "
     printf(commonInfo + pable)
-  }
-}
-
-object GTimer {
-  def apply() = {
-    val c = RegInit(0.U(64.W))
-    c := c + 1.U
-    c
   }
 }

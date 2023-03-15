@@ -22,7 +22,9 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.mbist.MBISTPipeline
+import xs.utils.mbist.MBISTPipeline
+import xs.utils._
+import xs.utils.sram.SRAMWrapper
 import huancun.utils._
 
 class DataStorage(parentName:String = "Unknown")(implicit p: Parameters) extends HuanCunModule {

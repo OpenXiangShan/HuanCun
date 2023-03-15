@@ -1,11 +1,11 @@
 package huancun.prefetch
 
-import huancun.utils.SRAMTemplate
+import xs.utils.sram.SRAMTemplate
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import huancun.HasHuanCunParameters
-import huancun.mbist.MBISTPipeline
+import xs.utils.mbist.MBISTPipeline
 
 case class BOPParameters(
   rrTableEntries: Int = 256,

@@ -23,7 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
-import huancun.utils.ParallelPriorityMux
+import xs.utils.ParallelPriorityMux
 
 class SourceB(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {

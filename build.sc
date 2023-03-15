@@ -79,6 +79,15 @@ object rocketchip extends `rocket-chip`.common.CommonRocketChip {
 
 }
 
+object xsutils extends CommonModule {
+  override def millSourcePath = os.pwd / "xs-utils"
+  override def moduleDeps = super.moduleDeps ++ Seq(rocketchip)
+  override def ivyDeps = super.ivyDeps() ++ Agg(
+    getVersion("chisel3"),
+    getVersion("chiseltest"),
+  )
+}
+
 
 object HuanCun extends SbtModule with ScalafmtModule with CommonModule {
 
@@ -90,14 +99,12 @@ object HuanCun extends SbtModule with ScalafmtModule with CommonModule {
     getVersion("chiseltest"),
   )
 
-  override def moduleDeps = super.moduleDeps ++ Seq(rocketchip)
+  override def moduleDeps = super.moduleDeps ++ Seq(rocketchip, xsutils)
 
-  object test extends Tests {
+  object test extends Tests with TestModule.ScalaTest{
     override def ivyDeps = super.ivyDeps() ++ Agg(
       getVersion("scalatest","org.scalatest")
     )
-
-    def testFrameworks = Seq("org.scalatest.tools.Framework")
 
   /*
     def testOnly(args: String*) = T.command {

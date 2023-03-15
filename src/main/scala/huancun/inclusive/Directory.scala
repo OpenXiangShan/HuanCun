@@ -3,10 +3,9 @@ package huancun.inclusive
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.util.SetAssocLRU
 import huancun._
-import huancun.mbist.MBISTPipeline
-import huancun.utils._
+import xs.utils.mbist.MBISTPipeline
+import xs.utils.ParallelPriorityMux
 
 // TODO: inclusive may have cache aliase too
 

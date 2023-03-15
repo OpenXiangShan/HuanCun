@@ -23,7 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import utils._
-import freechips.rocketchip.tilelink._
+import xs.utils.{ParallelOR, ParallelPriorityMux}
 
 class MSHRSelector(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {

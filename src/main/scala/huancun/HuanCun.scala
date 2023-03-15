@@ -25,13 +25,14 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages._
-import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
-import huancun.mbist.{MBISTInterface, MBISTPipeline}
+import freechips.rocketchip.util.{BundleFieldBase, UIntToOH1}
 import huancun.prefetch._
-import huancun.utils.{FastArbiter, Pipeline, ResetGen, SRAMTemplate, DFTResetSignals}
+import xs.utils.mbist.{MBISTInterface, MBISTPipeline}
+import xs.utils.sram.SRAMTemplate
+import xs.utils._
+import huancun.utils._
 import huancun.noninclusive.MSHR
 import chisel3.util.experimental.BoringUtils
-import huancun.utils.XSPerfAccumulate
 
 trait HasHuanCunParameters {
   val p: Parameters

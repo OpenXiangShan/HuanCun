@@ -7,8 +7,9 @@ import freechips.rocketchip.tilelink.TLMessages
 import huancun.MetaData._
 import huancun._
 import huancun.debug.{DirectoryLogger, TypeId}
-import huancun.mbist.MBISTPipeline
+import xs.utils.mbist.MBISTPipeline
 import huancun.utils._
+import xs.utils.{GTimer, ParallelPriorityMux}
 
 trait HasClientInfo { this: HasHuanCunParameters =>
   // assume all clients have same params

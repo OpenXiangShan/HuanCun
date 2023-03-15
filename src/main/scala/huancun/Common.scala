@@ -21,8 +21,6 @@ package huancun
 
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
-import chisel3.util._
-import freechips.rocketchip.util.{BundleMap, UIntToOH1}
 
 abstract class InnerTask(implicit p: Parameters) extends HuanCunBundle {
   val sourceId = UInt(sourceIdBits.W)
