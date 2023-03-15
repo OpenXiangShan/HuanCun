@@ -333,6 +333,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         })) }
         slice.io.in <> in
         in.b.bits.address := restoreAddress(slice.io.in.b.bits.address, i)
+        in.d.bits.user.apply(PaddrKey) := restoreAddress(slice.io.in.d.bits.user.lift(PaddrKey).getOrElse(0.U), i)
         out <> slice.io.out
         out.a.bits.address := restoreAddress(slice.io.out.a.bits.address, i)
         out.c.bits.address := restoreAddress(slice.io.out.c.bits.address, i)

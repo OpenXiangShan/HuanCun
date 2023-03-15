@@ -89,6 +89,17 @@ case class DirtyField() extends BundleField(DirtyKey) {
   }
 }
 
+
+case object PaddrKey extends ControlKey[UInt]("paddr")
+
+case class PaddrField(width: Int) extends BundleField(PaddrKey) {
+  override def data: UInt = Output(UInt(width.W))
+
+  override def default(x: UInt): Unit = {
+    x := 0.U(width.W)
+  }
+}
+
 case class CacheCtrl
 (
   address: BigInt,
