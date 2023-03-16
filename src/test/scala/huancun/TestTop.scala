@@ -2,7 +2,7 @@ package huancun
 
 import chisel3._
 import chisel3.util._
-import utility.{TLClientsMerger, ChiselDB}
+import utility.{TLClientsMerger, ChiselDB, FileRegisters}
 import huancun.debug._
 import chipsalliance.rocketchip.config._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
@@ -409,13 +409,9 @@ object TestTop_L2 extends App with HasRocketChipStageUtils {
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
-  ChiselDB.addToElaborationArtefacts
-  ElaborationArtefacts.files.foreach{
-    case (extension, contents) =>
-      val prefix = extension match {
-        case "h" | "cpp" => "chisel_db"
-      }
-      writeOutputFile("./build", s"$prefix.${extension}", contents())
+  ChiselDB.addToFileRegisters
+  FileRegisters.files.foreach{ case (filename, contents) =>
+    writeOutputFile("./build", filename, contents())
   }
 }
 
@@ -433,13 +429,9 @@ object TestTop_L2_Standalone extends App with HasRocketChipStageUtils {
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
-  ChiselDB.addToElaborationArtefacts
-  ElaborationArtefacts.files.foreach{
-    case (extension, contents) =>
-      val prefix = extension match {
-        case "h" | "cpp" => "chisel_db"
-      }
-      writeOutputFile("./build", s"$prefix.${extension}", contents())
+  ChiselDB.addToFileRegisters
+  FileRegisters.files.foreach{ case (filename, contents) =>
+    writeOutputFile("./build", filename, contents())
   }
 }
 
@@ -457,13 +449,9 @@ object TestTop_L2L3 extends App with HasRocketChipStageUtils {
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
-  ChiselDB.addToElaborationArtefacts
-  ElaborationArtefacts.files.foreach{
-    case (extension, contents) =>
-      val prefix = extension match {
-        case "h" | "cpp" => "chisel_db"
-      }
-      writeOutputFile("./build", s"$prefix.${extension}", contents())
+  ChiselDB.addToFileRegisters
+  FileRegisters.files.foreach{ case (filename, contents) =>
+    writeOutputFile("./build", filename, contents())
   }
 }
 
@@ -480,12 +468,8 @@ object TestTop_FullSys extends App with HasRocketChipStageUtils {
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
   ))
-  ChiselDB.addToElaborationArtefacts
-  ElaborationArtefacts.files.foreach{
-    case (extension, contents) =>
-      val prefix = extension match {
-        case "h" | "cpp" => "chisel_db"
-      }
-      writeOutputFile("./build", s"$prefix.${extension}", contents())
+  ChiselDB.addToFileRegisters
+  FileRegisters.files.foreach{ case (filename, contents) =>
+    writeOutputFile("./build", filename, contents())
   }
 }
