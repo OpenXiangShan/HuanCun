@@ -410,9 +410,7 @@ object TestTop_L2 extends App with HasRocketChipStageUtils {
     ChiselGeneratorAnnotation(() => top.module)
   ))
   ChiselDB.addToFileRegisters
-  FileRegisters.files.foreach{ case (filename, contents) =>
-    writeOutputFile("./build", filename, contents())
-  }
+  FileRegisters.write(fileDir = "./build")
 }
 
 object TestTop_L2_Standalone extends App with HasRocketChipStageUtils {
@@ -430,9 +428,7 @@ object TestTop_L2_Standalone extends App with HasRocketChipStageUtils {
     ChiselGeneratorAnnotation(() => top.module)
   ))
   ChiselDB.addToFileRegisters
-  FileRegisters.files.foreach{ case (filename, contents) =>
-    writeOutputFile("./build", filename, contents())
-  }
+  FileRegisters.write(fileDir = "./build")
 }
 
 object TestTop_L2L3 extends App with HasRocketChipStageUtils {
@@ -450,9 +446,7 @@ object TestTop_L2L3 extends App with HasRocketChipStageUtils {
     ChiselGeneratorAnnotation(() => top.module)
   ))
   ChiselDB.addToFileRegisters
-  FileRegisters.files.foreach{ case (filename, contents) =>
-    writeOutputFile("./build", filename, contents())
-  }
+  FileRegisters.write(fileDir = "./build")
 }
 
 object TestTop_FullSys extends App with HasRocketChipStageUtils {
@@ -469,7 +463,5 @@ object TestTop_FullSys extends App with HasRocketChipStageUtils {
     ChiselGeneratorAnnotation(() => top.module)
   ))
   ChiselDB.addToFileRegisters
-  FileRegisters.files.foreach{ case (filename, contents) =>
-    writeOutputFile("./build", filename, contents())
-  }
+  FileRegisters.write(fileDir = "./build")
 }
