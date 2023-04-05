@@ -137,6 +137,8 @@ case class HCCacheParameters
   //for lvna use
   LvnaEnable: Boolean = false,
   dsidWidth: Int = 5,
+  LvnaCtrlEnable: Boolean = false,
+  belongCoreId: Int = 0,
   sramClkDivBy2: Boolean = false,
   sramDepthDiv: Int = 1,
   simulation: Boolean = false,

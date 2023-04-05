@@ -82,6 +82,7 @@ class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
   val size = UInt(msgSizeBits.W)
   val needData = Bool()
   val putData = Bool()
+  //for lvna
   val dsid = if (hasDsid) Some(UInt(dsidWidth.W)) else None
 }
 class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
@@ -92,6 +93,7 @@ class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
   val source = UInt(mshrBits.W)
   val way = UInt(wayBits.W)
   val dirty = Bool()
+  //for lvna
   val dsid = if (hasDsid) Some(UInt(dsidWidth.W)) else None
 }
 class SourceEReq(implicit p: Parameters) extends HuanCunBundle {

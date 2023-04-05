@@ -41,6 +41,7 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val source = UInt(sourceIdBits.W)
   val wayMode = Bool()
   val way = UInt(log2Ceil(maxWays).W)
+  val dsid = if (hasDsid) Some(UInt(dsidWidth.W)) else None
 }
 
 abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
@@ -50,6 +51,7 @@ abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrit
   val result:  Valid[T_RESULT]
   val dirWReq: DecoupledIO[T_DIR_W]
   val tagWReq:  DecoupledIO[T_TAG_W]
+  val waymaskSetReq: Option[DecoupledIO[WaymaskSetReq]]
 }
 
 abstract class BaseDirectory[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
@@ -66,12 +68,17 @@ class SubDirectory[T <: Data](
   dir_init_fn: () => T,
   dir_hit_fn: T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
-  replacement: String)(implicit p: Parameters)
+  replacement: String,
+  invalid_way_sel_mask: Option[(Seq[T], UInt, UInt) => (Bool, UInt)] = None
+ )(implicit p: Parameters)
     extends MultiIOModule {
 
   val setBits = log2Ceil(sets)
   val wayBits = log2Ceil(ways)
   val dir_init = dir_init_fn()
+
+  val hasWaymask = invalid_way_sel_mask.isDefined
+  val dsidWidth = p(HCCacheParamsKey).dsidWidth
 
   val io = IO(new Bundle() {
     val read = Flipped(DecoupledIO(new Bundle() {
@@ -80,6 +87,7 @@ class SubDirectory[T <: Data](
       val replacerInfo = new ReplacerInfo()
       val wayMode = Bool()
       val way = UInt(wayBits.W)
+      val dsid = if (hasWaymask) Some(UInt(dsidWidth.W)) else None
     }))
     val resp = ValidIO(new Bundle() {
       val hit = Bool()
@@ -98,6 +106,10 @@ class SubDirectory[T <: Data](
       val way = UInt(wayBits.W)
       val dir = dir_init.cloneType
     }))
+    val waymask_r = if (hasWaymask) Some(new Bundle() {
+      val query_dsid = Output(UInt(dsidWidth.W))
+      val get_waymask = Input(UInt(ways.W))
+    }) else None
   })
 
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
@@ -169,8 +181,14 @@ class SubDirectory[T <: Data](
   val way_s1 = Wire(UInt(wayBits.W))
 
   // lvna: add waymask control here
-  val waymask = Wire(UInt(ways.W))
-  waymask := 0.U
+//  val waymask = Wire(UInt(ways.W))
+//  waymask := ((1L << ways) - 1).U
+  val waymask = WireInit(((1L << ways) - 1).U(ways.W))
+  if (hasWaymask) {
+    assert(replacement == "srrip")
+    io.waymask_r.get.query_dsid := reqReg.dsid.get
+    waymask := io.waymask_r.get.get_waymask
+  }
 
   val repl = ReplacementPolicy.fromString(replacement, ways)
   val repl_state = if(replacement == "random"){
@@ -210,9 +228,13 @@ class SubDirectory[T <: Data](
   val metaValidVec = metas.map(dir_hit_fn)
   val hitVec = tagMatchVec.zip(metaValidVec).map(x => x._1 && x._2)
   val hitWay = OHToUInt(hitVec)
-  val replaceWay = if(replacement == "srrip"){ repl.get_replace_way(repl_state,waymask) }
+  val replaceWay = if(hasWaymask && replacement == "srrip"){ repl.get_replace_way(repl_state,waymask) }
                    else { repl.get_replace_way(repl_state) }
-  val (inv, invalidWay) = invalid_way_sel(metas, replaceWay)
+  val (inv, invalidWay) = if(hasWaymask) {
+    invalid_way_sel_mask.get(metas, replaceWay, waymask)
+  } else {
+    invalid_way_sel(metas, replaceWay)
+  }
   val chosenWay = Mux(inv, invalidWay, replaceWay)
 
   /* stage 0: io.read.fire
@@ -282,11 +304,13 @@ abstract class SubDirectoryDoUpdate[T <: Data](
   dir_init_fn: () => T,
   dir_hit_fn:  T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
-  replacement: String)(implicit p: Parameters)
+  replacement: String,
+  invalid_way_sel_mask: Option[(Seq[T], UInt, UInt) => (Bool, UInt)] = None
+  )(implicit p: Parameters)
     extends SubDirectory[T](
       wports, sets, ways, tagBits,
       dir_init_fn, dir_hit_fn, invalid_way_sel,
-      replacement
+      replacement, invalid_way_sel_mask
     ) with HasUpdate {
 
   val update = doUpdate(reqReg.replacerInfo)

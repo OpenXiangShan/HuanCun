@@ -37,6 +37,7 @@ trait HasHuanCunParameters {
     else cacheParams.clientCaches.head.needResolveAlias
   val hasDsid = cacheParams.LvnaEnable
   val dsidWidth = cacheParams.dsidWidth
+  val hasLvnaCtrl = cacheParams.LvnaCtrlEnable
 
   val blockBytes = cacheParams.blockBytes
   val beatBytes = cacheParams.channelBytes.d.get
@@ -237,6 +238,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
+      val lvnaCtrl = if (hasLvnaCtrl) Some(new LvnaCtrlIO) else None
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -265,6 +267,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
     print_bundle_fields(node.in.head._2.bundle.requestFields, "usr")
     print_bundle_fields(node.in.head._2.bundle.echoFields, "echo")
+    print_bundle_fields(node.out.head._2.bundle.requestFields, "out-usr")
+    print_bundle_fields(node.out.head._2.bundle.echoFields, "out-echo")
 
     val pftParams: Parameters = p.alterPartial {
       case EdgeInKey => node.in.head._2
@@ -395,6 +399,16 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       slices.foreach(_.io.ctl_req.valid := false.B)
       slices.foreach(_.io.ctl_resp.ready := false.B)
       ecc_arb.io.out.ready := true.B
+    }
+    if (hasLvnaCtrl){
+      val lvna_ctrl = Module(new HuancunLvnaCtrl(slices.size))
+      lvna_ctrl.io.fromCP.waymaskSetReq <> io.lvnaCtrl.get.waymaskSetReq
+      slices.zipWithIndex.foreach {
+        case (s, i) =>
+          val wReq = Pipeline.pipeTo(s.io.lvna_req.get.broadcastWaymask,
+            depth = 2, pipe = false, name = Some(s"lvna_bwaymask_req_buffer_$i"))
+          wReq <> lvna_ctrl.io.toSlicesReq(i).broadcastWaymask
+      }
     }
     node.edges.in.headOption.foreach { n =>
       n.client.clients.zipWithIndex.foreach {

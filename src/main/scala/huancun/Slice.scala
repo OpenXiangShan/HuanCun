@@ -36,6 +36,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
+    val lvna_req = if (hasLvnaCtrl) Some(Flipped(new LvnaSliceReq)) else None
   })
   println(s"clientBits: $clientBits")
 
@@ -378,6 +379,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     c.io.dir_result.valid := directory.io.result.valid && directory.io.result.bits.idOH(1, 0) === "b11".U
     c.io.dir_result.bits := directory.io.result.bits
   })
+  if (hasLvnaCtrl){
+    directory.io.waymaskSetReq.get <> io.lvna_req.get.broadcastWaymask
+  }
 
   // Send tasks
 
@@ -636,7 +640,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     mshrReq.bits.dirty := false.B
     mshrReq.bits.needProbeAckData.foreach(_ := false.B)
     if (hasDsid) {
-      mshrReq.bits.dsid.get := 0xFFFF.U
+      mshrReq.bits.dsid.get := (1 << (dsidWidth - 1 )).U | cacheParams.belongCoreId.U
     }
     pftReq.ready := mshrReq.ready
     mshrReq

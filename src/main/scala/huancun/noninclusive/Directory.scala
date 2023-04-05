@@ -115,6 +115,7 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Sel
   val tagWReq = Flipped(DecoupledIO(new SelfTagWrite))
   val clientDirWReq = Flipped(DecoupledIO(new ClientDirWrite))
   val clientTagWreq = Flipped(DecoupledIO(new ClientTagWrite))
+  val waymaskSetReq = if (hasLvnaCtrl) Some(Flipped(DecoupledIO(new WaymaskSetReq))) else None
 }
 
 class Directory(implicit p: Parameters)
@@ -213,6 +214,28 @@ class Directory(implicit p: Parameters)
       Mux(has_invalid_way, invalid_way, Mux(repl_way_is_trunk, repl, trunk_way))
       )
   }
+  def self_invalid_way_sel_waymask(metaVec: Seq[SelfDirEntry], repl: UInt, waymask: UInt): (Bool, UInt) = {
+    // 1.try to find a invalid way
+    val waymaskBits = waymask.asBools
+    val invalid_vec = (metaVec zip waymaskBits).map{ case (s,w) =>
+      s.state === MetaData.INVALID && w
+    }
+    val has_invalid_way = Cat(invalid_vec).orR()
+    val invalid_way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
+    // 2.if there is no invalid way, then try to find a TRUNK to replace
+    // (we are non-inclusive, if we are trunk, there must be a TIP in our client)
+    val trunk_vec = (metaVec zip waymaskBits).map{ case (s,w) =>
+      s.state === MetaData.TRUNK && w
+    }
+    val has_trunk_way = Cat(trunk_vec).orR()
+    val trunk_way = ParallelPriorityMux(trunk_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
+    // we assert repl way must in waymask range
+    val repl_way_is_trunk = VecInit(metaVec)(repl).state === MetaData.TRUNK
+    (
+      has_invalid_way || has_trunk_way,
+      Mux(has_invalid_way, invalid_way, Mux(repl_way_is_trunk, repl, trunk_way))
+    )
+  }
   val selfDir = Module(
     new SubDirectoryDoUpdate[SelfDirEntry](
       wports = mshrsAll,
@@ -227,9 +250,22 @@ class Directory(implicit p: Parameters)
       },
       dir_hit_fn = selfHitFn,
       self_invalid_way_sel,
-      replacement = cacheParams.replacement
+      replacement = cacheParams.replacement,
+      invalid_way_sel_mask = if (hasLvnaCtrl) Some(self_invalid_way_sel_waymask) else None
     ) with NonInclusiveCacheReplacerUpdate
   )
+
+  if (hasLvnaCtrl) {
+    val waymasks = RegInit(VecInit(Seq.fill(1 << dsidWidth) {
+      ((1L << cacheParams.ways) - 1).U
+    }))
+    when(io.waymaskSetReq.get.fire) {
+      waymasks(io.waymaskSetReq.get.bits.dsid) := io.waymaskSetReq.get.bits.waymask
+    }
+    io.waymaskSetReq.get.ready := true.B
+    val query_dsid = selfDir.io.waymask_r.get.query_dsid
+    selfDir.io.waymask_r.get.get_waymask := waymasks(query_dsid)
+  }
 
   def addrConnect(lset: UInt, ltag: UInt, rset: UInt, rtag: UInt) = {
     assert(lset.getWidth + ltag.getWidth == rset.getWidth + rtag.getWidth)
@@ -248,6 +284,9 @@ class Directory(implicit p: Parameters)
     p.bits.way := req.bits.way
     when(req.fire() && req.bits.wayMode){
       assert(req.bits.idOH(1, 0) === "b11".U)
+    }
+    if (p.bits.dsid.isDefined){
+      p.bits.dsid.get := req.bits.dsid.get
     }
   }
 

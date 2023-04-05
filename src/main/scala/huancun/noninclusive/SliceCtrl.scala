@@ -113,6 +113,8 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.dir_read.bits.replacerInfo := DontCare
   io.dir_read.bits.source := DontCare
 
+  io.dir_read.bits.dsid.foreach(_ := 0xff.U)
+
   when(io.dir_result.fire()){
     switch(req_reg.cmd){
       is(CacheCMD.CMD_R_S_DIR){
@@ -228,6 +230,8 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.cmo_req.bits.fromProbeHelper := false.B
   io.cmo_req.bits.fromCmoHelper := true.B
   io.cmo_req.bits.needProbeAckData.foreach(_ := false.B)
+
+  io.cmo_req.bits.dsid.foreach(_ := 0xff.U)
 
   io.cmo_req.valid := s_cmo
   when(io.cmo_req.fire()){

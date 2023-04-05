@@ -101,7 +101,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   queue.io.enq.bits.user.lift(PreferCacheKey).foreach(_ := true.B)
   queue.io.enq.bits.echo.lift(DirtyKey).foreach(_ := pipeOut.bits.task.dirty)
   if (hasDsid) {
-    queue.io.enq.bits.echo.lift(DsidKey).foreach(_ := pipeOut.bits.task.dsid.get)
+    queue.io.enq.bits.user.lift(DsidKey).foreach(_ := pipeOut.bits.task.dsid.get)
   }
 
   io.c <> queue.io.deq

@@ -40,6 +40,7 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Dir
   val result = ValidIO(new DirResult)
   val dirWReq = Flipped(DecoupledIO(new DirWrite))
   val tagWReq = Flipped(DecoupledIO(new TagWrite))
+  val waymaskSetReq = if (hasLvnaCtrl) Some(Flipped(DecoupledIO(new WaymaskSetReq))) else None
 }
 
 class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite] {
