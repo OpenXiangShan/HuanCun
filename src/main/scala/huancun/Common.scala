@@ -152,12 +152,12 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val needProbeAckData = if (cacheParams.inclusive) None else Some(Bool())
 }
 
-class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
+class MSHRStatus(implicit p: Parameters) extends HuanCunBundle with HasChannelBits {
   val set = UInt(setBits.W)
   val tag = UInt(tagBits.W)
   val way = UInt(wayBits.W)
   val way_reg = UInt(wayBits.W)
-  val reload = Bool()
+  val is_miss = Bool()
   val blockB, blockC = Bool()
   val nestB, nestC = Bool()
   /**

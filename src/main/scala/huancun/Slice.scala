@@ -33,6 +33,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
     val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
+    val ms_status = topDownOpt.map(_ => Vec(mshrsAll, ValidIO(new MSHRStatus)))
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
@@ -167,7 +168,13 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io.alloc := mshrAlloc.io.alloc(i)
       mshrAlloc.io.status(i) := mshr.io.status
   }
-
+  topDownOpt.foreach (
+   _ =>
+    io.ms_status.get.zip(ms).foreach {
+      case (out, mshr) =>
+        out := mshr.io.status
+    }
+  )
   val c_mshr = ms.last
   val bc_mshr = ms.init.last
   val abc_mshr = ms.init.init

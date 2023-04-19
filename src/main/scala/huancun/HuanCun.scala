@@ -36,6 +36,7 @@ trait HasHuanCunParameters {
   val p: Parameters
   val cacheParams = p(HCCacheParamsKey)
   val prefetchOpt = cacheParams.prefetch
+  val topDownOpt  = if(cacheParams.elaboratedTopDown) Some(true) else None
   val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
   val hasAliasBits = if(cacheParams.clientCaches.isEmpty) false
     else cacheParams.clientCaches.head.needResolveAlias
@@ -234,6 +235,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     case _ => None
   }
 
+  val addrNode = None
+
   lazy val module = new LazyModuleImp(this) {
     val banks = node.in.size
     val io = IO(new Bundle {
@@ -404,6 +407,21 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
           println(s"\t${i} <= ${c.name}")
       }
     }
+
+    val topDown = topDownOpt.map(_ => Module(new TopDownMonitor()(p.alterPartial {
+      case EdgeInKey => node.in.head._2
+      case EdgeOutKey => node.out.head._2
+      case BankBitsKey => bankBits
+    })))
+    topDownOpt.foreach {
+      _ =>
+        topDown.get.io.msStatus.zip(slices).foreach {
+          case (in, s) => in := s.io.ms_status.get
+        }
+        topDown.get.io.cpuAddr.valid := true.B
+        topDown.get.io.cpuAddr.bits  := 0.U
+    }
+
     if (cacheParams.enableTopDown && cacheParams.name == "L2") {
       val stall_l1d_load_miss = WireDefault(0.B)
       BoringUtils.addSink(stall_l1d_load_miss, "stall_l1d_load_miss")

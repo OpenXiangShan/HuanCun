@@ -1455,9 +1455,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   // Status
   io.status.valid := req_valid
+  io.status.bits.channel := req.channel
   io.status.bits.set := req.set
   io.status.bits.tag := req.tag
-  io.status.bits.reload := false.B // TODO
+  io.status.bits.is_miss := !self_meta.hit
   io.status.bits.way := self_meta.way
   io.status.bits.way_reg := meta_reg.self.way  // used to ease timing issue
   io.status.bits.will_grant_data := req.fromA && od.opcode(0) && io.tasks.source_d.bits.useBypass
