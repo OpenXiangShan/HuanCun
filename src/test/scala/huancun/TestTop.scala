@@ -9,8 +9,16 @@ import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import freechips.rocketchip.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
+import chisel3.util.experimental.BoringUtils
 
 import scala.collection.mutable.ArrayBuffer
+
+// XiangShan log / perf ctrl, should be inited in SimTop IO
+// If not needed, just ingore these signals
+class PerfInfoIO extends Bundle {
+  val clean = Input(Bool())
+  val dump = Input(Bool())
+}
 
 class TestTop_L2()(implicit p: Parameters) extends LazyModule {
 
@@ -62,6 +70,14 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
       l2.node :=* xbar
 
   lazy val module = new LazyModuleImp(this){
+    val io = IO(new Bundle(){
+      val perfInfo = new PerfInfoIO
+    })
+    val clean = io.perfInfo.clean
+    val dump = io.perfInfo.dump
+    BoringUtils.addSource(clean, "XSPERF_CLEAN")
+    BoringUtils.addSource(dump, "XSPERF_DUMP")
+
     master_nodes.zipWithIndex.foreach{
       case (node, i) =>
         node.makeIOs()(ValName(s"master_port_$i"))
