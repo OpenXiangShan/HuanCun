@@ -12,9 +12,8 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
     val msStatus = Vec(banks, Vec(mshrsAll, Flipped(ValidIO(new MSHRStatus))))
   })
 
-  val pAddr = Wire(Valid(UInt(36.W))) // TODO: hand written to match PAddrBits in SoC.scala
-  pAddr := DontCare
-  ExcitingUtils.addSink(pAddr, "rob_head_paddr", ExcitingUtils.Perf)
+  val pAddr = WireInit(0.U.asTypeOf(Valid(UInt(36.W)))) // TODO: hand written to match PAddrBits in SoC.scala
+  ExcitingUtils.addSink(pAddr, "rob_head_paddr_0", ExcitingUtils.Perf) // TODO: add core1
 
   /* ====== PART ONE ======
    * Check whether the Addr given by core is a Miss in Cache
@@ -25,8 +24,7 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
         ms =>
           val msBlockAddr = if(bankBits == 0) Cat(ms.bits.tag, ms.bits.set)
                             else Cat(ms.bits.tag, ms.bits.set, i.U(bankBits-1, 0))
-//          val pLineAddr = io.cpuAddr.bits & (~"h3F".U).asUInt
-          val pBlockAddr  = pAddr.bits & (~"h3F".U).asUInt
+          val pBlockAddr  = (pAddr.bits >> 6.U).asUInt
 
           val isCPUReq = ms.valid && ms.bits.fromA && !ms.bits.is_prefetch // TODO: whether we need fromA
           val isMiss   = ms.bits.is_miss
@@ -36,14 +34,11 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
 
   val addrMatch = Cat(addrMatchVec.flatten).orR
 
-//  ExcitingUtils.addSource(addrMatch,
-//    if(cacheParams.name == "L2") "IsL2Miss" else "IsL3Miss",
-//    ExcitingUtils.Perf)
+  val perfName = if(cacheParams.name == "L2") "L2MissMatch" else "L3MissMatch"
 
-  XSPerfAccumulate(cacheParams,
-    if(cacheParams.name == "L2") "L2MissMatch" else "L3MissMatch",
-    addrMatch
-  )
+  XSPerfAccumulate(cacheParams, perfName, addrMatch)
+  ExcitingUtils.addSource(addrMatch, perfName, ExcitingUtils.Perf)
+  ExcitingUtils.addSink(WireDefault(addrMatch), perfName, ExcitingUtils.Perf)
 
   /* ====== PART TWO ======
    * Count the parallel misses, and divide them into CPU/Prefetch
