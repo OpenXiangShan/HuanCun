@@ -37,6 +37,7 @@ trait HasHuanCunParameters {
   val cacheParams = p(HCCacheParamsKey)
   val prefetchOpt = cacheParams.prefetch
   val topDownOpt  = if(cacheParams.elaboratedTopDown) Some(true) else None
+  val hartIds = p(HCCacheParamsKey).hartIds
   val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
   val hasAliasBits = if(cacheParams.clientCaches.isEmpty) false
     else cacheParams.clientCaches.head.needResolveAlias
