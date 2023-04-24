@@ -224,3 +224,7 @@ class PrefetchRecv extends Bundle {
   val addr_valid = Bool()
   val l2_pf_en = Bool()
 }
+
+class L2ToL1Hint(implicit p: Parameters) extends HuanCunBundle {
+  val sourceId = UInt(32.W)    // tilelink sourceID
+}

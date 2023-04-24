@@ -239,6 +239,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
+      val l2_hint = Valid(UInt(32.W))
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -372,6 +373,16 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     ecc_arb.io.in <> VecInit(slices_ecc)
     io.ecc_error.valid := ecc_arb.io.out.fire()
     io.ecc_error.bits := restoreAddressUInt(ecc_arb.io.out.bits.addr, ecc_arb.io.chosen)
+    // dummy l2_hint signal (to be replaced)
+    val l2_hint_cnt = RegInit(0.U(10.W))
+    val (client_oh, client_start) = node.in.head._2.client.clients
+                                  .map(c => {
+                                        (c.sourceId.contains(l2_hint_cnt).asInstanceOf[Bool], c.sourceId.start.U)
+                                      })
+                                  .unzip
+    l2_hint_cnt := l2_hint_cnt + 1.U
+    io.l2_hint.valid := l2_hint_cnt === 100.U
+    io.l2_hint.bits := l2_hint_cnt - Mux1H(client_oh, client_start)
     ctrl_unit.foreach { c =>
       val ctl_reqs = slices.zipWithIndex.map {
         case (s, i) => Pipeline.pipeTo(s.io.ctl_req, depth = 2, pipe = false, name = Some(s"req_buffer_$i"))
