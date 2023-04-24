@@ -191,7 +191,8 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
       }
       val cntEnable =
         !io.status(i).valid && cnt =/= 0.U && cntStart && cnt < 5000.U // Ignore huge cnt during L3 dir reset
-      XSPerfHistogram(cacheParams, "mshr_latency_" + Integer.toString(i, 10), cnt, cntEnable, 0, 300, 10)
+      XSPerfHistogram(cacheParams, "mshr_latency_" + Integer.toString(i, 10), cnt, cntEnable, 0, 300, 10, rStrict = true)
+      XSPerfHistogram(cacheParams, "mshr_latency_" + Integer.toString(i, 10), cnt, cntEnable, 300, 1000, 50, lStrict = true)
       XSPerfMax(cacheParams, "mshr_latency", cnt, cntEnable)
     }
   }
