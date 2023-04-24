@@ -54,6 +54,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
     val pb_beat = Input(new PutBufferBeatEntry)
     // resp when merged putdata is written back
     val resp = ValidIO(new SourceDResp)
+
+    val l1Hint = Decoupled(new L2ToL1Hint)
   })
 
   val d = io.d
@@ -269,6 +271,10 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.resp.bits.sink := s4_req.sinkId
 
   TLArbiter.lowest(edgeIn, io.d, s3_d, s2_d)
+
+  val (first, last, done, count) = edgeIn.count(io.d)
+  io.l1Hint.valid := io.d.fire && io.d.bits.opcode === TLMessages.GrantData && !done
+  io.l1Hint.bits.sourceId := io.d.bits.source
 
   io.sourceD_r_hazard.valid := busy && s1_needData
   io.sourceD_r_hazard.bits.set := s1_req_reg.set

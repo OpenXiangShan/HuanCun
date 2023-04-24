@@ -239,6 +239,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
+      val l2_hint = Valid(UInt(32.W))
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -366,12 +367,26 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         slice
     }
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
+    val l1Hint_arb = Module(new Arbiter(new L2ToL1Hint, slices.size))
     val slices_ecc = slices.zipWithIndex.map {
       case (s, i) => Pipeline(s.io.ctl_ecc, depth = 2, pipe = false, name = Some(s"ecc_buffer_$i"))
     }
     ecc_arb.io.in <> VecInit(slices_ecc)
     io.ecc_error.valid := ecc_arb.io.out.fire()
     io.ecc_error.bits := restoreAddressUInt(ecc_arb.io.out.bits.addr, ecc_arb.io.chosen)
+    // dummy l2_hint signal (to be replaced)
+
+    l1Hint_arb.io.in <> VecInit(slices.map(_.io.l1Hint))
+    val (client_sourceId_match_oh, client_sourceId_start) = node.in.head._2.client.clients
+                                  .map(c => {
+                                        (c.sourceId.contains(l1Hint_arb.io.out.bits.sourceId).asInstanceOf[Bool], c.sourceId.start.U)
+                                      })
+                                  .unzip
+    io.l2_hint.valid := l1Hint_arb.io.out.fire()
+    io.l2_hint.bits := l1Hint_arb.io.out.bits.sourceId - Mux1H(client_sourceId_match_oh, client_sourceId_start)
+    // always ready for grant hint
+    l1Hint_arb.io.out.ready := true.B
+    XSPerfAccumulate(cacheParams, "hint_fire", io.l2_hint.valid)
     ctrl_unit.foreach { c =>
       val ctl_reqs = slices.zipWithIndex.map {
         case (s, i) => Pipeline.pipeTo(s.io.ctl_req, depth = 2, pipe = false, name = Some(s"req_buffer_$i"))

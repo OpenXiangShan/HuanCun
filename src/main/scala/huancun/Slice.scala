@@ -36,6 +36,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
+    val l1Hint = Decoupled(new L2ToL1Hint)
   })
   println(s"clientBits: $clientBits")
 
@@ -118,6 +119,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       sinkC.io.bs_wdata
     )
   } else sinkC.io.bs_wdata)
+
+  sourceD.io.l1Hint <> io.l1Hint
 
 
   val mshrAlloc = Module(new MSHRAlloc)
