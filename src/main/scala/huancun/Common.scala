@@ -224,3 +224,19 @@ class PrefetchRecv extends Bundle {
   val addr_valid = Bool()
   val l2_pf_en = Bool()
 }
+
+// indicates where the memory access request comes from
+// a dupliacte of this is in Xiangshan.package
+object MemReqSource extends Enumeration {
+  val NoWhere = Value("NoWhere")
+
+  val CPUInst = Value("CPUInst")
+  val CPUData = Value("CPUData")
+  val L1InstPrefetch = Value("L1InstPrefetch")
+  val L1DataPrefetch = Value("L1DataPrefetch")
+  val PTW = Value("PTW")
+  val L2Prefetch = Value("L2Prefetch")
+  val ReqSourceCount = Value("ReqSourceCount")
+
+  val reqSourceBits = log2Ceil(ReqSourceCount.id)
+}
