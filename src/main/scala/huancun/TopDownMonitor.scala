@@ -60,4 +60,21 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
   XSPerfHistogram(cacheParams, "parallel_misses_CPU" , PopCount(missVecCPU), true.B, 0, totalMSHRs, 1)
   XSPerfHistogram(cacheParams, "parallel_misses_Pref", PopCount(missVecPref), true.B, 0, totalMSHRs, 1)
   XSPerfHistogram(cacheParams, "parallel_misses_All" , PopCount(missVecCPU)+PopCount(missVecPref), true.B, 0, 32, 1)
+
+  /* ====== PART THREE ======
+ * Distinguish req sources and count num & miss
+ */
+  // TODO: the following comparison have extensive logic
+  for (i <- 0 until MemReqSource.ReqSourceCount.id) {
+    // use will_free to make sure each req is counted only once
+    val sourceMatchVec     = allMSHRMatchVec(s => s.will_free && s.fromA && s.reqSource === i.U)
+    val sourceMatchVecMiss = allMSHRMatchVec(s => s.will_free && s.fromA && s.reqSource === i.U && s.is_miss)
+    XSPerfAccumulate(cacheParams, s"${cacheParams.name}AReqSource_${i}_Total", PopCount(sourceMatchVec))
+    XSPerfAccumulate(cacheParams, s"${cacheParams.name}AReqSource_${i}_Miss",  PopCount(sourceMatchVecMiss))
+  }
+
+  // or we can io.msStatus.flatten.map(_.reqSource) to get all reqSource
+  // then io.msStatus.flatten.map(_.valid && _.will_free) as enable
+  // finally use XSPerfHistogram
+
 }
