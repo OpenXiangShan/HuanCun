@@ -123,7 +123,7 @@ case class HCCacheParameters
   dirReg: Boolean = true,
   enableDebug: Boolean = false,
   enablePerf: Boolean = true,
-  hartIds: Seq[Int] = Seq(0),
+  hartIds: Seq[Int] = Seq[Int](),
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   prefetch: Option[PrefetchParameters] = None,
   elaboratedTopDown: Boolean = true,
