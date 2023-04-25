@@ -81,6 +81,7 @@ class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
   val size = UInt(msgSizeBits.W)
   val needData = Bool()
   val putData = Bool()
+  val reqSource = UInt(MemReqSource.reqSourceBits.W)
 }
 class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
   val opcode = UInt(3.W)
@@ -150,6 +151,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val fromProbeHelper = Bool()
   val fromCmoHelper = Bool()
   val needProbeAckData = if (cacheParams.inclusive) None else Some(Bool())
+  val reqSource = UInt(MemReqSource.reqSourceBits.W)
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle with HasChannelBits {
@@ -178,6 +180,7 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle with HasChannelBi
   val will_free = Bool()
   // for debug usage now
   val is_prefetch = Bool()
+  val reqSource = UInt(MemReqSource.reqSourceBits.W)
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {

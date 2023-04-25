@@ -57,6 +57,7 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_acquire.bits.data := DontCare
   a_acquire.bits.corrupt := false.B
   a_acquire.bits.user.lift(PreferCacheKey).foreach(_ := false.B)
+  a_acquire.bits.user.lift(ReqSourceKey).foreach(_ := io.task.bits.reqSource)
   a_acquire.bits.echo.lift(DirtyKey).foreach(_ := true.B)
   a_acquire.valid := io.task.valid && !io.task.bits.putData
 

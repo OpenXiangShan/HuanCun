@@ -1034,6 +1034,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.putData := bypassPut_latch
   oa.bufIdx := req.bufIdx
   oa.size := req.size
+  oa.reqSource := req.reqSource
 
   ob.tag := req.tag
   ob.set := req.set
@@ -1465,6 +1466,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.will_save_data := req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
   io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)
   io.status.bits.blockB := true.B
+  io.status.bits.reqSource := req.reqSource
+
   // B nest A
   // if we are waitting for probeack,
   // we should not let B req in (avoid multi-probe to client)

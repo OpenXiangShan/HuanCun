@@ -8,7 +8,6 @@ import huancun.utils.{XSPerfAccumulate, XSPerfHistogram}
 class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
   val banks = 1 << bankBits
   val io = IO(new Bundle() {
-    val cpuAddr  = Flipped(ValidIO(UInt(39.W))) // CPU using ExcitingUtils to give addr, this deprecated
     val msStatus = Vec(banks, Vec(mshrsAll, Flipped(ValidIO(new MSHRStatus))))
   })
 

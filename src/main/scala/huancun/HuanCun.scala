@@ -419,8 +419,6 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         topDown.get.io.msStatus.zip(slices).foreach {
           case (in, s) => in := s.io.ms_status.get
         }
-        topDown.get.io.cpuAddr.valid := true.B
-        topDown.get.io.cpuAddr.bits  := 0.U
     }
   }
 
