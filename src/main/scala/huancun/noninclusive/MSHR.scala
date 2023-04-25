@@ -1034,7 +1034,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.putData := bypassPut_latch
   oa.bufIdx := req.bufIdx
   oa.size := req.size
-  oa.reqSource := req.reqSource
+  oa.reqSource := Mux(req.opcode === Hint, MemReqSource.L2Prefetch.id.U, req.reqSource)
 
   ob.tag := req.tag
   ob.set := req.set
