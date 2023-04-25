@@ -75,6 +75,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.fromProbeHelper := false.B
   io.alloc.bits.fromCmoHelper := false.B
   io.alloc.bits.needProbeAckData.foreach(_ := false.B)
+  io.alloc.bits.reqSource := MemReqSource.NoWhere.id.U // Ignore
   assert(!io.alloc.fire() || c.fire() && first, "alloc fire, but c channel not fire!")
 
   io.resp.valid := c.valid && (!noSpace || !first) && isResp

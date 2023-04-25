@@ -4,7 +4,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink.{TLMessages, TLPermissions}
-import huancun.{HuanCunModule, MSHRRequest, MetaData}
+import huancun.{HuanCunModule, MSHRRequest, MemReqSource, MetaData}
 import huancun.utils.XSPerfAccumulate
 
 class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
@@ -48,6 +48,7 @@ class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
   req.dirty := false.B // ignored
   req.needProbeAckData.foreach(_ := false.B)
   req.fromCmoHelper := false.B
+  req.reqSource := MemReqSource.NoWhere.id.U
 
   val client_dir = dir.clients.states(req_client)
   val dir_conflict = !dir.clients.tag_match && Cat(
