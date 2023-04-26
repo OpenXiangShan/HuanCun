@@ -166,6 +166,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.release.bits.size := offsetBits.U
   io.release.bits.corrupt := false.B
   io.release.bits.user.lift(PreferCacheKey).foreach(_ := true.B)
+  io.release.bits.user.lift(ReqSourceKey).foreach(_ := MemReqSource.NoWhere.id.U)
   io.release.bits.echo.lift(DirtyKey).foreach(_ := task_r.dirty)
 
   val w_fire_save = io.bs_waddr.fire() && !io.bs_waddr.bits.noop

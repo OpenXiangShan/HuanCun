@@ -106,6 +106,7 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_put.bits.data := s1_pb_latch.data
   a_put.bits.corrupt := false.B
   a_put.bits.user.lift(PreferCacheKey).foreach(_ := false.B)
+  a_put.bits.user.lift(ReqSourceKey).foreach(_ := MemReqSource.NoWhere.id.U) //TODO: where does Put comes from
   a_put.bits.echo.lift(DirtyKey).foreach(_ := true.B)
   a_put.valid := s1_full
 
