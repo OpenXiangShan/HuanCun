@@ -3,11 +3,13 @@ package huancun
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import huancun.noninclusive.DirResult
 import huancun.utils.{XSPerfAccumulate, XSPerfHistogram}
 
 class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
   val banks = 1 << bankBits
   val io = IO(new Bundle() {
+    val dirResult = Vec(banks, Flipped(ValidIO(new DirResult)))
     val msStatus = Vec(banks, Vec(mshrsAll, Flipped(ValidIO(new MSHRStatus))))
   })
 
@@ -64,17 +66,25 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
   /* ====== PART THREE ======
  * Distinguish req sources and count num & miss
  */
-  // TODO: the following comparison have extensive logic
-  for (i <- 0 until MemReqSource.ReqSourceCount.id) {
-    // use will_free to make sure each req is counted only once
-    val sourceMatchVec     = allMSHRMatchVec(s => s.will_free && s.fromA && s.reqSource === i.U)
-    val sourceMatchVecMiss = allMSHRMatchVec(s => s.will_free && s.fromA && s.reqSource === i.U && s.is_miss)
-    XSPerfAccumulate(cacheParams, s"${cacheParams.name}AReqSource_${i}_Total", PopCount(sourceMatchVec))
-    XSPerfAccumulate(cacheParams, s"${cacheParams.name}AReqSource_${i}_Miss",  PopCount(sourceMatchVecMiss))
+  // count releases
+  val releaseCnt = allMSHRMatchVec(s => s.will_free && s.fromC)
+  XSPerfAccumulate(cacheParams, s"${cacheParams.name}C_ReleaseCnt_Total", PopCount(releaseCnt))
+
+  // we can follow the counting logic of Directory to count
+  // add reqSource in replacerInfo, set in MSHRAlloc, passes in Directory and get the result in DirResult
+  // dirResult.valid is given 1 cycle ahead of bits, and we count A req only
+  def dirResultMatchVec(cond: DirResult => Bool): IndexedSeq[Bool] = {
+    io.dirResult.map {
+      r => RegNext(r.valid, false.B) && r.bits.replacerInfo.channel === 1.U && cond(r.bits)
+    }
   }
 
-  // or we can io.msStatus.flatten.map(_.reqSource) to get all reqSource
-  // then io.msStatus.flatten.map(_.valid && _.will_free) as enable
-  // finally use XSPerfHistogram
+  for (i <- 0 until MemReqSource.ReqSourceCount.id) {
+    val sourceMatchVec = dirResultMatchVec(r => r.replacerInfo.reqSource === i.U)
+    val sourceMatchVecMiss = dirResultMatchVec(r => r.replacerInfo.reqSource === i.U && !r.self.hit)
 
+    val sourceName = MemReqSource.apply(i).toString
+    XSPerfAccumulate(cacheParams, s"E2_${cacheParams.name}AReqSource_${sourceName}_Total", PopCount(sourceMatchVec))
+    XSPerfAccumulate(cacheParams, s"E2_${cacheParams.name}AReqSource_${sourceName}_Miss", PopCount(sourceMatchVecMiss))
+  }
 }

@@ -415,10 +415,14 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case BankBitsKey => bankBits
     })))
     topDownOpt.foreach {
-      _ =>
+      _ => {
         topDown.get.io.msStatus.zip(slices).foreach {
           case (in, s) => in := s.io.ms_status.get
         }
+        topDown.get.io.dirResult.zip(slices).foreach {
+          case (res, s) => res := s.io.dir_result.get
+        }
+      }
     }
   }
 
