@@ -30,9 +30,8 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
                               else Cat(ms.bits.tag, ms.bits.set, i.U(bankBits-1, 0))
             val pBlockAddr  = (pAddr.bits >> 6.U).asUInt
 
-            val isCPUReq = ms.valid && ms.bits.fromA && !ms.bits.is_prefetch // TODO: whether we need fromA
-            val isMiss   = ms.bits.is_miss
-            pAddr.valid && msBlockAddr === pBlockAddr && isCPUReq && isMiss
+            val isMiss   = ms.valid && ms.bits.is_miss
+            pAddr.valid && msBlockAddr === pBlockAddr && isMiss
         }
     }
 
