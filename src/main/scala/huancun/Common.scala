@@ -235,7 +235,9 @@ object MemReqSource extends Enumeration {
   val NoWhere = Value("NoWhere")
 
   val CPUInst = Value("CPUInst")
-  val CPUData = Value("CPUData")
+  val CPULoadData = Value("CPULoadData")
+  val CPUStoreData = Value("CPUStoreData")
+  val CPUAtomicData = Value("CPUAtomicData")
   val L1InstPrefetch = Value("L1InstPrefetch")
   val L1DataPrefetch = Value("L1DataPrefetch")
   val PTW = Value("PTW")
