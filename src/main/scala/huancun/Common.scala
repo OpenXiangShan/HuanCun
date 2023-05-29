@@ -230,7 +230,7 @@ class PrefetchRecv extends Bundle {
 }
 
 // indicates where the memory access request comes from
-// a dupliacte of this is in Xiangshan.package
+// a dupliacte of this is in Xiangshan.package and CoupledL2.common
 object MemReqSource extends Enumeration {
   val NoWhere = Value("NoWhere")
 
