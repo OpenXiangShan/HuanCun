@@ -27,6 +27,7 @@ import freechips.rocketchip.tilelink.{TLBufferParams, TLChannelBeatBytes, TLEdge
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, BundleKeyBase, ControlKey}
 import huancun.prefetch.PrefetchParameters
 import MemReqSource._
+import utility.ReqSourceKey
 
 case object HCCacheParamsKey extends Field[HCCacheParameters](HCCacheParameters())
 
@@ -63,17 +64,6 @@ case class AliasField(width: Int) extends BundleField(AliasKey) {
 
   override def default(x: UInt): Unit = {
     x := 0.U(width.W)
-  }
-}
-
-// Used to indicate the source of the req (L1I/L1D/PTW)
-case object ReqSourceKey extends ControlKey[UInt]("reqSource")
-
-case class ReqSourceField() extends BundleField(ReqSourceKey) {
-  override def data: UInt = Output(UInt(reqSourceBits.W))
-
-  override def default(x: UInt): Unit = {
-    x := NoWhere.id.U(reqSourceBits.W)
   }
 }
 
