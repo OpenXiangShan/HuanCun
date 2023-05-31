@@ -26,6 +26,8 @@ import freechips.rocketchip.diplomacy.BufferParams
 import freechips.rocketchip.tilelink.{TLBufferParams, TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, BundleKeyBase, ControlKey}
 import huancun.prefetch.PrefetchParameters
+import MemReqSource._
+import utility.ReqSourceKey
 
 case object HCCacheParamsKey extends Field[HCCacheParameters](HCCacheParameters())
 
@@ -110,10 +112,11 @@ case class HCCacheParameters
   dirReadPorts: Int = 1,
   dirReg: Boolean = true,
   enableDebug: Boolean = false,
-  enablePerf: Boolean = false,
-  enableTopDown: Boolean = false,
+  enablePerf: Boolean = true,
+  hartIds: Seq[Int] = Seq[Int](),
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   prefetch: Option[PrefetchParameters] = None,
+  elaboratedTopDown: Boolean = true,
   clientCaches: Seq[CacheParameters] = Nil,
   inclusive: Boolean = true,
   alwaysReleaseData: Boolean = false,
@@ -122,7 +125,7 @@ case class HCCacheParameters
   echoField: Seq[BundleFieldBase] = Nil,
   reqField: Seq[BundleFieldBase] = Nil, // master
   respKey: Seq[BundleKeyBase] = Nil,
-  reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey), // slave
+  reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey, ReqSourceKey), // slave
   respField: Seq[BundleFieldBase] = Nil,
   ctrl: Option[CacheCtrl] = None,
   sramClkDivBy2: Boolean = false,

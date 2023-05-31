@@ -582,7 +582,6 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   io.status.valid := req_valid
   io.status.bits.set := req.set
   io.status.bits.tag := req.tag
-  io.status.bits.reload := false.B // TODO
   io.status.bits.way := meta.way
   io.status.bits.way_reg := meta_reg.way
   io.status.bits.will_grant_data := false.B //req.fromA && od.opcode(0)

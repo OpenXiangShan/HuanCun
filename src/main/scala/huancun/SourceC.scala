@@ -23,6 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
+import utility.ReqSourceKey
 
 class SourceCPipe(implicit p: Parameters) extends HuanCunBundle {
   val task = new SourceCReq
@@ -99,6 +100,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   queue.io.enq.bits.data := io.bs_rdata.data
   queue.io.enq.bits.corrupt := io.bs_rdata.corrupt
   queue.io.enq.bits.user.lift(PreferCacheKey).foreach(_ := true.B)
+  queue.io.enq.bits.user.lift(ReqSourceKey).foreach(_ := MemReqSource.NoWhere.id.U)
   queue.io.enq.bits.echo.lift(DirtyKey).foreach(_ := pipeOut.bits.task.dirty)
 
   io.c <> queue.io.deq

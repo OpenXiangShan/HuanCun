@@ -36,6 +36,8 @@ trait HasHuanCunParameters {
   val p: Parameters
   val cacheParams = p(HCCacheParamsKey)
   val prefetchOpt = cacheParams.prefetch
+  val topDownOpt  = if(cacheParams.elaboratedTopDown) Some(true) else None
+  val hartIds = p(HCCacheParamsKey).hartIds
   val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
   val hasAliasBits = if(cacheParams.clientCaches.isEmpty) false
     else cacheParams.clientCaches.head.needResolveAlias
@@ -234,6 +236,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     case _ => None
   }
 
+  val addrNode = None
+
   lazy val module = new LazyModuleImp(this) {
     val banks = node.in.size
     val io = IO(new Bundle {
@@ -404,51 +408,21 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
           println(s"\t${i} <= ${c.name}")
       }
     }
-    if (cacheParams.enableTopDown && cacheParams.name == "L2") {
-      val stall_l1d_load_miss = WireDefault(0.B)
-      BoringUtils.addSink(stall_l1d_load_miss, "stall_l1d_load_miss")
-      val stall_l2_miss = slices.map(
-        _.ms.map(_.asInstanceOf[MSHR]).map(y =>
-          y.edgeIn.master.masters.map(z =>
-            if (z.name == "dcache") {
-              val req = 0.U.asTypeOf(y.req)
-              BoringUtils.bore(y.req, Seq(req))
-              val is_load_from_A = z.sourceId.contains(req.source) && req.fromA && !req.isPrefetch.getOrElse(0.B) && (req.opcode === AcquireBlock || req.opcode === Get)
-              val req_valid = WireDefault(0.B)
-              BoringUtils.bore(y.req_valid, Seq(req_valid))
-              val read_miss = WireDefault(0.B)
-              BoringUtils.bore(y.read_miss, Seq(read_miss))
-              val stall_l2_miss = req_valid && is_load_from_A && read_miss
-              stall_l2_miss
-            } else 0.B
-          ).reduce(_ || _)).reduce(_ || _)).reduce(_ || _)
-      val stall_l2_load_miss = stall_l1d_load_miss && stall_l2_miss
-      BoringUtils.addSource(stall_l2_load_miss, "stall_l2_load_miss")
-      val l2_loads_bound = stall_l1d_load_miss && !stall_l2_miss
-      XSPerfAccumulate(cacheParams, "l2_loads_bound", l2_loads_bound)
-    }
-    if (cacheParams.enableTopDown && cacheParams.name == "L3") {
-      val stall_l2_load_miss = WireDefault(0.B)
-      BoringUtils.addSink(stall_l2_load_miss, "stall_l2_load_miss")
-      val stall_l3_miss = slices.map(
-        _.ms.map(_.asInstanceOf[MSHR]).map(y =>
-          y.edgeIn.master.masters.map(z =>
-            if (z.name == "L2") {
-              val req = 0.U.asTypeOf(y.req)
-              BoringUtils.bore(y.req, Seq(req))
-              val is_load_from_A = z.sourceId.contains(req.source) && req.fromA && !req.isPrefetch.getOrElse(0.B) && (req.opcode === AcquireBlock || req.opcode === Get)
-              val req_valid = WireDefault(0.B)
-              BoringUtils.bore(y.req_valid, Seq(req_valid))
-              val read_miss = WireDefault(0.B)
-              BoringUtils.bore(y.read_miss, Seq(read_miss))
-              val stall_l3_miss = req_valid && is_load_from_A && read_miss
-              stall_l3_miss
-            } else 0.B
-          ).reduce(_ || _)).reduce(_ || _)).reduce(_ || _)
-      val stall_l3_load_miss = stall_l2_load_miss && stall_l3_miss
-      val l3_loads_bound = stall_l2_load_miss && !stall_l3_miss
-      XSPerfAccumulate(cacheParams, "l3_loads_bound", l3_loads_bound)
-      XSPerfAccumulate(cacheParams, "ddr_loads_bound", stall_l3_load_miss)
+
+    val topDown = topDownOpt.map(_ => Module(new TopDownMonitor()(p.alterPartial {
+      case EdgeInKey => node.in.head._2
+      case EdgeOutKey => node.out.head._2
+      case BankBitsKey => bankBits
+    })))
+    topDownOpt.foreach {
+      _ => {
+        topDown.get.io.msStatus.zip(slices).foreach {
+          case (in, s) => in := s.io.ms_status.get
+        }
+        topDown.get.io.dirResult.zip(slices).foreach {
+          case (res, s) => res := s.io.dir_result.get
+        }
+      }
     }
   }
 

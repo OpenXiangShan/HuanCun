@@ -81,6 +81,7 @@ class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
   val size = UInt(msgSizeBits.W)
   val needData = Bool()
   val putData = Bool()
+  val reqSource = UInt(MemReqSource.reqSourceBits.W)
 }
 class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
   val opcode = UInt(3.W)
@@ -150,14 +151,15 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val fromProbeHelper = Bool()
   val fromCmoHelper = Bool()
   val needProbeAckData = if (cacheParams.inclusive) None else Some(Bool())
+  val reqSource = UInt(MemReqSource.reqSourceBits.W)
 }
 
-class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
+class MSHRStatus(implicit p: Parameters) extends HuanCunBundle with HasChannelBits {
   val set = UInt(setBits.W)
   val tag = UInt(tagBits.W)
   val way = UInt(wayBits.W)
   val way_reg = UInt(wayBits.W)
-  val reload = Bool()
+  val is_miss = Bool()
   val blockB, blockC = Bool()
   val nestB, nestC = Bool()
   /**
@@ -178,6 +180,7 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle {
   val will_free = Bool()
   // for debug usage now
   val is_prefetch = Bool()
+  val reqSource = UInt(MemReqSource.reqSourceBits.W)
 }
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
@@ -205,6 +208,7 @@ class SourceDHazard(implicit p: Parameters) extends HuanCunBundle {
 class ReplacerInfo() extends Bundle {
   val channel = UInt(3.W)
   val opcode = UInt(3.W)
+  val reqSource = UInt(MemReqSource.reqSourceBits.W)
 }
 
 class PutBufferPop(implicit p: Parameters) extends HuanCunBundle {
@@ -223,4 +227,22 @@ class PrefetchRecv extends Bundle {
   val addr = UInt(64.W)
   val addr_valid = Bool()
   val l2_pf_en = Bool()
+}
+
+// indicates where the memory access request comes from
+// a dupliacte of this is in Xiangshan.package and CoupledL2.common
+object MemReqSource extends Enumeration {
+  val NoWhere = Value("NoWhere")
+
+  val CPUInst = Value("CPUInst")
+  val CPULoadData = Value("CPULoadData")
+  val CPUStoreData = Value("CPUStoreData")
+  val CPUAtomicData = Value("CPUAtomicData")
+  val L1InstPrefetch = Value("L1InstPrefetch")
+  val L1DataPrefetch = Value("L1DataPrefetch")
+  val PTW = Value("PTW")
+  val L2Prefetch = Value("L2Prefetch")
+  val ReqSourceCount = Value("ReqSourceCount")
+
+  val reqSourceBits = log2Ceil(ReqSourceCount.id)
 }

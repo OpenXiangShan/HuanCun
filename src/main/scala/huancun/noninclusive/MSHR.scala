@@ -1034,6 +1034,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.putData := bypassPut_latch
   oa.bufIdx := req.bufIdx
   oa.size := req.size
+  oa.reqSource := Mux(req.opcode === Hint, MemReqSource.L2Prefetch.id.U, req.reqSource)
 
   ob.tag := req.tag
   ob.set := req.set
@@ -1455,15 +1456,18 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   // Status
   io.status.valid := req_valid
+  io.status.bits.channel := req.channel
   io.status.bits.set := req.set
   io.status.bits.tag := req.tag
-  io.status.bits.reload := false.B // TODO
+  io.status.bits.is_miss := !self_meta.hit
   io.status.bits.way := self_meta.way
   io.status.bits.way_reg := meta_reg.self.way  // used to ease timing issue
   io.status.bits.will_grant_data := req.fromA && od.opcode(0) && io.tasks.source_d.bits.useBypass
   io.status.bits.will_save_data := req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
   io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)
   io.status.bits.blockB := true.B
+  io.status.bits.reqSource := req.reqSource
+
   // B nest A
   // if we are waitting for probeack,
   // we should not let B req in (avoid multi-probe to client)
