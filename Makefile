@@ -27,6 +27,9 @@ basic-test:
 bsp:
 	mill -i mill.bsp.BSP/install
 
+idea:
+	mill -i mill.scalalib.GenIdea/idea
+
 clean:
 	rm -rf ./build
 
