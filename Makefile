@@ -14,7 +14,11 @@ test-top-l2:
 	mv build/TestTop_L2.v build/TestTop.v
 
 test-top-l2l3:
+ifeq ($(FIRRTL_COVER),)
 	mill -i HuanCun.test.runMain huancun.TestTop_L2L3 -td build
+else
+	mill -i HuanCun.test.runMain huancun.TestTop_L2L3 -td build COVER=$(FIRRTL_COVER)
+endif
 	mv build/TestTop_L2L3.v build/TestTop.v
 
 test-top-fullsys:

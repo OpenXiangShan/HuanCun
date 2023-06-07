@@ -5,9 +5,11 @@ import chisel3.util._
 import huancun.utils.TLClientsMerger
 import chipsalliance.rocketchip.config._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+import difftest.DifftestModule
 import freechips.rocketchip.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
+import xfuzz.CoverPoint
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -140,7 +142,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
     TLXbar() :=*
       TLFragmenter(32, 64) :=*
       TLCacheCork() :=*
-      TLDelayer(delayFactor) :=*
+      // TLDelayer(delayFactor) :=*
       l3.node :=* xbar
 
   lazy val module = new LazyModuleImp(this){
@@ -304,7 +306,8 @@ object TestTop_L2 extends App {
 
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
-  ))
+  ) ++ CoverPoint.getTransforms(args))
+  DifftestModule.finish("HuanCun")
 }
 
 object TestTop_L2L3 extends App {
@@ -320,7 +323,8 @@ object TestTop_L2L3 extends App {
 
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
-  ))
+  ) ++ CoverPoint.getTransforms(args))
+  DifftestModule.finish("HuanCun")
 }
 
 object TestTop_FullSys extends App {
@@ -335,5 +339,6 @@ object TestTop_FullSys extends App {
 
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)
-  ))
+  ) ++ CoverPoint.getTransforms(args))
+  DifftestModule.finish("HuanCun")
 }
