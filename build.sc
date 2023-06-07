@@ -4,6 +4,8 @@ import scalafmt._
 import $file.`rocket-chip`.common
 import $file.`rocket-chip`.`api-config-chipsalliance`.`build-rules`.mill.build
 import $file.`rocket-chip`.hardfloat.build
+import $file.difftest.build
+import $file.difftest.instrumentation.instrumentation.build
 
 val defaultVersions = Map(
   "chisel3" -> "3.5.0",
@@ -69,7 +71,7 @@ object rocketchip extends `rocket-chip`.common.CommonRocketChip {
     def chisel3IvyDeps = if(chisel3Module.isEmpty) Agg(
       common.getVersion("chisel3")
     ) else Agg.empty[Dep]
-    
+
     def chisel3PluginIvyDeps = Agg(common.getVersion("chisel3-plugin", cross=true))
   }
 
@@ -79,6 +81,18 @@ object rocketchip extends `rocket-chip`.common.CommonRocketChip {
 
 }
 
+object difftestDep extends difftest.build.CommonDiffTest {
+
+  object fuzz extends difftest.instrumentation.instrumentation.build.CommonRFuzz {
+    def sourceRoot = T.sources { T.workspace / "difftest" / "instrumentation" / "instrumentation" / "src" }
+
+    def allSources = T { sourceRoot().flatMap(p => os.walk(p.path)).map(PathRef(_)) }
+  }
+
+  override def fuzzModule: PublishModule = fuzz
+
+  override def millSourcePath = os.pwd / "difftest"
+}
 
 object HuanCun extends SbtModule with ScalafmtModule with CommonModule {
 
@@ -90,7 +104,7 @@ object HuanCun extends SbtModule with ScalafmtModule with CommonModule {
     getVersion("chiseltest"),
   )
 
-  override def moduleDeps = super.moduleDeps ++ Seq(rocketchip)
+  override def moduleDeps = super.moduleDeps ++ Seq(rocketchip, difftestDep)
 
   object test extends Tests {
     override def ivyDeps = super.ivyDeps() ++ Agg(
