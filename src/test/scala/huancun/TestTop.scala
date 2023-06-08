@@ -110,7 +110,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       level = 2,
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2")),
-      prefetch = Some(huancun.prefetch.BOPParameters()),
+      prefetch = None,
       reqField = Seq(PreferCacheField()),
       echoField = Seq(DirtyField())
     )
