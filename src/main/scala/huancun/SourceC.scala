@@ -102,6 +102,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   queue.io.enq.bits.user.lift(PreferCacheKey).foreach(_ := true.B)
   queue.io.enq.bits.user.lift(ReqSourceKey).foreach(_ := MemReqSource.NoWhere.id.U)
   queue.io.enq.bits.echo.lift(DirtyKey).foreach(_ := pipeOut.bits.task.dirty)
+  queue.io.enq.bits.user.lift(IsHitKey).foreach(_ := true.B)
 
   io.c <> queue.io.deq
 }

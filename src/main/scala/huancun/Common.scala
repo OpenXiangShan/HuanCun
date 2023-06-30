@@ -67,6 +67,7 @@ class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val sinkId = UInt(mshrBits.W)
   val bypassPut = Bool()
   val dirty = Bool()
+  val isHit = Bool()
 }
 
 class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
@@ -114,6 +115,7 @@ class SinkDResp(implicit p: Parameters) extends HuanCunBundle {
   val last = Bool() // last beat
   val denied = Bool()
   val dirty = Bool()
+  // val isHit = Bool()
   val bufIdx = UInt(bufIdxBits.W)
 }
 class SinkEResp(implicit p: Parameters) extends HuanCunBundle {
@@ -148,6 +150,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val alias = aliasBitsOpt.map(_ => UInt(aliasBitsOpt.get.W))
   val preferCache = Bool()
   val dirty = Bool()
+  val isHit = Bool()
   val fromProbeHelper = Bool()
   val fromCmoHelper = Bool()
   val needProbeAckData = if (cacheParams.inclusive) None else Some(Bool())

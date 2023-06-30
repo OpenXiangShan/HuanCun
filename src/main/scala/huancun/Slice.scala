@@ -424,6 +424,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   arbTasks(sourceB.io.task, ms.map(_.io.tasks.source_b), Some("sourceB"), latch=true)
   arbTasks(sourceC.io.task, ms.map(_.io.tasks.source_c), Some("sourceC"), latch=true)
   arbTasks(sourceD.io.task, ms.map(_.io.tasks.source_d), Some("sourceD"), latch=true)
+  dontTouch(sourceD.io.task.bits.isHit)
   arbTasks(sourceE.io.task, ms.map(_.io.tasks.source_e), Some("sourceE"), latch=true)
   arbTasks(sinkA.io.task, ms.map(_.io.tasks.sink_a), Some("sinkA"), latch=true)
   arbTasks(sinkC.io.task, ms.map(_.io.tasks.sink_c), Some("sinkC"), latch=true)
@@ -633,6 +634,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     mshrReq.bits.fromCmoHelper := false.B
     mshrReq.bits.bufIdx := DontCare
     mshrReq.bits.dirty := false.B
+    mshrReq.bits.isHit := true.B
     mshrReq.bits.needProbeAckData.foreach(_ := false.B)
     mshrReq.bits.reqSource := MemReqSource.L2Prefetch.id.U
     pftReq.ready := mshrReq.ready

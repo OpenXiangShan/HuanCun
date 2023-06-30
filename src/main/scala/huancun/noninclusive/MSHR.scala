@@ -1163,6 +1163,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     ),
     false.B
   )
+  od.isHit := self_meta.hit
   od.bufIdx := req.bufIdx
   od.bypassPut := bypassPut_latch
 
