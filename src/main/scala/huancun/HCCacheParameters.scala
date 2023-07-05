@@ -79,6 +79,18 @@ case class PreferCacheField() extends BundleField(PreferCacheKey) {
   }
 }
 
+// indicate whether this block is granted from L3 or not (only used when grantData to L2)
+// now it only works for non-inclusive cache (ignored in inclusive cache)
+case object IsHitKey extends ControlKey[Bool](name = "isHitInL3")
+
+case class IsHitField() extends BundleField(IsHitKey) {
+  override def data: Bool = Output(Bool())
+
+  override def default(x: Bool): Unit = {
+    x := true.B
+  }
+}
+
 // indicate whether this block is dirty or not (only used in handle Release/ReleaseData)
 // now it only works for non-inclusive cache (ignored in inclusive cache)
 case object DirtyKey extends ControlKey[Bool](name = "blockisdirty")

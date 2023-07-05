@@ -635,6 +635,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     mshrReq.bits.fromCmoHelper := false.B
     mshrReq.bits.bufIdx := DontCare
     mshrReq.bits.dirty := false.B
+    mshrReq.bits.isHit := true.B
     mshrReq.bits.needProbeAckData.foreach(_ := false.B)
     mshrReq.bits.reqSource := MemReqSource.L2Prefetch.id.U
     pftReq.ready := mshrReq.ready
