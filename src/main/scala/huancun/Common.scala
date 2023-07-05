@@ -127,6 +127,10 @@ class SourceDResp(implicit p: Parameters) extends HuanCunBundle {
   val sink = UInt(mshrBits.W)
 }
 
+class SinkCAck(implicit p: Parameters) extends HuanCunBundle {
+  val sink = UInt(mshrBits.W)
+}
+
 trait HasChannelBits { this: Bundle =>
   val channel = UInt(3.W)
   def fromA = channel(0).asBool
