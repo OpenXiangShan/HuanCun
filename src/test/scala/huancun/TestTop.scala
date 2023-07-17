@@ -190,7 +190,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
         minLatency = 1,
         echoFields = Seq(DirtyField()),
         requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField(), AliasField(2)),
-        responseKeys = Seq(IsHitKey)
+        // responseKeys = Seq(HitLevelL3toL2Key)
       )
     ))
     masterNode
@@ -210,7 +210,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       prefetch = Some(huancun.prefetch.BOPParameters()),
       reqField = Seq(PreferCacheField()),
       echoField = Seq(DirtyField()),
-      respKey = Seq(IsHitKey)
+      respKey = Seq(HitLevelL3toL2Key)
     )
   }))).node)
 
@@ -221,7 +221,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L3")),
       echoField = Seq(DirtyField()),
-      respField  = Seq(IsHitField()),
+      respField  = Seq(HitLevelL3toL2Field()),
       simulation = true
     )
   })))
@@ -318,7 +318,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
       clientCaches = Seq(CacheParameters("dcache", sets = 32, ways = 8, blockGranularity = 5)),
       reqField = Seq(PreferCacheField()),
       echoField = Seq(DirtyField()),
-      respKey = Seq(IsHitKey),
+      respKey = Seq(HitLevelL3toL2Key),
       prefetch = Some(huancun.prefetch.BOPParameters()),
       sramDepthDiv = 2,
       simulation = true

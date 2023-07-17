@@ -79,18 +79,6 @@ case class PreferCacheField() extends BundleField(PreferCacheKey) {
   }
 }
 
-// indicate whether this block is granted from L3 or not (only used when grantData to L2)
-// now it only works for non-inclusive cache (ignored in inclusive cache)
-case object IsHitKey extends ControlKey[Bool](name = "isHitInL3")
-
-case class IsHitField() extends BundleField(IsHitKey) {
-  override def data: Bool = Output(Bool())
-
-  override def default(x: Bool): Unit = {
-    x := true.B
-  }
-}
-
 // indicate whether this block is dirty or not (only used in handle Release/ReleaseData)
 // now it only works for non-inclusive cache (ignored in inclusive cache)
 case object DirtyKey extends ControlKey[Bool](name = "blockisdirty")
@@ -100,6 +88,22 @@ case class DirtyField() extends BundleField(DirtyKey) {
 
   override def default(x: Bool): Unit = {
     x := true.B
+  }
+}
+
+// indicate where this granted-block is from(only used in handle Grant/GrantData)
+// now it only works for non-inclusive cache (ignored in inclusive cache) 
+  // 0：isHitinMem or default 
+  // 1：isHitinL3
+  // 2：isHitinAnotherCore
+  // 3：isHitinCork
+case object HitLevelL3toL2Key extends ControlKey[UInt]("HitLevelL3toL2") 
+
+case class HitLevelL3toL2Field() extends BundleField(HitLevelL3toL2Key) {
+  override def data: UInt = Output(UInt(2.W))
+
+  override def default(x: UInt): Unit = {
+    x := 0.U(2.W)
   }
 }
 
@@ -138,7 +142,7 @@ case class HCCacheParameters
   reqField: Seq[BundleFieldBase] = Nil, // master
   respKey: Seq[BundleKeyBase] = Nil,
   reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey, ReqSourceKey), // slave
-  respField: Seq[BundleFieldBase] = Nil,
+  respField: Seq[BundleFieldBase] = Seq(HitLevelL3toL2Field()), 
   ctrl: Option[CacheCtrl] = None,
   sramClkDivBy2: Boolean = false,
   sramDepthDiv: Int = 1,
