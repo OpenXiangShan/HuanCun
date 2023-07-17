@@ -28,6 +28,7 @@ abstract class BaseFakeClient(name: String, nBanks: Int, probe: Boolean = true)(
       echoFields = cacheParams.echoField,
       requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField()),
       responseKeys = cacheParams.respKey
+      // responseKeys = Seq(HitLevelL3toL2Key)
     )
   })
 }
