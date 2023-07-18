@@ -33,7 +33,7 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
         ),
         channelBytes = TLChannelBeatBytes(cacheParams.blockBytes),
         minLatency = 1,
-        echoFields = cacheParams.echoField,
+        echoFields = Seq(),
         requestFields = Seq(PrefetchField(), PreferCacheField(), DirtyField(), AliasField(2)),
         responseKeys = cacheParams.respKey
       )
@@ -120,7 +120,6 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       level = 3,
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L3")),
-      echoField = Seq(DirtyField()),
       simulation = true
     )
   })))
@@ -296,7 +295,6 @@ object TestTop_L2 extends App {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2", aliasBitsOpt = Some(2))),
-      echoField = Seq(DirtyField()),
       sramClkDivBy2 = true,
     )
   })
@@ -312,7 +310,6 @@ object TestTop_L2L3 extends App {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2", aliasBitsOpt = Some(2))),
-      echoField = Seq(DirtyField())
     )
   })
   val top = DisableMonitors(p => LazyModule(new TestTop_L2L3()(p)) )(config)
@@ -328,7 +325,6 @@ object TestTop_FullSys extends App {
     case HCCacheParamsKey => HCCacheParameters(
       inclusive = false,
       clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2", aliasBitsOpt = Some(2))),
-      echoField = Seq(DirtyField())
     )
   })
   val top = DisableMonitors( p => LazyModule(new TestTop_FullSys()(p)) )(config)
