@@ -3,7 +3,7 @@ package huancun
 import chisel3._
 import chisel3.util._
 import huancun.utils.TLClientsMerger
-import chipsalliance.rocketchip.config._
+import org.chipsalliance.cde.config._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import freechips.rocketchip.util._
 import freechips.rocketchip.diplomacy._

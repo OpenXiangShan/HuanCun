@@ -19,7 +19,7 @@
 
 package huancun
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
@@ -313,17 +313,17 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
         case (n, i) =>
           n.isToN := Mux(
             select_c,
-            c_mshr.io.tasks.client_dir_write.valid &&
-              c_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.INVALID,
-            bc_mshr.io.tasks.client_dir_write.valid &&
-              bc_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.INVALID
+            c_mshr.client.dir_write.valid &&
+              c_mshr.client.dir_write.bits.data(i).state === MetaData.INVALID,
+            bc_mshr.client.dir_write.valid &&
+              bc_mshr.client.dir_write.bits.data(i).state === MetaData.INVALID
           )
           n.isToB := Mux(
             select_c,
-            c_mshr.io.tasks.client_dir_write.valid &&
-              c_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.BRANCH,
-            bc_mshr.io.tasks.client_dir_write.valid &&
-              bc_mshr.io.tasks.client_dir_write.bits.data(i).state === MetaData.BRANCH
+            c_mshr.client.dir_write.valid &&
+              c_mshr.client.dir_write.bits.data(i).state === MetaData.BRANCH,
+            bc_mshr.client.dir_write.valid &&
+              bc_mshr.client.dir_write.bits.data(i).state === MetaData.BRANCH
           )
       }
     case (bc_mshr: inclusive.MSHR, c_mshr: inclusive.MSHR) =>
@@ -436,14 +436,14 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       block_b_c(
         Pipeline.pipeTo(dir.io.clientDirWReq),
         add_ctrl(
-          ms.map(_.io.tasks.client_dir_write),
+          ms.map(_.client.dir_write),
           ctrl.map(_.io.c_dir_w)
         )
       )
       arbTasks(
         Pipeline.pipeTo(dir.io.clientTagWreq),
         add_ctrl(
-          ms.map(_.io.tasks.client_tag_write),
+          ms.map(_.client.tag_write),
           ctrl.map(_.io.c_tag_w)
         )
       )

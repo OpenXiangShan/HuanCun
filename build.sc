@@ -1,15 +1,15 @@
 import mill._
 import scalalib._
 import scalafmt._
+import $file.`rocket-chip`.`cde`.common
 import $file.`rocket-chip`.common
-import $file.`rocket-chip`.`api-config-chipsalliance`.`build-rules`.mill.build
 import $file.`rocket-chip`.hardfloat.build
 
 val defaultVersions = Map(
-  "chisel3" -> "3.5.0",
-  "chisel3-plugin" -> "3.5.0",
+  "chisel3" -> "3.5.6",
+  "chisel3-plugin" -> "3.5.6",
   "chiseltest" -> "0.5.2",
-  "scala" -> "2.12.13",
+  "scala" -> "2.13.10",
   "scalatest" -> "3.2.7"
 )
 
@@ -24,13 +24,9 @@ def getVersion(dep: String, org: String = "edu.berkeley.cs", cross: Boolean = fa
 trait CommonModule extends ScalaModule {
   override def scalaVersion = defaultVersions("scala")
 
-  override def scalacOptions = Seq("-Xsource:2.11")
+  override def scalacOptions = Seq("-Ymacro-annotations")
 
-  val macroParadise = ivy"org.scalamacros:::paradise:2.1.1"
-
-  override def compileIvyDeps = Agg(macroParadise)
-  override def scalacPluginIvyDeps = Agg(macroParadise, getVersion("chisel3-plugin", cross = true))
-
+  override def scalacPluginIvyDeps = Agg(getVersion("chisel3-plugin", cross = true))
 }
 
 object rocketchip extends `rocket-chip`.common.CommonRocketChip {
@@ -39,12 +35,10 @@ object rocketchip extends `rocket-chip`.common.CommonRocketChip {
 
   override def scalaVersion = defaultVersions("scala")
 
-  override def scalacOptions = Seq("-Xsource:2.11")
-
   override def millSourcePath = rcPath
 
-  object configRocket extends `rocket-chip`.`api-config-chipsalliance`.`build-rules`.mill.build.config with PublishModule {
-    override def millSourcePath = rcPath / "api-config-chipsalliance" / "design" / "craft"
+  object cdeRocket extends `rocket-chip`.`cde`.common.CDEModule with PublishModule {
+    override def millSourcePath = rcPath / "cde" / "cde"
 
     override def scalaVersion = T {
       rocketchip.scalaVersion()
@@ -75,7 +69,7 @@ object rocketchip extends `rocket-chip`.common.CommonRocketChip {
 
   def hardfloatModule = hardfloatRocket
 
-  def configModule = configRocket
+  def cdeModule = cdeRocket
 
 }
 

@@ -19,7 +19,7 @@
 
 package huancun
 
-import chipsalliance.rocketchip.config.Field
+import org.chipsalliance.cde.config.Field
 import chisel3._
 import chisel3.util.log2Ceil
 import freechips.rocketchip.diplomacy.BufferParams

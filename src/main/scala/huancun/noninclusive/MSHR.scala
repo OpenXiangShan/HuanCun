@@ -1,6 +1,6 @@
 package huancun.noninclusive
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink.TLMessages._
@@ -33,10 +33,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     override val tasks = new MSHRTasks[SelfDirWrite, SelfTagWrite] {
       override val dir_write: DecoupledIO[SelfDirWrite] = DecoupledIO(new SelfDirWrite())
       override val tag_write: DecoupledIO[SelfTagWrite] = DecoupledIO(new SelfTagWrite())
-      val client_dir_write = DecoupledIO(new ClientDirWrite())
-      val client_tag_write = DecoupledIO(new ClientTagWrite())
     }
     override val dirResult = Flipped(ValidIO(new DirResult()))
+  })
+  val client = IO(new Bundle {
+    val dir_write = DecoupledIO(new ClientDirWrite())
+    val tag_write = DecoupledIO(new ClientTagWrite())
   })
 
   val io_c_status = IO(new C_Status)
@@ -949,8 +951,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
   io.tasks.dir_write.valid := io.enable && !s_wbselfdir && no_wait && can_start
   io.tasks.tag_write.valid := io.enable && !s_wbselftag && no_wait && can_start
-  io.tasks.client_dir_write.valid := io.enable && !s_wbclientsdir && no_wait && can_start
-  io.tasks.client_tag_write.valid := io.enable && !s_wbclientstag && no_wait && can_start
+  client.dir_write.valid := io.enable && !s_wbclientsdir && no_wait && can_start
+  client.tag_write.valid := io.enable && !s_wbclientstag && no_wait && can_start
   // io.tasks.sink_a.valid := !s_writeput && w_grant && s_writeprobe && w_probeacklast
   io.tasks.sink_a.valid := false.B
   io.tasks.sink_c.valid := io.enable && ((!s_writerelease && (!releaseSave || s_release)) || (!s_writeprobe))
@@ -1220,12 +1222,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.tasks.tag_write.bits.tag := req.tag
 
   val req_line_addr = Cat(req.tag, req.set)
-  io.tasks.client_dir_write.bits.apply(
+  client.dir_write.bits.apply(
     req_line_addr,
     meta_reg.clients.way,
     new_clients_dir
   )
-  io.tasks.client_tag_write.bits.apply(
+  client.tag_write.bits.apply(
     req_line_addr,
     meta_reg.clients.way
   )
@@ -1267,10 +1269,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   when(io.tasks.tag_write.fire()) {
     s_wbselftag := true.B
   }
-  when(io.tasks.client_dir_write.fire()){
+  when(client.dir_write.fire()){
     s_wbclientsdir := true.B
   }
-  when(io.tasks.client_tag_write.fire()){
+  when(client.tag_write.fire()){
     s_wbclientstag := true.B
   }
   when(io.tasks.sink_c.fire()) {

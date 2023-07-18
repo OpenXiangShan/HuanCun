@@ -19,7 +19,7 @@
 
 package huancun
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
@@ -167,6 +167,14 @@ abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with Has
 
 abstract class HuanCunModule(implicit val p: Parameters) extends MultiIOModule with HasHuanCunParameters
 
+class HuanCunImp(outer: HuanCun) extends LazyModuleImp(outer) {
+  val banks = outer.node.in.size
+  val io = IO(new Bundle {
+    val perfEvents = Vec(banks, Vec(outer.numPCntHc, Output(UInt(6.W))))
+    val ecc_error = Valid(UInt(64.W))
+  })
+}
+
 class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
   val xfer = TransferSizes(blockBytes, blockBytes)
@@ -230,13 +238,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     case _ => None
   }
 
-  lazy val module = new LazyModuleImp(this) {
-    val banks = node.in.size
-    val io = IO(new Bundle {
-      val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
-      val ecc_error = Valid(UInt(64.W))
-    })
-
+  lazy val module = new HuanCunImp(this) {
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
     def sizeBytesToStr(sizeBytes: Double): String = sizeBytes match {
       case _ if sizeBytes >= 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"

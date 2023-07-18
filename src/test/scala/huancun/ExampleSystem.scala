@@ -1,10 +1,13 @@
 package huancun
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 import freechips.rocketchip.tilelink.{BankBinder, TLCacheCork, TLFragmenter, TLRAM, TLWidthWidget, TLXbar}
+class ExampleSystemImp(outer: ExampleSystem) extends LazyModuleImp(outer) {
+  val success = IO(Output(Bool()))
+}
 
 class ExampleSystem(nBanks: Int = 1, l1dReq: Int = 0, l1iReq: Int = 0, ptwReq: Int = 0)(implicit p: Parameters) extends LazyModule {
 
@@ -31,8 +34,7 @@ class ExampleSystem(nBanks: Int = 1, l1dReq: Int = 0, l1iReq: Int = 0, ptwReq: I
   xbar := l1i.node
   xbar := ptw.node
 
-  lazy val module = new LazyModuleImp(this) {
-    val success = IO(Output(Bool()))
+  lazy val module = new ExampleSystemImp(this) {
     success := Seq(l1d, l1i, ptw).map(_.module.finish).reduce(_&&_)
   }
 }

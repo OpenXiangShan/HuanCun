@@ -1,14 +1,19 @@
 package huancun.tlctest
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import freechips.rocketchip.diplomacy.{AddressSet, DisableMonitors, LazyModule, LazyModuleImp}
-import freechips.rocketchip.tilelink.{TLBuffer, TLCacheCork, TLDelayer, TLFragmenter, TLRAM, TLWidthWidget, TLXbar}
+import freechips.rocketchip.tilelink.{TLBuffer, TLBundle, TLCacheCork, TLDelayer, TLFragmenter, TLRAM, TLWidthWidget, TLXbar}
 import huancun._
 import tltest.{ScoreboardData, TLCMasterAgent, TLCTrans, TLMessagesBigInt, TLULMasterAgent}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+
+abstract class TestTopImp(outer: TestTop) extends LazyModuleImp(outer) {
+  val l1d_io: Vec[TLBundle]
+  val l1i_io: Vec[TLBundle]
+}
 
 class TestTop
 (serialList: ArrayBuffer[(Int, TLCTrans)],
@@ -62,7 +67,7 @@ class TestTop
   }
   xbar := TLBuffer() := TLDelayer(delayFactor) := TLBuffer() := ptw.node
 
-  lazy val module = new LazyModuleImp(this) {
+  lazy val module = new TestTopImp(this) {
     val l1d_io = IO(Vec(dcacheNum, Flipped(l1d_list.head.module.tl_master_io.cloneType)))
     l1d_list.zip(l1d_io).foreach{
       case (agent, tl_master_io) => agent.module.tl_master_io <> tl_master_io

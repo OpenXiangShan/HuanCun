@@ -2,7 +2,7 @@ package huancun
 
 import chisel3._
 import chisel3.util._
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.BundleField
@@ -116,6 +116,6 @@ class XbarCircuit
   val inSeq = io.in.zip(edgeIn)
   val outSeq = io.out.zip(edgeOut)
 
-  TLXbar.circuit(policy, inSeq, outSeq)
+  TLXbar.circuit(policy, inSeq.toSeq, outSeq.toSeq)
 
 }

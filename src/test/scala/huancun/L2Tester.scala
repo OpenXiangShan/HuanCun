@@ -1,7 +1,7 @@
 package huancun
 
 import chisel3._
-import chipsalliance.rocketchip.config.Config
+import org.chipsalliance.cde.config.Config
 import chiseltest._
 import chiseltest.{VerilatorBackendAnnotation, WriteVcdAnnotation}
 import chiseltest.simulator.{VerilatorCFlags, VerilatorFlags}

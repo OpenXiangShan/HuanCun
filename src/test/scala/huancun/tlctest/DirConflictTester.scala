@@ -1,6 +1,6 @@
 package huancun.tlctest
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import huancun.noninclusive.HasClientInfo
 import huancun.{DumpVCD, HCCacheParamsKey, HasHuanCunParameters, UseVerilatorBackend}
 import tltest.TLMessagesBigInt.trunk

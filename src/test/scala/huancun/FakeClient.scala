@@ -3,7 +3,7 @@ package huancun
 import chisel3._
 import chisel3.util._
 import chiseltest._
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp, TransferSizes}
 import freechips.rocketchip.tilelink.{TLBundle, TLChannelBeatBytes, TLClientNode, TLMasterParameters, TLMasterPortParameters, TLPermissions}
 import tltest.{AddrState, ScoreboardData, TLCMasterAgent, TLCScalaB, TLCScalaD, TLCTrans, TLULMasterAgent}
@@ -32,12 +32,14 @@ abstract class BaseFakeClient(name: String, nBanks: Int, probe: Boolean = true)(
   })
 }
 
+class BaseFakeClientImp(outer: BaseFakeClient) extends LazyModuleImp(outer) {
+  val finish = IO(Output(Bool()))
+}
+
 class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0)(implicit p: Parameters)
   extends BaseFakeClient(name, nBanks, probe) {
 
-  lazy val module = new LazyModuleImp(this) {
-
-    val finish = IO(Output(Bool()))
+  lazy val module = new BaseFakeClientImp(this) {
 
     val flags = Seq.fill(node.out.size) {
       RegInit(false.B)
@@ -98,6 +100,10 @@ class FakeL1I(nBanks: Int, reqs: Int = 0)(implicit p: Parameters)
 class FakePTW(nBanks: Int, reqs: Int = 0)(implicit p: Parameters)
   extends FakeClient("PTW", nBanks, probe = false, reqs = reqs)
 
+abstract class MasterAgentImp(outer: BaseFakeClient) extends LazyModuleImp(outer) {
+  val tl_master_io: TLBundle
+}
+
 class MasterAgent
 (
   id: Int,
@@ -119,7 +125,7 @@ class MasterAgent
     blockBytes,
     beatBytes
   )
-  lazy val module = new LazyModuleImp(this) {
+  lazy val module = new MasterAgentImp(this) {
     val tl_master_io = IO(Flipped(new TLBundle(node.out.head._1.params)))
     node.out.head._1 <> tl_master_io
   }
@@ -242,7 +248,7 @@ class MasterULAgent
     blockBytes,
     beatBytes
   )
-  lazy val module = new LazyModuleImp(this) {
+  lazy val module = new MasterAgentImp(this) {
     val tl_master_io = IO(Flipped(new TLBundle(node.out.head._1.params)))
     node.out.head._1 <> tl_master_io
   }
