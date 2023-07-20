@@ -233,7 +233,7 @@ object TLLogger {
   }
 
   def apply(name: String, enable: Boolean = true)(implicit p: Parameters) = {
-    if(enable){
+    if(false){
       val logger = LazyModule(new TLLogger(name))
       logger.node
     } else {
