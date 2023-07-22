@@ -112,7 +112,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   dataStorage.io.sourceD_wdata <> sourceD.io.bs_wdata
   dataStorage.io.sourceC_raddr <> ctrl_arb(sourceC.io.bs_raddr, ctrl.map(_.io.bs_r_addr))
   dataStorage.io.sinkC_waddr <> ctrl_arb(sinkC.io.bs_waddr, ctrl.map(_.io.bs_w_addr))
-  dataStorage.io.sinkC_wdata <> (if(ctrl.nonEmpty){
+  dataStorage.io.sinkC_wdata := (if(ctrl.nonEmpty){
     Mux(ctrl.get.io.bs_w_addr.valid,
       ctrl.get.io.bs_w_data,
       sinkC.io.bs_wdata
@@ -465,7 +465,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       val abc = in.init.init
       val bc = in.init.last
       val c = in.last
-      val arbiter = Module(if (latch) new LatchFastArbiter[T](chiselTypeOf(out.bits), abc.size) 
+      val arbiter = Module(if (latch) new LatchFastArbiter[T](chiselTypeOf(out.bits), abc.size)
                            else new FastArbiter[T](chiselTypeOf(out.bits), abc.size))
       if (name.nonEmpty) arbiter.suggestName(s"${name.get}_task_arb")
       for ((arb, req) <- arbiter.io.in.zip(abc)) {
