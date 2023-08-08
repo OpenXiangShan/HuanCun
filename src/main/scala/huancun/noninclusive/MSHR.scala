@@ -1295,7 +1295,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val sink_c_resp_valid = io.resps.sink_c.valid && !w_probeacklast
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
   // ! This is the last client sending probeack
-  val probeack_last = (probes_done | probeack_bit) === probe_clients
+  val probeack_last = if(clientBits == 1) sink_c_resp_valid else (probes_done | probeack_bit) === probe_clients
 
   // Update client_probeack_param_vec according to the param of ProbeAck
   client_probeack_param_vec := client_probeack_param_vec_reg
