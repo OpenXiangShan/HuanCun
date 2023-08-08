@@ -19,7 +19,7 @@
 
 package huancun
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
@@ -152,17 +152,17 @@ trait HasHuanCunParameters {
   }
 
   def startBeat(offset: UInt): UInt = {
-    (offset >> log2Up(beatBytes)).asUInt()
+    (offset >> log2Up(beatBytes)).asUInt
   }
 
   def totalBeats(size: UInt): UInt = {
-    (UIntToOH1(size, log2Up(blockBytes)) >> log2Ceil(beatBytes)).asUInt()
+    (UIntToOH1(size, log2Up(blockBytes)) >> log2Ceil(beatBytes)).asUInt
   }
 
 }
 
 trait DontCareInnerLogic { this: Module =>
-  override def IO[T <: Data](iodef: T): T = {
+  def IO[T <: Data](iodef: T): T = {
     val p = chisel3.experimental.IO.apply(iodef)
     p <> DontCare
     p
@@ -171,7 +171,7 @@ trait DontCareInnerLogic { this: Module =>
 
 abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with HasHuanCunParameters
 
-abstract class HuanCunModule(implicit val p: Parameters) extends MultiIOModule with HasHuanCunParameters
+abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
 
 class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
@@ -374,7 +374,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case (s, i) => Pipeline(s.io.ctl_ecc, depth = 2, pipe = false, name = Some(s"ecc_buffer_$i"))
     }
     ecc_arb.io.in <> VecInit(slices_ecc)
-    io.ecc_error.valid := ecc_arb.io.out.fire()
+    io.ecc_error.valid := ecc_arb.io.out.fire
     io.ecc_error.bits := restoreAddressUInt(ecc_arb.io.out.bits.addr, ecc_arb.io.chosen)
     ctrl_unit.foreach { c =>
       val ctl_reqs = slices.zipWithIndex.map {

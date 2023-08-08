@@ -2,7 +2,7 @@ package huancun.noninclusive
 
 import chisel3._
 import chisel3.util._
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tilelink.{TLBundleC, TLMessages}
 import huancun._
 
@@ -36,8 +36,8 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
       assert(b < 20000.U, "Buffer leak in SinkC")
     }
   }
-  val bufVals = VecInit(beatVals.map(_.asUInt().orR())).asUInt()
-  val full = bufVals.andR()
+  val bufVals = VecInit(beatVals.map(_.asUInt.orR)).asUInt
+  val full = bufVals.andR
   val c = io.c
   val isRelease = c.bits.opcode === TLMessages.Release
   val isReleaseData = c.bits.opcode === TLMessages.ReleaseData
@@ -49,7 +49,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val hasData = edgeIn.hasData(c.bits)
   val noSpace = full && hasData
   val insertIdx = PriorityEncoder(~bufVals)
-  val insertIdxReg = RegEnable(insertIdx, c.fire() && first)
+  val insertIdxReg = RegEnable(insertIdx, c.fire && first)
   val (tag, set, off) = parseAddress(c.bits.address)
 
   c.ready := Mux(first, !noSpace && !(isReq && !io.alloc.ready), true.B)
@@ -77,7 +77,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.fromCmoHelper := false.B
   io.alloc.bits.needProbeAckData.foreach(_ := false.B)
   io.alloc.bits.reqSource := MemReqSource.NoWhere.id.U // Ignore
-  assert(!io.alloc.fire() || c.fire() && first, "alloc fire, but c channel not fire!")
+  assert(!io.alloc.fire || c.fire && first, "alloc fire, but c channel not fire!")
 
   io.resp.valid := c.valid && (!noSpace || !first) && isResp
   io.resp.bits.hasData := hasData
@@ -88,12 +88,12 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.resp.bits.bufIdx := Mux(first, insertIdx, insertIdxReg)
 
   val task = io.task.bits
-  val task_r = RegEnable(io.task.bits, io.task.fire())
+  val task_r = RegEnable(io.task.bits, io.task.fire)
   val busy = RegInit(false.B) // busy also serve as task_r.valid
   val setMatchVec = RegInit(0.U(bufBlocks.W))
 
   // buffer write
-  when(c.fire() && hasData) {
+  when(c.fire && hasData) {
     when(first) {
       buffer(insertIdx)(count) := c.bits.data
       beatValsSave(insertIdx)(count) := true.B
@@ -111,13 +111,13 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     })
   }
 
-  when(c.fire() && first && isProbeAckData) {
+  when(c.fire && first && isProbeAckData) {
     setMatchVec := Cat((bufferSetVals.zipWithIndex).zip(bufferSet.zip(bufferTag)).map{
       case ((v, i), (s, t)) => 
         Mux(busy && i.U === task_r.bufIdx, false.B, (t === tag) && (s === set) && v) // do not clean buffer of ongoing task
     }.reverse)
   }
-  when(setMatchVec.orR()) {
+  when(setMatchVec.orR) {
     assert(PopCount(setMatchVec) === 1.U, "SinkC: ProbeAckData cleaner detects multiple data")
     val bufIdx = OHToUInt(setMatchVec)
     beatValsSave(bufIdx).foreach(_ := false.B)
@@ -136,7 +136,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val w_through_done_r = RegInit(false.B)
 
   io.task.ready := !busy && task_w_safe
-  when(io.task.fire()) {
+  when(io.task.fire) {
     assert(task.save || task.drop || task.release, "Null Task!")
     busy := true.B
     when(!task.save && !task.drop) {
@@ -170,8 +170,8 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.release.bits.user.lift(utility.ReqSourceKey).foreach(_ := MemReqSource.NoWhere.id.U)
   io.release.bits.echo.lift(DirtyKey).foreach(_ := task_r.dirty)
 
-  val w_fire_save = io.bs_waddr.fire() && !io.bs_waddr.bits.noop
-  val w_fire_through = io.release.fire()
+  val w_fire_save = io.bs_waddr.fire && !io.bs_waddr.bits.noop
+  val w_fire_through = io.release.fire
   val w_fire = w_fire_save || w_fire_through
   when(w_fire_save) { w_counter_save := w_counter_save + 1.U }
   when(w_fire_through) { w_counter_through := w_counter_through + 1.U }

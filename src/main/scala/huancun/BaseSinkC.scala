@@ -19,7 +19,7 @@
 
 package huancun
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
@@ -40,7 +40,7 @@ abstract class BaseSinkC(implicit p: Parameters) extends HuanCunModule {
   })
   io.alloc.bits.isPrefetch.foreach(_ := false.B)
 
-  when (io.c.fire()) {
+  when (io.c.fire) {
     assert(io.c.bits.opcode =/= 3.U) // opcode 3 is reserved for C channel
   }
 }

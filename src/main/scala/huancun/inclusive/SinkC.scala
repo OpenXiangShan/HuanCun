@@ -1,6 +1,6 @@
 package huancun.inclusive
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
@@ -14,7 +14,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val releaseBuf = Reg(Vec(bufBlocks, Vec(blockBytes / beatBytes, UInt((beatBytes * 8).W))))
   val beatValids = RegInit(VecInit(Seq.fill(bufBlocks) { VecInit(Seq.fill(blockBytes / beatBytes)(false.B)) }))
   val bufValids = RegInit(VecInit(Seq.fill(bufBlocks)(false.B)))
-  val bufFull = Cat(bufValids).andR()
+  val bufFull = Cat(bufValids).andR
   val insertIdx = PriorityEncoder(bufValids.map(b => !b))
 
   val c = io.c
@@ -31,13 +31,13 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val w_counter = RegInit(0.U(beatBits.W))
   val w_done = (w_counter === ((blockBytes / beatBytes) - 1).U) && (io.bs_waddr.ready && !io.bs_waddr.bits.noop)
 
-  val task_r = RegEnable(io.task.bits, io.task.fire())
+  val task_r = RegEnable(io.task.bits, io.task.fire)
   val busy_r = RegInit(false.B)
-  val do_release = io.task.fire() || busy_r
+  val do_release = io.task.fire || busy_r
 
   when(w_done) {
     busy_r := false.B
-  }.elsewhen(io.task.fire()) {
+  }.elsewhen(io.task.fire) {
     busy_r := true.B
   }
 
@@ -71,7 +71,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.fromCmoHelper := false.B
 
   if (cacheParams.enableDebug) {
-    when(c.fire()) {
+    when(c.fire) {
       when(isRelease) {
         printf("release: addr:[%x]\n", c.bits.address)
       }
@@ -81,8 +81,8 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     }
   }
 
-  val insertIdxReg = RegEnable(insertIdx, c.fire() && isReleaseData && first)
-  when(c.fire() && isReleaseData) {
+  val insertIdxReg = RegEnable(insertIdx, c.fire && isReleaseData && first)
+  when(c.fire && isReleaseData) {
     when(first) {
       releaseBuf(insertIdx)(count) := c.bits.data
       beatValids(insertIdx)(count) := true.B
@@ -99,7 +99,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     beatValids(task_r.bufIdx).foreach(_ := false.B)
   }
 
-  when(io.bs_waddr.fire() && !io.bs_waddr.bits.noop || io.release.fire()) {
+  when(io.bs_waddr.fire && !io.bs_waddr.bits.noop || io.release.fire) {
     w_counter := w_counter + 1.U
   }
   when(w_done) {
@@ -110,12 +110,12 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val task_w_safe = !(io.sourceD_r_hazard.valid &&
     io.sourceD_r_hazard.bits.safe(io.task.bits.set, io.task.bits.way))
 
-  val isProbeAckDataReg = RegEnable(isProbeAckData, io.c.fire())
-  val resp_way = Mux(io.c.valid, io.way, RegEnable(io.way, io.c.fire()))
-  val resp_set = Mux(io.c.valid, set, RegEnable(set, io.c.fire()))
+  val isProbeAckDataReg = RegEnable(isProbeAckData, io.c.fire)
+  val resp_way = Mux(io.c.valid, io.way, RegEnable(io.way, io.c.fire))
+  val resp_set = Mux(io.c.valid, set, RegEnable(set, io.c.fire))
   val resp_w_valid = (io.c.valid && !do_release && isProbeAckData) || (!first && isProbeAckDataReg) // ProbeAckData
   val req_w_valid =
-    (io.task.fire() && io.task.bits.save) || (busy_r && task_r.save)
+    (io.task.fire && io.task.bits.save) || (busy_r && task_r.save)
 
   io.task.ready := first && !busy_r && task_w_safe // TODO: flow here
 

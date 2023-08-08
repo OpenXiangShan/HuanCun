@@ -19,7 +19,7 @@
 
 package huancun
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
@@ -31,6 +31,6 @@ class SinkE(implicit p: Parameters) extends HuanCunModule {
   })
   val e = io.e
   e.ready := true.B
-  io.resp.valid := e.fire()
+  io.resp.valid := e.fire
   io.resp.bits.sink := e.bits.sink
 }

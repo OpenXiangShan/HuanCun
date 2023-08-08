@@ -1,6 +1,6 @@
 package huancun
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy.{AddressSet, BundleBridgeSource, LazyModule, LazyModuleImp, SimpleDevice}
@@ -135,7 +135,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     )
   )
   cmd_in_ready := req.ready
-  when(resp.fire()){
+  when(resp.fire){
     cmd_out_valid := true.B
   }
   resp.ready := !cmd_out_valid
@@ -148,7 +148,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
   req.bits.way := ctl_way
   req.bits.dir := ctl_dir
 
-  when(resp.fire()) {
+  when(resp.fire) {
     switch(resp.bits.cmd){
       is(CacheCMD.CMD_R_S_TAG){
         ctl_tag := resp.bits.data(0)
@@ -168,7 +168,7 @@ class CtrlUnitImp(wrapper: CtrlUnit) extends LazyModuleImp(wrapper) {
     }
   }
 
-  when(ecc.fire()) {
+  when(ecc.fire) {
     ecc_code := ecc.bits.errCode
     ecc_addr := ecc.bits.addr
   }

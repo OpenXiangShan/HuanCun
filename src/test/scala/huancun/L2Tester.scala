@@ -1,12 +1,12 @@
 package huancun
 
 import chisel3._
-import chipsalliance.rocketchip.config.Config
+import org.chipsalliance.cde.config.Config
 import chiseltest._
 import chiseltest.{VerilatorBackendAnnotation, WriteVcdAnnotation}
 import chiseltest.simulator.{VerilatorCFlags, VerilatorFlags}
-import firrtl.AnnotationSeq
-import firrtl.stage.RunFirrtlTransformAnnotation
+import firrtl2.AnnotationSeq
+import firrtl2.stage.RunFirrtlTransformAnnotation
 import org.scalatest.flatspec._
 import org.scalatest.matchers.should._
 import huancun.prefetch._

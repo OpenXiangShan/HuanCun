@@ -19,7 +19,7 @@
 
 package huancun.inclusive
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink.TLMessages._
@@ -293,8 +293,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
       when(
         meta.hit && (req_needT || meta.state === TRUNK) && req.opcode =/= Hint &&
           (
-            meta.clients & (~Mux(skipProbeN(req.opcode), getClientBitOH(req.source), 0.U)).asUInt()
-          ).orR()
+            meta.clients & (~Mux(skipProbeN(req.opcode), getClientBitOH(req.source), 0.U)).asUInt
+          ).orR
       ) {
         s_pprobe := false.B
         w_pprobeackfirst := false.B
@@ -484,38 +484,38 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   }
 
   dontTouch(io.tasks)
-  when(io.tasks.source_a.fire()) {
+  when(io.tasks.source_a.fire) {
     s_acquire := true.B
     s_transferput := true.B
   }
-  when(io.tasks.source_b.fire()) {
+  when(io.tasks.source_b.fire) {
     s_rprobe := true.B
     s_pprobe := true.B
   }
-  when(io.tasks.source_c.fire()) {
+  when(io.tasks.source_c.fire) {
     s_release := true.B
     s_probeack := true.B
   }
-  when(io.tasks.source_d.fire()) {
+  when(io.tasks.source_d.fire) {
     s_execute := true.B
   }
-  when(io.tasks.source_e.fire()) {
+  when(io.tasks.source_e.fire) {
     s_grantack := true.B
   }
   when(no_wait && !s_writebackdir && io.tasks.dir_write.ready) {
     s_writebackdir := true.B
   }
-  when(io.tasks.tag_write.fire()) {
+  when(io.tasks.tag_write.fire) {
     s_writebacktag := true.B
   }
-  when(io.tasks.sink_c.fire()) {
+  when(io.tasks.sink_c.fire) {
     s_writerelease := true.B
   }
   if (prefetchOpt.nonEmpty) {
-    when(io.tasks.prefetch_train.get.fire()) {
+    when(io.tasks.prefetch_train.get.fire) {
       s_triggerprefetch.get := true.B
     }
-    when(io.tasks.prefetch_resp.get.fire()) {
+    when(io.tasks.prefetch_resp.get.fire) {
       s_prefetchack.get := true.B
     }
   }

@@ -59,15 +59,15 @@ class SRAMWrapper[T <: Data]
     sram
   }
 
-  val ren_vec_0 = VecInit(banks.map(_.io.r.req.fire()))
+  val ren_vec_0 = VecInit(banks.map(_.io.r.req.fire))
   val ren_vec_1 = RegNext(ren_vec_0, 0.U.asTypeOf(ren_vec_0))
   val ren_vec = if(clk_div_by_2){
     RegNext(ren_vec_1, 0.U.asTypeOf(ren_vec_0))
   } else ren_vec_1
 
-  io.r.req.ready := Cat(banks.map(_.io.r.req.ready)).andR()
+  io.r.req.ready := Cat(banks.map(_.io.r.req.ready)).andR
   io.r.resp.data := Mux1H(ren_vec, banks.map(_.io.r.resp.data))
 
-  io.w.req.ready := Cat(banks.map(_.io.w.req.ready)).andR()
+  io.w.req.ready := Cat(banks.map(_.io.w.req.ready)).andR
 
 }
