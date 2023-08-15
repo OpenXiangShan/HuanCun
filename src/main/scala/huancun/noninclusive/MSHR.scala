@@ -988,7 +988,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val acquire_opcode = if (cacheParams.name == "L2") {
     Mux(req.opcode === AcquirePerm && req.param === BtoT, AcquirePerm, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
   } else {
-    Mux(req_put, AcquireBlock, req.opcode)
+    Mux(req_put, AcquireBlock, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
     // for put & !bypassPut, cache hierachy should have B/T. AcquirePerm is enough
   }
 
@@ -998,7 +998,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       req.param
     )
   } else {
-    Mux(req.opcode === AcquireBlock && req.param === BtoT, NtoT, Mux(req_put, NtoT, req.param))
+    Mux(req.opcode === Hint,
+      Mux(req_needT, Mux(highest_perm_reg === BRANCH, BtoT, NtoT), NtoB),
+      Mux(req.opcode === AcquireBlock && req.param === BtoT, NtoT, Mux(req_put, NtoT, req.param))
+    )
   }
 
   oa.opcode := Mux(!s_transferput || bypassGet, req.opcode,

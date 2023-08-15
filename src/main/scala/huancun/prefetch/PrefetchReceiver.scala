@@ -12,6 +12,11 @@ case class PrefetchReceiverParams(n: Int = 32) extends PrefetchParameters {
   override val inflightEntries: Int = n
 }
 
+case class L3PrefetchReceiverParams(n: Int = 32) extends PrefetchParameters {
+  override val hasPrefetchBit: Boolean = true
+  override val inflightEntries: Int = n
+}
+
 class PrefetchReceiver()(implicit p: Parameters) extends PrefetchModule {
   val io = IO(new PrefetchIO())
   // just ignore train reqs
