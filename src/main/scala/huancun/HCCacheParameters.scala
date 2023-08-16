@@ -26,8 +26,7 @@ import freechips.rocketchip.diplomacy.BufferParams
 import freechips.rocketchip.tilelink.{TLBufferParams, TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, BundleKeyBase, ControlKey}
 import huancun.prefetch.PrefetchParameters
-import MemReqSource._
-import utility.ReqSourceKey
+import utility.{MemReqSource, ReqSourceKey}
 
 case object HCCacheParamsKey extends Field[HCCacheParameters](HCCacheParameters())
 

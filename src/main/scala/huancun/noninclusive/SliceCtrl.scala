@@ -4,7 +4,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import huancun._
-import utility.RegNextN
+import utility.{MemReqSource, RegNextN}
 
 class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
 

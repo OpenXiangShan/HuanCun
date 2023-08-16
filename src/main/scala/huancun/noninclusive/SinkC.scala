@@ -5,6 +5,7 @@ import chisel3.util._
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.tilelink.{TLBundleC, TLMessages}
 import huancun._
+import utility.MemReqSource
 
 class SinkC(implicit p: Parameters) extends BaseSinkC {
 
