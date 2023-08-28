@@ -23,6 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.{BundleMap, UIntToOH1}
+import utility.MemReqSource
 
 abstract class InnerTask(implicit p: Parameters) extends HuanCunBundle {
   val sourceId = UInt(sourceIdBits.W)
@@ -67,6 +68,7 @@ class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
   val sinkId = UInt(mshrBits.W)
   val bypassPut = Bool()
   val dirty = Bool()
+  val isHit = Bool()
 }
 
 class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
@@ -114,6 +116,7 @@ class SinkDResp(implicit p: Parameters) extends HuanCunBundle {
   val last = Bool() // last beat
   val denied = Bool()
   val dirty = Bool()
+  // val isHit = Bool()
   val bufIdx = UInt(bufIdxBits.W)
 }
 class SinkEResp(implicit p: Parameters) extends HuanCunBundle {
@@ -122,6 +125,10 @@ class SinkEResp(implicit p: Parameters) extends HuanCunBundle {
 }
 
 class SourceDResp(implicit p: Parameters) extends HuanCunBundle {
+  val sink = UInt(mshrBits.W)
+}
+
+class SinkCAck(implicit p: Parameters) extends HuanCunBundle {
   val sink = UInt(mshrBits.W)
 }
 
@@ -148,6 +155,7 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val alias = aliasBitsOpt.map(_ => UInt(aliasBitsOpt.get.W))
   val preferCache = Bool()
   val dirty = Bool()
+  val isHit = Bool()
   val fromProbeHelper = Bool()
   val fromCmoHelper = Bool()
   val needProbeAckData = if (cacheParams.inclusive) None else Some(Bool())
@@ -227,22 +235,4 @@ class PrefetchRecv extends Bundle {
   val addr = UInt(64.W)
   val addr_valid = Bool()
   val l2_pf_en = Bool()
-}
-
-// indicates where the memory access request comes from
-// a dupliacte of this is in Xiangshan.package and CoupledL2.common
-object MemReqSource extends Enumeration {
-  val NoWhere = Value("NoWhere")
-
-  val CPUInst = Value("CPUInst")
-  val CPULoadData = Value("CPULoadData")
-  val CPUStoreData = Value("CPUStoreData")
-  val CPUAtomicData = Value("CPUAtomicData")
-  val L1InstPrefetch = Value("L1InstPrefetch")
-  val L1DataPrefetch = Value("L1DataPrefetch")
-  val PTW = Value("PTW")
-  val L2Prefetch = Value("L2Prefetch")
-  val ReqSourceCount = Value("ReqSourceCount")
-
-  val reqSourceBits = log2Ceil(ReqSourceCount.id)
 }

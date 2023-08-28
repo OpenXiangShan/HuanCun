@@ -529,10 +529,12 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io.resps.sink_d.valid := sinkD.io.resp.valid && sinkD.io.resp.bits.source === i.U
       mshr.io.resps.sink_e.valid := sinkE.io.resp.valid && sinkE.io.resp.bits.sink === i.U
       mshr.io.resps.source_d.valid := sourceD.io.resp.valid && sourceD.io.resp.bits.sink === i.U
+      mshr.io.resps.sink_c_ack.valid := sinkC.io.taskack.valid && sinkC.io.taskack.bits.sink === i.U
       mshr.io.resps.sink_c.bits := sinkC.io.resp.bits
       mshr.io.resps.sink_d.bits := sinkD.io.resp.bits
       mshr.io.resps.sink_e.bits := sinkE.io.resp.bits
       mshr.io.resps.source_d.bits := sourceD.io.resp.bits
+      mshr.io.resps.sink_c_ack.bits := sinkC.io.taskack.bits
   }
   c_mshr.io.resps.sink_c.valid := false.B
 
@@ -633,6 +635,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     mshrReq.bits.fromCmoHelper := false.B
     mshrReq.bits.bufIdx := DontCare
     mshrReq.bits.dirty := false.B
+    mshrReq.bits.isHit := true.B
     mshrReq.bits.needProbeAckData.foreach(_ := false.B)
     mshrReq.bits.reqSource := MemReqSource.L2Prefetch.id.U
     pftReq.ready := mshrReq.ready

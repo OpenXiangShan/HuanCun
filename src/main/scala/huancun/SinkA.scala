@@ -23,6 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
+import utility.MemReqSource
 
 class SinkA(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
@@ -108,6 +109,7 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
     allocInfo.preferCache := Mux((a.bits.opcode === TLMessages.Get || a.bits.opcode(2,1) === 0.U), true.B, a.bits.user.lift(PreferCacheKey).getOrElse(true.B))
   }
   allocInfo.dirty := false.B // ignored
+  allocInfo.isHit := true.B // ignored
   allocInfo.fromProbeHelper := false.B
   allocInfo.fromCmoHelper := false.B
   allocInfo.needProbeAckData.foreach(_ := false.B)

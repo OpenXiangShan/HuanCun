@@ -4,7 +4,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import huancun._
-import utility.RegNextN
+import utility.{MemReqSource, RegNextN}
 
 class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
 
@@ -225,6 +225,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.cmo_req.bits.alias.foreach(_ := false.B)
   io.cmo_req.bits.preferCache := false.B
   io.cmo_req.bits.dirty := false.B
+  io.cmo_req.bits.isHit := true.B
   io.cmo_req.bits.fromProbeHelper := false.B
   io.cmo_req.bits.fromCmoHelper := true.B
   io.cmo_req.bits.needProbeAckData.foreach(_ := false.B)

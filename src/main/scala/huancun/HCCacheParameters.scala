@@ -26,8 +26,7 @@ import freechips.rocketchip.diplomacy.BufferParams
 import freechips.rocketchip.tilelink.{TLBufferParams, TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, BundleKeyBase, ControlKey}
 import huancun.prefetch.PrefetchParameters
-import MemReqSource._
-import utility.ReqSourceKey
+import utility.{MemReqSource, ReqSourceKey}
 
 case object HCCacheParamsKey extends Field[HCCacheParameters](HCCacheParameters())
 
@@ -76,6 +75,18 @@ case class PreferCacheField() extends BundleField(PreferCacheKey) {
 
   override def default(x: Bool): Unit = {
     x := false.B
+  }
+}
+
+// indicate whether this block is granted from L3 or not (only used when grantData to L2)
+// now it only works for non-inclusive cache (ignored in inclusive cache)
+case object IsHitKey extends ControlKey[Bool](name = "isHitInL3")
+
+case class IsHitField() extends BundleField(IsHitKey) {
+  override def data: Bool = Output(Bool())
+
+  override def default(x: Bool): Unit = {
+    x := true.B
   }
 }
 

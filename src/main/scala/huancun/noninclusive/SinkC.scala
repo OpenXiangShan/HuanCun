@@ -5,6 +5,7 @@ import chisel3.util._
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.tilelink.{TLBundleC, TLMessages}
 import huancun._
+import utility.MemReqSource
 
 class SinkC(implicit p: Parameters) extends BaseSinkC {
 
@@ -71,6 +72,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.isBop.foreach(_ := false.B)
   io.alloc.bits.alias.foreach(_ := 0.U)
   io.alloc.bits.preferCache := true.B
+  io.alloc.bits.isHit := true.B
   io.alloc.bits.dirty := c.bits.echo.lift(DirtyKey).getOrElse(true.B)
   io.alloc.bits.fromProbeHelper := false.B
   io.alloc.bits.fromCmoHelper := false.B
@@ -194,4 +196,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
     w_save_done_r := false.B
     w_through_done_r := false.B
   }
+
+  io.taskack.bits.sink := RegNext(task_r.source)
+  io.taskack.valid := RegNext(busy && (w_done || busy && task_r.drop), false.B)
 }
