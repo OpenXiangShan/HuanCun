@@ -438,7 +438,7 @@ class SRAMTemplate[T <: Data]
     val addId = if (isNto1) mbistNodeNumNto1 else mbistNodeNum1toN
     nodeId += addId
     SRAMTemplate.increaseDomainID(addId)
-    array.mbist.get.selectedOH := myMbistBundle.selectedOH & (!broadCastSignals.ram_hold)
+    array.mbist.get.selectedOH := Mux(broadCastSignals.ram_hold, 0.U, myMbistBundle.selectedOH)
   }
   else{
     if(clk_div_by_2){
