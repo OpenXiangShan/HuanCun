@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import huancun._
-import utility.Pipeline
+import utility.{MemReqSource, Pipeline}
 
 case class PrefetchReceiverParams(n: Int = 32) extends PrefetchParameters {
   override val hasPrefetchBit: Boolean = true
@@ -27,6 +27,7 @@ class PrefetchReceiver()(implicit p: Parameters) extends PrefetchModule {
   io.req.bits.set := parseFullAddress(io.recv_addr.bits)._2
   io.req.bits.needT := false.B
   io.req.bits.source := 0.U // TODO: ensure source 0 is dcache
+  io.req.bits.pfSource := MemReqSource.Prefetch2L2Stream.id.U // TODO: add L3 pfSource
   io.req.valid := io.recv_addr.valid
 
 }
