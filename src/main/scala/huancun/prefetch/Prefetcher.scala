@@ -120,6 +120,24 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       bop.io.req.ready := true.B
       pipe.io.in <> pftQueue.io.deq
       io.req <> pipe.io.out
+    case receiver: L3PrefetchReceiverParams =>
+      val l1_pf = Module(new PrefetchReceiver())
+      val pftQueue = Module(new PrefetchQueue)
+      val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
+
+      l1_pf.io.recv_addr := ValidIODelay(io.recv_addr, 2)
+      l1_pf.io.train <> DontCare
+      l1_pf.io.resp <> DontCare
+
+      io.resp.ready := true.B
+      io.train.ready := true.B
+
+      pftQueue.io.enq.valid := l1_pf.io.req.valid
+      pftQueue.io.enq.bits := l1_pf.io.req.bits
+
+      l1_pf.io.req.ready := true.B
+      pipe.io.in <> pftQueue.io.deq
+      io.req <> pipe.io.out
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }
