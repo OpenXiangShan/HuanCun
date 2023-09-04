@@ -6,7 +6,7 @@ import freechips.rocketchip.diplomacy.LazyModule
 class DSTest extends L2Tester {
 
   val system = LazyModule(new ExampleSystem())
-  chisel3.stage.ChiselStage.elaborate(system.module)
+  circt.stage.ChiselStage.elaborate(system.module)
 
   val datastorage = chisel3.aop.Select.collectDeep[DataStorage](system.module){
     case ds: DataStorage =>

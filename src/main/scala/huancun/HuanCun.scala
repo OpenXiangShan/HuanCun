@@ -163,7 +163,7 @@ trait HasHuanCunParameters {
 
 trait DontCareInnerLogic { this: Module =>
   def IO[T <: Data](iodef: T): T = {
-    val p = chisel3.experimental.IO.apply(iodef)
+    val p = chisel3.IO.apply(iodef)
     p <> DontCare
     p
   }

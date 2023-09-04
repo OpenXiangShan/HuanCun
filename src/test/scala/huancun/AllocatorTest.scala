@@ -8,7 +8,7 @@ import freechips.rocketchip.tilelink.{BankBinder, TLCacheCork, TLFuzzer, TLRAM, 
 class AllocatorTest extends L2Tester {
 
   val system = LazyModule(new ExampleSystem())
-  chisel3.stage.ChiselStage.elaborate(system.module)
+  circt.stage.ChiselStage.elaborate(system.module)
 
   val mshrAlloc = chisel3.aop.Select.collectDeep[MSHRAlloc](system.module){
     case alloc: MSHRAlloc =>
