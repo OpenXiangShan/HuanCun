@@ -37,6 +37,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
     val lvna_req = if (hasLvnaCtrl) Some(Flipped(new LvnaSliceReq)) else None
+    val currentActDsid = if (hasDsid) Some(Input(UInt(dsidWidth.W))) else None
   })
   println(s"clientBits: $clientBits")
 
@@ -640,7 +641,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     mshrReq.bits.dirty := false.B
     mshrReq.bits.needProbeAckData.foreach(_ := false.B)
     if (hasDsid) {
-      mshrReq.bits.dsid.get := (1 << (dsidWidth - 1 )).U | cacheParams.belongCoreId.U
+      // mshrReq.bits.dsid.get := (1 << (dsidWidth - 1 )).U | io.currentActDsid.get
+      mshrReq.bits.dsid.get := io.currentActDsid.get
     }
     pftReq.ready := mshrReq.ready
     mshrReq

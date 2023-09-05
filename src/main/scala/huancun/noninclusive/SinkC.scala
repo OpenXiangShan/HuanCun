@@ -73,7 +73,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.alloc.bits.preferCache := true.B
   io.alloc.bits.dirty := c.bits.echo.lift(DirtyKey).getOrElse(true.B)
   if (hasDsid) {
-    io.alloc.bits.dsid.get := c.bits.user.lift(DsidKey).getOrElse(0.U)
+    io.alloc.bits.dsid.get := c.bits.user.lift(DsidKey).getOrElse(unusedDsid)
   }
   io.alloc.bits.fromProbeHelper := false.B
   io.alloc.bits.fromCmoHelper := false.B

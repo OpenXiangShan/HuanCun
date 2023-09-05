@@ -37,6 +37,7 @@ trait HasHuanCunParameters {
     else cacheParams.clientCaches.head.needResolveAlias
   val hasDsid = cacheParams.LvnaEnable
   val dsidWidth = cacheParams.dsidWidth
+  val unusedDsid = ((1 << dsidWidth) - 1).U(dsidWidth.W)
   val hasLvnaCtrl = cacheParams.LvnaCtrlEnable
 
   val blockBytes = cacheParams.blockBytes
@@ -367,6 +368,19 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         io.perfEvents(i) := slice.perfinfo
         slice
     }
+
+    if (hasDsid) {
+      val currentActDsid = RegInit(unusedDsid)
+      val banksInHasValidDsid = (node.in) map {
+        case (in, _) => in.a.fire && in.a.bits.user.lift(DsidKey).getOrElse(unusedDsid) =/= unusedDsid
+      }
+      currentActDsid := PriorityMux(
+        banksInHasValidDsid,
+        node.in.map(_._1.a.bits.user.lift(DsidKey).getOrElse(unusedDsid))
+      )
+      slices.foreach(_.io.currentActDsid.get := currentActDsid)
+    }
+
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
     val slices_ecc = slices.zipWithIndex.map {
       case (s, i) => Pipeline(s.io.ctl_ecc, depth = 2, pipe = false, name = Some(s"ecc_buffer_$i"))
