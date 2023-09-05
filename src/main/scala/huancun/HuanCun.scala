@@ -37,7 +37,7 @@ trait HasHuanCunParameters {
     else cacheParams.clientCaches.head.needResolveAlias
   val hasDsid = cacheParams.LvnaEnable
   val dsidWidth = cacheParams.dsidWidth
-  val unusedDsid = ((1 << dsidWidth) - 1).U(dsidWidth.W)
+  def unusedDsid: UInt = ((1 << dsidWidth) - 1).U(dsidWidth.W)
   val hasLvnaCtrl = cacheParams.LvnaCtrlEnable
 
   val blockBytes = cacheParams.blockBytes
