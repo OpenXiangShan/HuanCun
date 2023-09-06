@@ -481,7 +481,13 @@ class SRAMTemplate[T <: Data]
     val waymask = Mux(resetState, Fill(way, "b1".U), io.w.req.bits.waymask.getOrElse("b1".U))
 
     val finalWriteSetIdx = if (hasMbist && hasShareBus) Mux(mbistFuncSel, mbistAddr, setIdx) else setIdx
-    val finalReadSetIdx = if (hasMbist && hasShareBus) Mux(mbistFuncSel, mbistAddrRead, io.r.req.bits.setIdx) else io.r.req.bits.setIdx
+    val finalReadSetIdx = if (hasMbist && hasShareBus & implementSinglePort){
+      Mux(mbistFuncSel, mbistAddr, io.r.req.bits.setIdx)
+    } else if(hasMbist && hasShareBus & !implementSinglePort) {
+      Mux(mbistFuncSel, mbistAddrRead, io.r.req.bits.setIdx)
+    } else {
+      io.r.req.bits.setIdx
+    }
     val finalWen = if (hasMbist && hasShareBus) Mux(mbistFuncSel, mbistWriteEn, wen) else wen
     val finalRen = if (hasMbist && hasShareBus) Mux(mbistFuncSel, mbistReadEn, ren) else ren
     val finalWmask = if (hasMbist && hasShareBus) Mux(mbistFuncSel, mbistWMask, waymask) else waymask
