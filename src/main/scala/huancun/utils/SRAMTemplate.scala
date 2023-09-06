@@ -359,8 +359,7 @@ class SRAMTemplate[T <: Data]
   // mbist support
   hasMbist: Boolean = true, hasShareBus: Boolean = false,
   maxMbistDataWidth: Int = 256, parentName:String = s"Unknown",
-  bitWrite:Boolean = false, foundry:String = "Unkown",
-  sramInst:String = "STANDARD"
+  foundry:String = "Unkown",sramInst:String = "STANDARD"
   ) extends Module {
 
   val io = IO(new Bundle {
@@ -405,6 +404,7 @@ class SRAMTemplate[T <: Data]
   val myDataWidth = if (isNto1) mbistDataWidthNto1 else mbistDataWidth1toN
   val myMaskWidth = if (isNto1) maskWidthNto1 else maskWidth1toN
   val myArrayIds = Seq.tabulate(myNodeNum)(idx => SRAMTemplate.getDomainID() + idx)
+  val bitWrite = myMaskWidth != 1
   val (array,vname) = SRAMArray(master_clock, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2,
     hasMbist = hasMbist,selectedLen = if(hasMbist && hasShareBus) myNodeNum else 0)
   val myNodeParam = RAM2MBISTParams(set, myDataWidth,myMaskWidth,implementSinglePort,vname,parentName,myNodeNum,myArrayIds.max,bitWrite,foundry,sramInst)

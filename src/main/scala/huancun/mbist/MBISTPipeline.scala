@@ -117,7 +117,7 @@ object MBISTPipeline {
     val intfHeads = "\"INTF Name\", \"INTF Addr\", \"INTF Data\", \"INTF Array\", \"INTF Be\"\n"
     fileHandle.print(intfHeads)
     fileHandle.print(intfInfo.toString + '\n')
-    val sramHeads = "\"SRAM Name\",\"SRAM Type\",\"SRAM array\",\"pipeline depth\",\"bitWrite\",\"foundry\",\"SRAM Inst\"\n"
+    val sramHeads = "\"SRAM Name\",\"SRAM Type\",\"SRAM array\",\"pipeline depth\",\"bitWrite\",\"selectOH width\",\"foundry\",\"SRAM Inst\"\n"
     fileHandle.print(sramHeads)
     node.ramParamsBelongToThis.zip(node.array_id).zip(node.array_depth).foreach({
       case ((p,id),depth) =>
@@ -126,6 +126,7 @@ object MBISTPipeline {
         fileHandle.print(id.toString + ",")
         fileHandle.print((depth * 2 + 2).toString + ",")
         fileHandle.print(if(p.bitWrite) "true," else "false,")
+        fileHandle.print(p.nodeNum + ",")
         fileHandle.print(p.foundry + ",")
         fileHandle.print(p.sramInst)
         fileHandle.print("\n")
