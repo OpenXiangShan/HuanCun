@@ -404,7 +404,7 @@ class SRAMTemplate[T <: Data]
   val myDataWidth = if (isNto1) mbistDataWidthNto1 else mbistDataWidth1toN
   val myMaskWidth = if (isNto1) maskWidthNto1 else maskWidth1toN
   val myArrayIds = Seq.tabulate(myNodeNum)(idx => SRAMTemplate.getDomainID() + idx)
-  val bitWrite = myMaskWidth != 1
+  val bitWrite = way != 1
   val (array,vname) = SRAMArray(master_clock, implementSinglePort, set, way * gen.getWidth, way, MCP = clk_div_by_2,
     hasMbist = hasMbist,selectedLen = if(hasMbist && hasShareBus) myNodeNum else 0)
   val myNodeParam = RAM2MBISTParams(set, myDataWidth,myMaskWidth,implementSinglePort,vname,parentName,myNodeNum,myArrayIds.max,bitWrite,foundry,sramInst)
@@ -480,10 +480,14 @@ class SRAMTemplate[T <: Data]
     val wdata = VecInit(Mux(resetState, 0.U.asTypeOf(Vec(way, gen)), io.w.req.bits.data).map(_.asTypeOf(wordType)))
     val waymask = Mux(resetState, Fill(way, "b1".U), io.w.req.bits.waymask.getOrElse("b1".U))
 
-    val finalWriteSetIdx = if (hasMbist && hasShareBus) Mux(mbistFuncSel, mbistAddr, setIdx) else setIdx
-    val finalReadSetIdx = if (hasMbist && hasShareBus & implementSinglePort){
-      Mux(mbistFuncSel, mbistAddr, io.r.req.bits.setIdx)
-    } else if(hasMbist && hasShareBus & !implementSinglePort) {
+    val finalWriteSetIdx = if (hasMbist && hasShareBus & implementSinglePort){
+      Mux(mbistFuncSel, mbistAddrRead, setIdx)
+    } else if(hasMbist && hasShareBus & !implementSinglePort){
+      Mux(mbistFuncSel, mbistAddr, setIdx)
+    } else {
+      setIdx
+    }
+    val finalReadSetIdx = if (hasMbist && hasShareBus){
       Mux(mbistFuncSel, mbistAddrRead, io.r.req.bits.setIdx)
     } else {
       io.r.req.bits.setIdx
