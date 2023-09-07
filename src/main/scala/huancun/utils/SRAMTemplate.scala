@@ -207,6 +207,12 @@ class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
   }
 }
 
+class SRAMArray1P_MCP(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None,selectedLen:Int)
+  extends SRAMArray1P(depth, width, maskSegments, hasMbist, sramName, selectedLen)
+
+class SRAMArray2P_MCP(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None,selectedLen:Int)
+  extends SRAMArray2P(depth, width, maskSegments, hasMbist, sramName, selectedLen)
+
 object SRAMArray {
   private val instances = ListBuffer.empty[(Boolean, Int, Int, Int, Boolean, Boolean)]
 
@@ -225,10 +231,14 @@ object SRAMArray {
     val numPort = if (singlePort) 1 else 2
     val maskWidth = width / maskSegments
     val sramName = Some(s"sram_array_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix")
-    val array = if (singlePort) {
+    val array = if (singlePort && MCP) {
       Module(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName,selectedLen))
-    } else {
+    } else if (singlePort && !MCP) {
       Module(new SRAMArray2P(depth, width, maskSegments, hasMbist, sramName,selectedLen))
+    } else if (!singlePort && MCP) {
+      Module(new SRAMArray1P_MCP(depth, width, maskSegments, hasMbist, sramName,selectedLen))
+    } else {
+      Module(new SRAMArray2P_MCP(depth, width, maskSegments, hasMbist, sramName,selectedLen))
     }
     array.init(clock, writeClock)
     (array,sramName.get)
