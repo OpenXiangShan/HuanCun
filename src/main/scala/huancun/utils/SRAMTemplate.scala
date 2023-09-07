@@ -231,14 +231,14 @@ object SRAMArray {
     val numPort = if (singlePort) 1 else 2
     val maskWidth = width / maskSegments
     val sramName = Some(s"sram_array_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix")
-    val array = if (singlePort && MCP) {
-      Module(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName,selectedLen))
-    } else if (singlePort && !MCP) {
-      Module(new SRAMArray2P(depth, width, maskSegments, hasMbist, sramName,selectedLen))
-    } else if (!singlePort && MCP) {
-      Module(new SRAMArray1P_MCP(depth, width, maskSegments, hasMbist, sramName,selectedLen))
+    val array = if (singlePort && !MCP) {
+      Module(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName, selectedLen))
+    } else if (!singlePort && !MCP) {
+      Module(new SRAMArray2P(depth, width, maskSegments, hasMbist, sramName, selectedLen))
+    } else if (singlePort && MCP) {
+      Module(new SRAMArray1P_MCP(depth, width, maskSegments, hasMbist, sramName, selectedLen))
     } else {
-      Module(new SRAMArray2P_MCP(depth, width, maskSegments, hasMbist, sramName,selectedLen))
+      Module(new SRAMArray2P_MCP(depth, width, maskSegments, hasMbist, sramName, selectedLen))
     }
     array.init(clock, writeClock)
     (array,sramName.get)
