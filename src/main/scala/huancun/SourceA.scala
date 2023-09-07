@@ -25,6 +25,7 @@ import chisel3.util._
 import freechips.rocketchip.tilelink.TLMessages._
 import freechips.rocketchip.tilelink._
 import huancun.utils.HoldUnless
+import utility.MemReqSource
 
 class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {

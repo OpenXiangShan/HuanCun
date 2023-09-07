@@ -23,7 +23,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
-import utility.ReqSourceKey
+import utility.{MemReqSource, ReqSourceKey}
 
 class SourceCPipe(implicit p: Parameters) extends HuanCunBundle {
   val task = new SourceCReq

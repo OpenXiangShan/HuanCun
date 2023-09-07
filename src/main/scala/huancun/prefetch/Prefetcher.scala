@@ -12,7 +12,11 @@ class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
   val set = UInt(setBits.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
-  val isBOP = Bool()
+  val pfSource = UInt(MemReqSource.reqSourceBits.W)
+
+  def isBOP: Bool = pfSource === MemReqSource.Prefetch2L2BOP.id.U
+  def isSMS: Bool = pfSource === MemReqSource.Prefetch2L2SMS.id.U
+  def isTP: Bool = pfSource === MemReqSource.Prefetch2L2TP.id.U
 }
 
 class PrefetchResp(implicit p: Parameters) extends PrefetchBundle {
@@ -114,6 +118,24 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       )
       l1_pf.io.req.ready := true.B
       bop.io.req.ready := true.B
+      pipe.io.in <> pftQueue.io.deq
+      io.req <> pipe.io.out
+    case receiver: L3PrefetchReceiverParams =>
+      val l1_pf = Module(new PrefetchReceiver())
+      val pftQueue = Module(new PrefetchQueue)
+      val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
+
+      l1_pf.io.recv_addr := ValidIODelay(io.recv_addr, 2)
+      l1_pf.io.train <> DontCare
+      l1_pf.io.resp <> DontCare
+
+      io.resp.ready := true.B
+      io.train.ready := true.B
+
+      pftQueue.io.enq.valid := l1_pf.io.req.valid
+      pftQueue.io.enq.bits := l1_pf.io.req.bits
+
+      l1_pf.io.req.ready := true.B
       pipe.io.in <> pftQueue.io.deq
       io.req <> pipe.io.out
     case _ => assert(cond = false, "Unknown prefetcher")
