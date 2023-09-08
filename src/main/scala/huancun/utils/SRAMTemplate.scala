@@ -21,13 +21,13 @@
 package huancun.utils
 
 import chisel3._
+import chisel3.experimental.hierarchy.{Definition, Instance, instantiable, public}
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 import freechips.rocketchip.tilelink.LFSR64
 import huancun.mbist._
 import huancun.utils.SRAMTemplate.{nodeId, wrapperId}
-
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable
 import scala.math.sqrt
 
 object HoldUnless {
@@ -51,35 +51,34 @@ class BroadCastBundle() extends Bundle {
   val l3dataramclk_bypass = Input(Bool())
   val cgen = Input(Bool())
 }
-
-abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None, selectedLen:Int, noDedup:Boolean) extends RawModule {
-  val mbist = if (hasMbist) Some(IO(new SRAMMbistIO(selectedLen))) else None
+@instantiable
+abstract class SRAMArray(hasMbist: Boolean, sramName: Option[String] = None, selectedLen:Int) extends RawModule {
+  @public val mbist = if (hasMbist) Some(IO(new SRAMMbistIO(selectedLen))) else None
   if (mbist.isDefined) {
     dontTouch(mbist.get)
   }
 
   override def desiredName: String = sramName.getOrElse(super.desiredName)
 
-  def init(clock: Clock, writeClock: Option[Clock]): Unit
-  def read(addr: UInt): UInt
-  def read(addr: UInt, enable: Bool): UInt = {
+  @public def init(clock: Clock, writeClock: Option[Clock]): Unit
+  @public def read(addr: UInt): UInt
+  @public def read(addr: UInt, enable: Bool): UInt = {
     var rdata = 0.U
     when (enable) {
       rdata = read(addr)
     }
     rdata
   }
-  def write(addr: UInt, data: UInt): Unit
-  def write(addr: UInt, data: UInt, mask: UInt): Unit
+  @public def write(addr: UInt, data: UInt): Unit
+  @public def write(addr: UInt, data: UInt, mask: UInt): Unit
 
-  if (noDedup) {
-    MBIST.noDedup(this)
-  }
+  MBIST.noDedup(this)
 }
 
-class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None, selectedLen:Int, noDedup:Boolean)
-  extends SRAMArray(hasMbist, sramName,selectedLen, noDedup) {
-  val RW0 = IO(new Bundle() {
+@instantiable
+class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None, selectedLen:Int)
+  extends SRAMArray(hasMbist, sramName,selectedLen) {
+  @public val RW0 = IO(new Bundle() {
     val clk   = Input(Clock())
     val addr  = Input(UInt(log2Ceil(depth).W))
     val en    = Input(Bool())
@@ -106,23 +105,23 @@ class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
     }
   }
 
-  def init(clock: Clock, writeClock: Option[Clock] = None): Unit = {
+  @public def init(clock: Clock, writeClock: Option[Clock] = None): Unit = {
     dontTouch(RW0)
     RW0 := DontCare
     RW0.clk := clock
     RW0.en := false.B
   }
-  def read(addr: UInt): UInt = {
+  @public def read(addr: UInt): UInt = {
     RW0.addr := addr
     RW0.en := true.B
     RW0.wmode := false.B
     RW0.rdata
   }
-  def write(addr: UInt, data: UInt): Unit = {
+  @public def write(addr: UInt, data: UInt): Unit = {
     val mask = Fill(maskSegments, true.B)
     write(addr, data, mask)
   }
-  def write(addr: UInt, data: UInt, mask: UInt): Unit = {
+  @public def write(addr: UInt, data: UInt, mask: UInt): Unit = {
     RW0.addr := addr
     RW0.en := true.B
     RW0.wmode := true.B
@@ -133,18 +132,19 @@ class SRAMArray1P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
   }
 }
 
-class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None, selectedLen:Int, noDedup:Boolean)
-  extends SRAMArray(hasMbist, sramName, selectedLen, noDedup)  {
+@instantiable
+class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, sramName: Option[String] = None, selectedLen:Int)
+  extends SRAMArray(hasMbist, sramName, selectedLen)  {
   require(width % maskSegments == 0)
 
-  val R0 = IO(new Bundle() {
+  @public val R0 = IO(new Bundle() {
     val clk   = Input(Clock())
     val addr  = Input(UInt(log2Ceil(depth).W))
     val en    = Input(Bool())
     val data  = Output(UInt(width.W))
   })
 
-  val W0 = IO(new Bundle() {
+  @public val W0 = IO(new Bundle() {
     val clk   = Input(Clock())
     val addr  = Input(UInt(log2Ceil(depth).W))
     val en    = Input(Bool())
@@ -183,7 +183,7 @@ class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
     // write with mask
   }
 
-  def init(clock: Clock, writeClock: Option[Clock]): Unit = {
+  @public def init(clock: Clock, writeClock: Option[Clock]): Unit = {
     dontTouch(R0)
     dontTouch(W0)
     R0 := DontCare
@@ -193,15 +193,15 @@ class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
     W0.clk := writeClock.getOrElse(clock)
     W0.en := false.B
   }
-  def read(addr: UInt): UInt = {
+  @public def read(addr: UInt): UInt = {
     R0.addr := addr
     R0.en := true.B
     R0.data
   }
-  def write(addr: UInt, data: UInt): Unit = {
+  @public def write(addr: UInt, data: UInt): Unit = {
     write(addr, data, ((1L << maskSegments) - 1).U)
   }
-  def write(addr: UInt, data: UInt, mask: UInt): Unit = {
+  @public def write(addr: UInt, data: UInt, mask: UInt): Unit = {
     W0.addr := addr
     W0.en := true.B
     if (W0.mask.isDefined) {
@@ -212,30 +212,30 @@ class SRAMArray2P(depth: Int, width: Int, maskSegments: Int, hasMbist: Boolean, 
 }
 
 object SRAMArray {
-  private val instances = ListBuffer.empty[(Boolean, Int, Int, Int, Boolean, Boolean)]
+  private val defMap = mutable.Map[String, Definition[SRAMArray]]()
 
   def apply(clock: Clock, singlePort: Boolean, depth: Int, width: Int,
             maskSegments: Int = 1,
             MCP: Boolean = false,
             writeClock: Option[Clock] = None,
             hasMbist: Boolean,
-            selectedLen:Int
-           ): (SRAMArray,String) = {
-    val sram_key = (singlePort, depth, width, maskSegments, MCP, hasMbist)
-    var noDedup = false
-    if (!instances.contains(sram_key)) {
-      instances += sram_key
-      noDedup = true
-    }
+            selectedLen:Int,
+            suffix:String = ""
+           ): (Instance[SRAMArray],String) = {
+    val mbist = if(hasMbist) "_bist" else ""
     val mcpPrefix = if (MCP) "_multicycle" else ""
     val numPort = if (singlePort) 1 else 2
     val maskWidth = width / maskSegments
-    val sramName = Some(s"sram_array_${numPort}p${depth}x${width}m$maskWidth$mcpPrefix")
-    val array = if (singlePort) {
-      Module(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName, selectedLen, noDedup))
-    } else{
-      Module(new SRAMArray2P(depth, width, maskSegments, hasMbist, sramName, selectedLen, noDedup))
+    val sramName = Some(s"sram_array_${numPort}p${depth}x${width}m$maskWidth$mbist$mcpPrefix$suffix")
+    if(!defMap.contains(sramName.get)){
+      val sramDef = if(singlePort){
+        Definition(new SRAMArray1P(depth, width, maskSegments, hasMbist, sramName, selectedLen))
+      } else {
+        Definition(new SRAMArray2P(depth, width, maskSegments, hasMbist, sramName, selectedLen))
+      }
+      defMap(sramName.get) = sramDef
     }
+    val array = Instance(defMap(sramName.get))
     array.init(clock, writeClock)
     (array,sramName.get)
   }
