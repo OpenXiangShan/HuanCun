@@ -138,7 +138,7 @@ object MBIST {
     node
   }
 
-  def noDedup(m: Module): Unit = {
+  def noDedup(m: RawModule): Unit = {
     chisel3.experimental.annotate(new ChiselAnnotation {
       override def toFirrtl: Annotation = NoDedupAnnotation(m.toTarget)
     })
