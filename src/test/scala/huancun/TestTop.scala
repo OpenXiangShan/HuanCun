@@ -9,7 +9,6 @@ import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import freechips.rocketchip.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
-import chisel3.util.experimental.BoringUtils
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -27,6 +26,7 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
    *    L2
    */
 
+  override lazy val desiredName: String = "TestTop"
   val delayFactor = 0.5
   val cacheParams = p(HCCacheParamsKey)
 
@@ -69,16 +69,21 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
       TLDelayer(delayFactor) :=*
       l2.node :=* xbar
 
-  lazy val module = new LazyModuleImp(this){
+  lazy val module = new LazyModuleImp(this) {
     val io = IO(new Bundle(){
       val perfInfo = new PerfInfoIO
     })
-    val clean = io.perfInfo.clean
-    val dump = io.perfInfo.dump
-    BoringUtils.addSource(clean, "XSPERF_CLEAN")
-    BoringUtils.addSource(dump, "XSPERF_DUMP")
+    val timer = WireDefault(0.U(64.W))
+    val logEnable = WireDefault(false.B)
+    val clean = WireDefault(io.perfInfo.clean)
+    val dump = WireDefault(io.perfInfo.dump)
 
-    master_nodes.zipWithIndex.foreach{
+    dontTouch(timer)
+    dontTouch(logEnable)
+    dontTouch(clean)
+    dontTouch(dump)
+
+    master_nodes.zipWithIndex.foreach {
       case (node, i) =>
         node.makeIOs()(ValName(s"master_port_$i"))
     }
@@ -92,6 +97,7 @@ class TestTop_L2_Standalone()(implicit p: Parameters) extends LazyModule {
    *    L2
    */
 
+  override lazy val desiredName: String = "TestTop"
   val delayFactor = 0.5
   val cacheParams = p(HCCacheParamsKey)
 
@@ -155,8 +161,18 @@ class TestTop_L2_Standalone()(implicit p: Parameters) extends LazyModule {
     TLDelayer(delayFactor) :=*
     l2.node :=* xbar
 
-  lazy val module = new LazyModuleImp(this){
-    master_nodes.zipWithIndex.foreach{
+  lazy val module = new LazyModuleImp(this) {
+    val timer = WireDefault(0.U(64.W))
+    val logEnable = WireDefault(false.B)
+    val clean = WireDefault(false.B)
+    val dump = WireDefault(false.B)
+
+    dontTouch(timer)
+    dontTouch(logEnable)
+    dontTouch(clean)
+    dontTouch(dump)
+
+    master_nodes.zipWithIndex.foreach {
       case (node, i) =>
         node.makeIOs()(ValName(s"master_port_$i"))
     }
@@ -173,6 +189,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
    *    L3
    */
 
+  override lazy val desiredName: String = "TestTop"
   val delayFactor = 0.2
   val cacheParams = p(HCCacheParamsKey)
 
@@ -236,7 +253,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       TLDelayer(delayFactor) :=*
       l3.node :=* xbar
 
-  for(tllogger <- l2_l3_tllog_nodes){
+  for(tllogger <- l2_l3_tllog_nodes) {
     xbar :=* tllogger
   }
 
@@ -249,8 +266,18 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       l1d_nodes(i)
   }
 
-  lazy val module = new LazyModuleImp(this){
-    master_nodes.zipWithIndex.foreach{
+  lazy val module = new LazyModuleImp(this) {
+    val timer = WireDefault(0.U(64.W))
+    val logEnable = WireDefault(false.B)
+    val clean = WireDefault(false.B)
+    val dump = WireDefault(false.B)
+
+    dontTouch(timer)
+    dontTouch(logEnable)
+    dontTouch(clean)
+    dontTouch(dump)
+
+    master_nodes.zipWithIndex.foreach {
       case (node, i) =>
         node.makeIOs()(ValName(s"master_port_$i"))
     }
@@ -267,6 +294,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
 //             |
 //             l3
 
+  override lazy val desiredName: String = "TestTop"
   val cacheParams: HCCacheParameters = p(HCCacheParamsKey)
   val nrL2 = 1
   val L2NBanks = 1
@@ -407,6 +435,16 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
   }
 
   lazy val module = new LazyModuleImp(this) {
+    val timer = WireDefault(0.U(64.W))
+    val logEnable = WireDefault(false.B)
+    val clean = WireDefault(false.B)
+    val dump = WireDefault(false.B)
+
+    dontTouch(timer)
+    dontTouch(logEnable)
+    dontTouch(clean)
+    dontTouch(dump)
+
     master_nodes.zipWithIndex.foreach {
       case (node, i) =>
         node.makeIOs()(ValName(s"master_port_$i"))
