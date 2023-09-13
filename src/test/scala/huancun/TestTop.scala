@@ -70,10 +70,13 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
       l2.node :=* xbar
 
   lazy val module = new LazyModuleImp(this) {
+    val io = IO(new Bundle(){
+      val perfInfo = new PerfInfoIO
+    })
     val timer = WireDefault(0.U(64.W))
     val logEnable = WireDefault(false.B)
-    val clean = WireDefault(false.B)
-    val dump = WireDefault(false.B)
+    val clean = WireDefault(io.perfInfo.clean)
+    val dump = WireDefault(io.perfInfo.dump)
 
     dontTouch(timer)
     dontTouch(logEnable)
