@@ -250,8 +250,6 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
     })
 
-    io.debugTopDown <> DontCare
-
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
     def sizeBytesToStr(sizeBytes: Double): String = sizeBytes match {
       case _ if sizeBytes >= 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
@@ -421,14 +419,16 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case EdgeOutKey => node.out.head._2
       case BankBitsKey => bankBits
     })))
-    topDown.foreach { t =>
-      t.io.msStatus.zip(slices).foreach {
-        case (in, s) => in := s.io.ms_status.get
-      }
-      t.io.dirResult.zip(slices).foreach {
-        case (res, s) => res := s.io.dir_result.get
-      }
-      t.io.debugTopDown <> io.debugTopDown
+    topDown match {
+      case Some(t) =>
+        t.io.msStatus.zip(slices).foreach {
+          case (in, s) => in := s.io.ms_status.get
+        }
+        t.io.dirResult.zip(slices).foreach {
+          case (res, s) => res := s.io.dir_result.get
+        }
+        t.io.debugTopDown <> io.debugTopDown
+      case None => io.debugTopDown.addrMatch.foreach(_ := false.B)
     }
   }
 
