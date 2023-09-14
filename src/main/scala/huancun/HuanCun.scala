@@ -244,6 +244,10 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
+      val debugTopDown = new Bundle {
+        val robHeadPaddr = Vec(cacheParams.hartIds.length, Flipped(Valid(UInt(36.W))))
+        val addrMatch = Vec(cacheParams.hartIds.length, Output(Bool()))
+      }
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -415,15 +419,16 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case EdgeOutKey => node.out.head._2
       case BankBitsKey => bankBits
     })))
-    topDownOpt.foreach {
-      _ => {
-        topDown.get.io.msStatus.zip(slices).foreach {
+    topDown match {
+      case Some(t) =>
+        t.io.msStatus.zip(slices).foreach {
           case (in, s) => in := s.io.ms_status.get
         }
-        topDown.get.io.dirResult.zip(slices).foreach {
+        t.io.dirResult.zip(slices).foreach {
           case (res, s) => res := s.io.dir_result.get
         }
-      }
+        t.io.debugTopDown <> io.debugTopDown
+      case None => io.debugTopDown.addrMatch.foreach(_ := false.B)
     }
   }
 
