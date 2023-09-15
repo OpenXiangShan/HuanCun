@@ -23,6 +23,7 @@ import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.{BundleMap, UIntToOH1}
+import utility.MemReqSource
 
 abstract class InnerTask(implicit p: Parameters) extends HuanCunBundle {
   val sourceId = UInt(sourceIdBits.W)
@@ -234,22 +235,4 @@ class PrefetchRecv extends Bundle {
   val addr = UInt(64.W)
   val addr_valid = Bool()
   val l2_pf_en = Bool()
-}
-
-// indicates where the memory access request comes from
-// a dupliacte of this is in Xiangshan.package and CoupledL2.common
-object MemReqSource extends Enumeration {
-  val NoWhere = Value("NoWhere")
-
-  val CPUInst = Value("CPUInst")
-  val CPULoadData = Value("CPULoadData")
-  val CPUStoreData = Value("CPUStoreData")
-  val CPUAtomicData = Value("CPUAtomicData")
-  val L1InstPrefetch = Value("L1InstPrefetch")
-  val L1DataPrefetch = Value("L1DataPrefetch")
-  val PTW = Value("PTW")
-  val L2Prefetch = Value("L2Prefetch")
-  val ReqSourceCount = Value("ReqSourceCount")
-
-  val reqSourceBits = log2Ceil(ReqSourceCount.id)
 }

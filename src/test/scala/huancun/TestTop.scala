@@ -255,7 +255,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       TLDelayer(delayFactor) :=*
       l3.node :=* xbar
 
-  for(tllogger <- l2_l3_tllog_nodes){
+  for(tllogger <- l2_l3_tllog_nodes) {
     xbar :=* tllogger
   }
 

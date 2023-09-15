@@ -4,7 +4,7 @@ import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import huancun._
-import utility.RegNextN
+import utility.{MemReqSource, RegNextN}
 
 class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
 
@@ -230,6 +230,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.cmo_req.bits.fromCmoHelper := true.B
   io.cmo_req.bits.needProbeAckData.foreach(_ := false.B)
   io.cmo_req.bits.reqSource := MemReqSource.NoWhere.id.U
+  io.cmo_req.bits.isBop.foreach(_ := false.B)
 
   io.cmo_req.valid := s_cmo
   when(io.cmo_req.fire){

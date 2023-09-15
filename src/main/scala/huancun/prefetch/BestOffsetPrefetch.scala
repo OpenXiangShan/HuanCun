@@ -5,6 +5,7 @@ import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import huancun.HasHuanCunParameters
+import utility.MemReqSource
 
 case class BOPParameters(
   rrTableEntries: Int = 256,
@@ -262,7 +263,7 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
 
   io.req.valid := req_valid
   io.req.bits := req
-  io.req.bits.isBOP := true.B
+  io.req.bits.pfSource := MemReqSource.Prefetch2L2BOP.id.U
   io.train.ready := scoreTable.io.req.ready && (!req_valid || io.req.ready)
   io.resp.ready := rrTable.io.w.ready
 }

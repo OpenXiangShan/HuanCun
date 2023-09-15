@@ -9,7 +9,7 @@ import freechips.rocketchip.tilelink.TLHints._
 import huancun._
 import huancun.utils._
 import huancun.MetaData._
-import utility.ParallelMax
+import utility.{MemReqSource, ParallelMax}
 
 class C_Status(implicit p: Parameters) extends HuanCunBundle {
   // When C nest A, A needs to know the status of C and tells C to release through to next level
@@ -993,7 +993,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val acquire_opcode = if (cacheParams.name == "L2") {
     Mux(req.opcode === AcquirePerm && req.param === BtoT, AcquirePerm, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
   } else {
-    Mux(req_put, AcquireBlock, req.opcode)
+    Mux(req_put, AcquireBlock, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
     // for put & !bypassPut, cache hierachy should have B/T. AcquirePerm is enough
   }
 
@@ -1003,7 +1003,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       req.param
     )
   } else {
-    Mux(req.opcode === AcquireBlock && req.param === BtoT, NtoT, Mux(req_put, NtoT, req.param))
+    Mux(req.opcode === Hint,
+      Mux(req_needT, Mux(highest_perm_reg === BRANCH, BtoT, NtoT), NtoB),
+      Mux(req.opcode === AcquireBlock && req.param === BtoT, NtoT, Mux(req_put, NtoT, req.param))
+    )
   }
 
   oa.opcode := Mux(!s_transferput || bypassGet, req.opcode,
@@ -1039,7 +1042,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.putData := bypassPut_latch
   oa.bufIdx := req.bufIdx
   oa.size := req.size
-  oa.reqSource := Mux(req.opcode === Hint, MemReqSource.L2Prefetch.id.U, req.reqSource)
+  oa.reqSource := Mux(req.opcode === Hint,
+    if (cacheParams.level == 2) req.reqSource else MemReqSource.Prefetch2L3Unknown.id.U,
+    req.reqSource
+  )
 
   ob.tag := req.tag
   ob.set := req.set
@@ -1297,7 +1303,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val sink_c_resp_valid = io.resps.sink_c.valid && !w_probeacklast
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
   // ! This is the last client sending probeack
-  val probeack_last = (probes_done | probeack_bit) === probe_clients
+  val probeack_last = if(clientBits == 1) sink_c_resp_valid else (probes_done | probeack_bit) === probe_clients
 
   // Update client_probeack_param_vec according to the param of ProbeAck
   client_probeack_param_vec := client_probeack_param_vec_reg
