@@ -35,7 +35,7 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
         }
     }
 
-    val addrMatch = Cat(addrMatchVec.flatten).orR
+    val addrMatch = WireDefault(Cat(addrMatchVec.flatten).orR)
 
     XSPerfAccumulate(cacheParams, perfName, addrMatch)
     ExcitingUtils.addSource(addrMatch, perfName, ExcitingUtils.Perf)

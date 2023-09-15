@@ -30,7 +30,6 @@ import huancun.prefetch._
 import utils.{ResetGen, XSPerfAccumulate}
 import utility.{Pipeline, FastArbiter}
 import huancun.noninclusive.MSHR
-import chisel3.util.experimental.BoringUtils
 
 trait HasHuanCunParameters {
   val p: Parameters
