@@ -108,7 +108,7 @@ object XSPerfPrint {
     apply(Printable.pack(fmt, data: _*))(ctrlInfo)
 
   def apply(pable: Printable)(ctrlInfo: LogPerfIO): Any = {
-    val commonInfo = p"[PERF ][time=${ctrlInfo.timer}] 9527: "
+    val commonInfo = p"[PERF ][time=${ctrlInfo.timer}] __PERCENTAGE_M__: "
     printf(commonInfo + pable)
   }
 }
