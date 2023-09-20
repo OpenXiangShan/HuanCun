@@ -49,7 +49,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
 
   def invalid_way_sel(metaVec: Seq[DirectoryEntry], repl: UInt) = {
     val invalid_vec = metaVec.map(_.state === MetaData.INVALID)
-    val has_invalid_way = Cat(invalid_vec).orR()
+    val has_invalid_way = Cat(invalid_vec).orR
     val way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
     (has_invalid_way, way)
   }
@@ -80,7 +80,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
   rport.bits.wayMode := false.B
   rport.bits.way := DontCare
   req.ready := rport.ready
-  val reqIdOHReg = RegEnable(req.bits.idOH, req.fire())
+  val reqIdOHReg = RegEnable(req.bits.idOH, req.fire)
   val resp = io.result
   val selfResp = dir.io.resp
   resp.valid := selfResp.valid

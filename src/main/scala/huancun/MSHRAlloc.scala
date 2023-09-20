@@ -87,17 +87,17 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     io.status.map(s => s.valid && s.bits.nestB).init.init ++ Seq(false.B, false.B)
   )
 
-  val conflict_c = c_match_vec.asUInt().orR()
-  val conflict_b = b_match_vec.asUInt().orR()
-  val conflict_a = a_match_vec.asUInt().orR()
+  val conflict_c = c_match_vec.asUInt.orR
+  val conflict_b = b_match_vec.asUInt.orR
+  val conflict_a = a_match_vec.asUInt.orR
 
   val abc_mshr_status = io.status.init.init
   val bc_mshr_status = io.status.init.last
   val c_mshr_status = io.status.last
 
-  val double_nest = Cat(c_match_vec.init.init).orR() && c_match_vec.init.last
-  val may_nestC = (c_match_vec.asUInt() & nestC_vec.asUInt()).orR() && !(double_nest && !bc_mshr_status.bits.nestC)
-  val may_nestB = (b_match_vec.asUInt() & nestB_vec.asUInt()).orR()
+  val double_nest = Cat(c_match_vec.init.init).orR && c_match_vec.init.last
+  val may_nestC = (c_match_vec.asUInt & nestC_vec.asUInt).orR && !(double_nest && !bc_mshr_status.bits.nestC)
+  val may_nestB = (b_match_vec.asUInt & nestB_vec.asUInt).orR
 
   val abc_mshr_alloc = io.alloc.init.init
   val bc_mshr_alloc = io.alloc.init.last
@@ -107,7 +107,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val nestB = may_nestB && !bc_mshr_status.valid && !c_mshr_status.valid
 
   val dirRead = io.dirRead
-  val mshrFree = Cat(abc_mshr_status.map(s => !s.valid)).orR()
+  val mshrFree = Cat(abc_mshr_status.map(s => !s.valid)).orR
 
   //val can_accept_c = (mshrFree && !conflict_c) || nestC
   val can_accept_c = (!conflict_c && (mshrFree || !c_mshr_status.valid)) || nestC
@@ -159,7 +159,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   io.c_mask.valid := c_mshr_alloc.valid
   io.c_mask.bits := c_match_vec
 
-  dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR() && dirRead.ready
+  dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR && dirRead.ready
   dirRead.bits.source := request.bits.source
   dirRead.bits.tag := request.bits.tag
   dirRead.bits.set := request.bits.set
@@ -207,7 +207,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   XSPerfAccumulate(cacheParams, "nrWorkingBmshr", io.status.take(mshrs+1).last.valid)
   XSPerfAccumulate(cacheParams, "nrWorkingCmshr", io.status.last.valid)
   XSPerfAccumulate(cacheParams, "conflictA", io.a_req.valid && conflict_a)
-  XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && Cat(pretch_block_vec).orR())
+  XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && Cat(pretch_block_vec).orR)
   XSPerfAccumulate(cacheParams, "conflictB", io.b_req.valid && conflict_b)
   XSPerfAccumulate(cacheParams, "conflictC", io.c_req.valid && conflict_c)
   //val perfinfo = IO(new Bundle(){

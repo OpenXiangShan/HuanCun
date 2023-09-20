@@ -113,8 +113,8 @@ class XbarCircuit
     val out = MixedVec(edgeOut.map(e => TLBundle(e.bundle)))
   })
 
-  val inSeq = io.in.zip(edgeIn)
-  val outSeq = io.out.zip(edgeOut)
+  val inSeq = io.in.zip(edgeIn).toSeq
+  val outSeq = io.out.zip(edgeOut).toSeq
 
   TLXbar.circuit(policy, inSeq, outSeq)
 

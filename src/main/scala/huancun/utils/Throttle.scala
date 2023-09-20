@@ -14,15 +14,15 @@ class Throttle(threshold: Int)(implicit p: Parameters) extends LazyModule {
     val (out, edgeOut) = node.out.head
 
     // TL-UL is guaranteed
-    assert(!in.b.fire() && !in.c.fire() && !in.e.fire())
-    assert(!out.b.fire() && !out.c.fire() && !out.e.fire())
+    assert(!in.b.fire && !in.c.fire && !in.e.fire)
+    assert(!out.b.fire && !out.c.fire && !out.e.fire)
 
     val pendingCnt = RegInit(0.U(32.W))
     val (a_first, _, _, _) = edgeIn.count(in.a)
     val (d_first, _, _, _) = edgeIn.count(in.d)
 
-    val new_req = in.a.fire() && a_first
-    val new_resp = in.d.fire() && d_first
+    val new_req = in.a.fire && a_first
+    val new_resp = in.d.fire && d_first
 
     when(new_req) {
       when(!new_resp) {

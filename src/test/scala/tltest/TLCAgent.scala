@@ -170,7 +170,7 @@ class TLCAgent(
   var clock = 0
 
   def transStep(): Unit = {
-    Unit
+    ()
   }
 
   def step(): Unit = {

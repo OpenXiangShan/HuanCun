@@ -55,7 +55,7 @@ class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
   val client_dir = dir.clients.states(req_client)
   val dir_conflict = !dir.clients.tag_match && Cat(
     dir.clients.states.map(s => !s.hit && s.state =/= MetaData.INVALID)
-  ).orR()
+  ).orR
   val formA = dir.replacerInfo.channel === 1.U
   val req_acquire = formA && (dir.replacerInfo.opcode === TLMessages.AcquirePerm ||
     dir.replacerInfo.opcode === TLMessages.AcquireBlock)
@@ -65,13 +65,13 @@ class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
 
   io.probe <> queue.io.deq
 
-  XSPerfAccumulate(cacheParams, "client_dir_conflict", queue.io.enq.fire())
+  XSPerfAccumulate(cacheParams, "client_dir_conflict", queue.io.enq.fire)
   //val perfinfo = IO(new Bundle(){
   //  val perfEvents = Output(new PerfEventsBundle(numPCntHcReqb))
   //})
   val perfinfo = IO(Output(Vec(numPCntHcProb, (UInt(6.W)))))
   val perfEvents = Seq(
-    ("client_dir_conflict        ", queue.io.enq.fire()             ),
+    ("client_dir_conflict        ", queue.io.enq.fire             ),
   )
 
   for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {

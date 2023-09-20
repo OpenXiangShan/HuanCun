@@ -62,7 +62,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.d.ready := !needData || bs_ready || !cache && bypass_ready || (!cache && !io.inner_grant)
 
   // Generate resp
-  io.resp.valid := (first || last) && io.d.fire() // MSHR need to be notified when both first & last
+  io.resp.valid := (first || last) && io.d.fire // MSHR need to be notified when both first & last
   io.resp.bits.last := last
   io.resp.bits.opcode := io.d.bits.opcode
   io.resp.bits.param := io.d.bits.param
@@ -77,7 +77,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     (bypass_ready || !io.inner_grant)
   io.bs_waddr.bits.way := io.way
   io.bs_waddr.bits.set := io.set
-  io.bs_waddr.bits.beat := Mux(io.d.valid, beat, RegEnable(beat + io.bs_waddr.ready.asUInt(), io.d.valid))
+  io.bs_waddr.bits.beat := Mux(io.d.valid, beat, RegEnable(beat + io.bs_waddr.ready.asUInt, io.d.valid))
   io.bs_waddr.bits.write := true.B
   io.bs_waddr.bits.noop := !io.d.valid
   io.bs_wdata.data := io.d.bits.data

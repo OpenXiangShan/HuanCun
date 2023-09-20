@@ -73,7 +73,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   // stage1
   val busy = RegInit(false.B)
   val s1_block_r = RegInit(false.B)
-  val s1_req_reg = RegEnable(io.task.bits, io.task.fire())
+  val s1_req_reg = RegEnable(io.task.bits, io.task.fire)
   val s1_req = Mux(busy, s1_req_reg, io.task.bits)
   val s1_needData = needData(s1_req)
   val s1_need_pb = s1_req.fromA && (s1_req.opcode === TLMessages.AccessAck && !s1_req.bypassPut)
@@ -102,10 +102,10 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.bypass_read.beat := s1_beat
   io.bypass_read.last := s1_last
 
-  when(io.task.fire()) {
+  when(io.task.fire) {
     busy := true.B
   }
-  when(Mux(s1_req.useBypass, s1_bypass_hit, io.bs_raddr.fire())){
+  when(Mux(s1_req.useBypass, s1_bypass_hit, io.bs_raddr.fire)){
     s1_block_r := true.B
   }
   when(s1_valid && s2_ready) {
@@ -210,7 +210,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   assert(!s3_valid || needData(s3_regs.req), "Only data task can go to stage3!")
 
   pbQueue.io.enq.bits := io.pb_beat
-  pbQueue.io.enq.valid := RegNext(io.pb_pop.fire(), false.B)
+  pbQueue.io.enq.valid := RegNext(io.pb_pop.fire, false.B)
   pbQueue.io.deq.ready := s3_valid && s3_need_pb && s4_ready
 
   val s3_rdata = s3_queue.io.deq.bits.data
@@ -229,7 +229,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   dontTouch(s3_d.bits.user)
 
   s3_queue.io.enq.valid := RegNextN(
-    io.bs_raddr.fire(),
+    io.bs_raddr.fire,
     n = sramLatency,
     Some(false.B)
   )

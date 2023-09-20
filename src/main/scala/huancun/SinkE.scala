@@ -31,6 +31,6 @@ class SinkE(implicit p: Parameters) extends HuanCunModule {
   })
   val e = io.e
   e.ready := true.B
-  io.resp.valid := e.fire()
+  io.resp.valid := e.fire
   io.resp.bits.sink := e.bits.sink
 }

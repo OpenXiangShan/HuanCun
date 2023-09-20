@@ -99,7 +99,7 @@ object DirectoryLogger {
       dirLogger.io.way := way
       dirLogger.io.typeId := typeId.U
       dirLogger.io.stamp := stamp
-      dirLogger.io.dir := state.asUInt()
+      dirLogger.io.dir := state.asUInt
       dirLogger.io.tag := tag
       dirLogger.io.wen := wen
       dirLogger.io.clock := clock

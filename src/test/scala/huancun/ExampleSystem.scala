@@ -31,8 +31,9 @@ class ExampleSystem(nBanks: Int = 1, l1dReq: Int = 0, l1iReq: Int = 0, ptwReq: I
   xbar := l1i.node
   xbar := ptw.node
 
-  lazy val module = new LazyModuleImp(this) {
+  class ExampleSystemImp(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
     val success = IO(Output(Bool()))
     success := Seq(l1d, l1i, ptw).map(_.module.finish).reduce(_&&_)
   }
+  lazy val module = new ExampleSystemImp(this)
 }
