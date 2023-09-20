@@ -68,7 +68,7 @@ class SubDirectory[T <: Data](
   dir_hit_fn: T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
   replacement: String)(implicit p: Parameters)
-    extends MultiIOModule {
+    extends Module {
 
   val setBits = log2Ceil(sets)
   val wayBits = log2Ceil(ways)
@@ -132,7 +132,7 @@ class SubDirectory[T <: Data](
   if(eccBits > 0){
     val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
     eccArray.io.w(
-      io.tag_w.fire(),
+      io.tag_w.fire,
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
       io.tag_w.bits.set,
       UIntToOH(io.tag_w.bits.way)
@@ -140,30 +140,30 @@ class SubDirectory[T <: Data](
     if (clk_div_by_2) {
       eccArray.clock := masked_clock
     }
-    eccRead := eccArray.io.r(io.read.fire(), io.read.bits.set).resp.data
+    eccRead := eccArray.io.r(io.read.fire, io.read.bits.set).resp.data
   } else {
     eccRead.foreach(_ := 0.U)
   }
 
   tagArray.io.w(
-    io.tag_w.fire(),
+    io.tag_w.fire,
     io.tag_w.bits.tag,
     io.tag_w.bits.set,
     UIntToOH(io.tag_w.bits.way)
   )
-  tagRead := tagArray.io.r(io.read.fire(), io.read.bits.set).resp.data
+  tagRead := tagArray.io.r(io.read.fire, io.read.bits.set).resp.data
 
   if (clk_div_by_2) {
     metaArray.clock := masked_clock
     tagArray.clock := masked_clock
   }
 
-  val reqReg = RegEnable(io.read.bits, enable = io.read.fire())
+  val reqReg = RegEnable(io.read.bits, io.read.fire)
   val reqValidReg = RegInit(false.B)
   if (clk_div_by_2) {
-    reqValidReg := RegNext(io.read.fire())
+    reqValidReg := RegNext(io.read.fire)
   } else {
-    reqValidReg := io.read.fire()
+    reqValidReg := io.read.fire
   }
 
   val hit_s1 = Wire(Bool())
@@ -171,22 +171,22 @@ class SubDirectory[T <: Data](
 
   val repl = ReplacementPolicy.fromString(replacement, ways)
   val repl_state = if(replacement == "random"){
-    when(io.tag_w.fire()){
+    when(io.tag_w.fire){
       repl.miss
     }
     0.U
   } else {
     val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, shouldReset = true))
-    val repl_sram_r = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
+    val repl_sram_r = replacer_sram.io.r(io.read.fire, io.read.bits.set).resp.data(0)
     val repl_state_hold = WireInit(0.U(repl.nBits.W))
-    repl_state_hold := HoldUnless(repl_sram_r, RegNext(io.read.fire(), false.B))
+    repl_state_hold := HoldUnless(repl_sram_r, RegNext(io.read.fire, false.B))
     val next_state = repl.get_next_state(repl_state_hold, way_s1)
     replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqReg.set), 1.U)
     repl_state_hold
   }
 
   io.resp.valid := reqValidReg
-  val metas = metaArray.io.r(io.read.fire(), io.read.bits.set).resp.data
+  val metas = metaArray.io.r(io.read.fire, io.read.bits.set).resp.data
   val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
   val metaValidVec = metas.map(dir_hit_fn)
   val hitVec = tagMatchVec.zip(metaValidVec).map(x => x._1 && x._2)
@@ -200,7 +200,7 @@ class SubDirectory[T <: Data](
      stage 1: generate hit/way, io.resp.valid = TRUE (will latch into MSHR)
      stage 2: output latched hit/way, output dir/tag
   */
-  hit_s1 := Cat(hitVec).orR()
+  hit_s1 := Cat(hitVec).orR
   way_s1 := Mux(reqReg.wayMode, reqReg.way, Mux(hit_s1, hitWay, chosenWay))
 
   val hit_s2 = RegEnable(hit_s1, false.B, reqValidReg)

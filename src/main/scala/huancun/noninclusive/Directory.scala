@@ -131,7 +131,7 @@ class Directory(implicit p: Parameters)
     0.U,
     selfDirW.bits.data,
     stamp,
-    selfDirW.fire(),
+    selfDirW.fire,
     this.clock,
     this.reset
   )
@@ -142,7 +142,7 @@ class Directory(implicit p: Parameters)
     io.tagWReq.bits.tag,
     0.U,
     stamp,
-    io.tagWReq.fire(),
+    io.tagWReq.fire,
     this.clock,
     this.reset
   )
@@ -154,7 +154,7 @@ class Directory(implicit p: Parameters)
     0.U,
     io.clientDirWReq.bits.data,
     stamp,
-    io.clientDirWReq.fire(),
+    io.clientDirWReq.fire,
     this.clock,
     this.reset
   )
@@ -165,14 +165,14 @@ class Directory(implicit p: Parameters)
     io.clientTagWreq.bits.tag,
     0.U,
     stamp,
-    io.clientTagWreq.fire(),
+    io.clientTagWreq.fire,
     this.clock,
     this.reset
   )
 
   def client_invalid_way_fn(metaVec: Seq[Vec[ClientDirEntry]], repl: UInt): (Bool, UInt) = {
-    val invalid_vec = metaVec.map(states => Cat(states.map(_.state === INVALID)).andR())
-    val has_invalid_way = Cat(invalid_vec).orR()
+    val invalid_vec = metaVec.map(states => Cat(states.map(_.state === INVALID)).andR)
+    val has_invalid_way = Cat(invalid_vec).orR
     val way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(clientWayBits.W)))
     (has_invalid_way, way)
   }
@@ -199,12 +199,12 @@ class Directory(implicit p: Parameters)
   def self_invalid_way_sel(metaVec: Seq[SelfDirEntry], repl: UInt): (Bool, UInt) = {
     // 1.try to find a invalid way
     val invalid_vec = metaVec.map(_.state === MetaData.INVALID)
-    val has_invalid_way = Cat(invalid_vec).orR()
+    val has_invalid_way = Cat(invalid_vec).orR
     val invalid_way = ParallelPriorityMux(invalid_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
     // 2.if there is no invalid way, then try to find a TRUNK to replace
     // (we are non-inclusive, if we are trunk, there must be a TIP in our client)
     val trunk_vec = metaVec.map(_.state === MetaData.TRUNK)
-    val has_trunk_way = Cat(trunk_vec).orR()
+    val has_trunk_way = Cat(trunk_vec).orR
     val trunk_way = ParallelPriorityMux(trunk_vec.zipWithIndex.map(x => x._1 -> x._2.U(wayBits.W)))
     val repl_way_is_trunk = VecInit(metaVec)(repl).state === MetaData.TRUNK
     (
@@ -245,7 +245,7 @@ class Directory(implicit p: Parameters)
     p.bits.replacerInfo := req.bits.replacerInfo
     p.bits.wayMode := req.bits.wayMode
     p.bits.way := req.bits.way
-    when(req.fire() && req.bits.wayMode){
+    when(req.fire && req.bits.wayMode){
       assert(req.bits.idOH(1, 0) === "b11".U)
     }
   }
@@ -253,18 +253,18 @@ class Directory(implicit p: Parameters)
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val cycleCnt = Counter(true.B, 2)
   val readyMask = if (clk_div_by_2) cycleCnt._1(0) else true.B
-  req.ready := Cat(rports.map(_.ready)).andR() && readyMask
-  val reqValidReg = RegNext(req.fire(), false.B)
-  val reqIdOHReg = RegEnable(req.bits.idOH, req.fire()) // generate idOH in advance to index MSHRs
-  val sourceIdReg = RegEnable(RegEnable(req.bits.source, req.fire()), reqValidReg)
-  val setReg = RegEnable(RegEnable(req.bits.set, req.fire()), reqValidReg)
-  val replacerInfoReg = RegEnable(RegEnable(req.bits.replacerInfo, req.fire()), reqValidReg)
+  req.ready := Cat(rports.map(_.ready)).andR && readyMask
+  val reqValidReg = RegNext(req.fire, false.B)
+  val reqIdOHReg = RegEnable(req.bits.idOH, req.fire) // generate idOH in advance to index MSHRs
+  val sourceIdReg = RegEnable(RegEnable(req.bits.source, req.fire), reqValidReg)
+  val setReg = RegEnable(RegEnable(req.bits.set, req.fire), reqValidReg)
+  val replacerInfoReg = RegEnable(RegEnable(req.bits.replacerInfo, req.fire), reqValidReg)
   val resp = io.result
   val clientResp = clientDir.io.resp
   val selfResp = selfDir.io.resp
   resp.valid := selfResp.valid
   val valids = Cat(clientResp.valid, selfResp.valid)
-  assert(valids.andR() || !valids.orR(), "valids must be all 1s or 0s")
+  assert(valids.andR || !valids.orR, "valids must be all 1s or 0s")
   resp.bits.idOH := reqIdOHReg
   resp.bits.sourceId := sourceIdReg
   resp.bits.set := setReg
@@ -279,7 +279,7 @@ class Directory(implicit p: Parameters)
   resp.bits.self.prefetch.foreach(p => p := selfResp.bits.dir.prefetch.get)
   resp.bits.clients.way := clientResp.bits.way
   resp.bits.clients.tag := clientResp.bits.tag
-  resp.bits.clients.error := Cat(resp.bits.clients.states.map(_.hit)).orR() && clientResp.bits.error
+  resp.bits.clients.error := Cat(resp.bits.clients.states.map(_.hit)).orR && clientResp.bits.error
   resp.bits.clients.states.zip(clientResp.bits.dir).foreach{
     case (s, dir) =>
       s.state := dir.state
@@ -315,7 +315,7 @@ class Directory(implicit p: Parameters)
   io.clientDirWReq.ready := clientDir.io.dir_w.ready && readyMask
 
   assert(dirReadPorts == 1)
-  val req_r = RegEnable(req.bits, req.fire())
+  val req_r = RegEnable(req.bits, req.fire)
   XSPerfAccumulate(cacheParams, "selfdir_A_req", req_r.replacerInfo.channel(0) && resp.valid)
   XSPerfAccumulate(cacheParams, "selfdir_A_hit", req_r.replacerInfo.channel(0) && resp.valid && resp.bits.self.hit)
   XSPerfAccumulate(cacheParams, "selfdir_B_req", req_r.replacerInfo.channel(1) && resp.valid)

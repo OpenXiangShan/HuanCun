@@ -62,7 +62,7 @@ class TestTop
   }
   xbar := TLBuffer() := TLDelayer(delayFactor) := TLBuffer() := ptw.node
 
-  lazy val module = new LazyModuleImp(this) {
+  class TestTopImp(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
     val l1d_io = IO(Vec(dcacheNum, Flipped(l1d_list.head.module.tl_master_io.cloneType)))
     l1d_list.zip(l1d_io).foreach{
       case (agent, tl_master_io) => agent.module.tl_master_io <> tl_master_io
@@ -73,6 +73,7 @@ class TestTop
     }
   }
 
+  lazy val module = new TestTopImp(this)
 }
 
 abstract class TLCTest extends L2Tester {

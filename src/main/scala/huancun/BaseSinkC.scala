@@ -40,7 +40,7 @@ abstract class BaseSinkC(implicit p: Parameters) extends HuanCunModule {
   })
   io.alloc.bits.isPrefetch.foreach(_ := false.B)
 
-  when (io.c.fire()) {
+  when (io.c.fire) {
     assert(io.c.bits.opcode =/= 3.U) // opcode 3 is reserved for C channel
   }
 }

@@ -19,7 +19,7 @@ package huancun.utils
 import chisel3._
 import chisel3.util._
 
-class ResetGen(SYNC_NUM: Int = 2) extends MultiIOModule {
+class ResetGen(SYNC_NUM: Int = 2) extends Module {
   val o_reset = IO(Output(AsyncReset()))
 
   val pipe_reset = RegInit(((1L << SYNC_NUM) - 1).U(SYNC_NUM.W))
@@ -31,7 +31,7 @@ class ResetGen(SYNC_NUM: Int = 2) extends MultiIOModule {
 
 trait ResetNode
 
-case class ModuleNode(mod: MultiIOModule) extends ResetNode
+case class ModuleNode(mod: Module) extends ResetNode
 
 case class ResetGenNode(children: Seq[ResetNode]) extends ResetNode
 
@@ -57,7 +57,7 @@ object ResetGen {
     }
   }
 
-  def apply(resetChain: Seq[Seq[MultiIOModule]], reset: Reset, sim: Boolean): Seq[Reset] = {
+  def apply(resetChain: Seq[Seq[Module]], reset: Reset, sim: Boolean): Seq[Reset] = {
     val resetReg = Wire(Vec(resetChain.length + 1, Reset()))
     resetReg.foreach(_ := reset)
     for ((resetLevel, i) <- resetChain.zipWithIndex) {

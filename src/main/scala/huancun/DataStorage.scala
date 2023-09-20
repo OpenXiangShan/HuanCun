@@ -163,7 +163,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   // mark accessed banks as busy
   if (cacheParams.sramClkDivBy2) {
     bank_en.grouped(stackSize).toList
-      .map(banks => Cat(banks).orR())
+      .map(banks => Cat(banks).orR)
       .zip(stackRdy)
       .foreach {
         case (accessed, rdy) => rdy := !accessed && cycleCnt._1(0)
@@ -219,7 +219,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         setIdx = banks.head.io.w.req.bits.setIdx,
         data = VecInit(banks.map(b =>
           dataCode.encode(b.io.w.req.bits.data(0)).head(eccBits)
-        )).asUInt(),
+        )).asUInt,
         waymask = 1.U
       )
       eccArray.io.r.req.valid := banks.head.io.r.req.valid
@@ -234,22 +234,22 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   }
   val data_grps = outData.grouped(stackSize).toList.transpose
   val ecc_grps = eccData.map(_.toList.transpose)
-  val d_sel = sourceD_rreq.bankEn.asBools().grouped(stackSize).toList.transpose
-  val c_sel = sourceC_req.bankEn.asBools().grouped(stackSize).toList.transpose
+  val d_sel = sourceD_rreq.bankEn.asBools.grouped(stackSize).toList.transpose
+  val c_sel = sourceC_req.bankEn.asBools.grouped(stackSize).toList.transpose
   for (i <- 0 until stackSize) {
     val dataSel = dataSelModules(i)
     dataSel.io.in := VecInit(data_grps(i))
     dataSel.io.ecc_in.map(_ := ecc_grps.get(i))
     dataSel.io.sel(0) := Cat(d_sel(i).reverse)
     dataSel.io.sel(1) := Cat(c_sel(i).reverse)
-    dataSel.io.en(0) := io.sourceD_raddr.fire()
-    dataSel.io.en(1) := io.sourceC_raddr.fire()
+    dataSel.io.en(0) := io.sourceD_raddr.fire
+    dataSel.io.en(1) := io.sourceC_raddr.fire
   }
 
   io.sourceD_rdata.data := Cat(dataSelModules.map(_.io.out(0)).reverse)
-  io.sourceD_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(0))).orR()
+  io.sourceD_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(0))).orR
   io.sourceC_rdata.data := Cat(dataSelModules.map(_.io.out(1)).reverse)
-  io.sourceC_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(1))).orR()
+  io.sourceC_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(1))).orR
 
   val d_addr_reg = RegNextN(io.sourceD_raddr.bits, sramLatency)
   val c_addr_reg = RegNextN(io.sourceC_raddr.bits, sramLatency)
@@ -294,7 +294,7 @@ class DataSel(inNum: Int, outNum: Int, width: Int, eccBits: Int)(implicit p: Par
       val err = oeccs.zip(odata).map{
         case (e, d) => dataCode.decode(e ## d).error
       }
-      io.err_out(i) := RegEnable(Mux1H(sel_r, err).orR(), false.B, RegNext(en, false.B))
+      io.err_out(i) := RegEnable(Mux1H(sel_r, err).orR, false.B, RegNext(en, false.B))
     } else {
       io.err_out(i) := false.B
     }
