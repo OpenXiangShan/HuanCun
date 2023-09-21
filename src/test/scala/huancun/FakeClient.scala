@@ -3,7 +3,7 @@ package huancun
 import chisel3._
 import chisel3.util._
 import chiseltest._
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp, TransferSizes}
 import freechips.rocketchip.tilelink.{TLBundle, TLChannelBeatBytes, TLClientNode, TLMasterParameters, TLMasterPortParameters, TLPermissions}
 import tltest.{AddrState, ScoreboardData, TLCMasterAgent, TLCScalaB, TLCScalaD, TLCTrans, TLULMasterAgent}
