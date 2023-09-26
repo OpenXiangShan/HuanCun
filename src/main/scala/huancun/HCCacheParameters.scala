@@ -149,7 +149,8 @@ case class HCCacheParameters
     c = BufferParams.default,
     d = BufferParams.default,
     e = BufferParams.default
-  )
+  ),
+  FPGAPlatform: Boolean = false
 ) {
   require(ways > 0)
   require(sets > 0)
