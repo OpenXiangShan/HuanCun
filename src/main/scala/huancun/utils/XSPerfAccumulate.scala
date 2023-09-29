@@ -6,7 +6,7 @@ import utility.{LogPerfHelper, LogPerfIO}
 
 object XSPerfAccumulate {
   def apply(params: HCCacheParameters, perfName: String, perfCnt: UInt) = {
-    if (params.enablePerf) {
+    if (params.enablePerf && !params.FPGAPlatform) {
       val helper = Module(new LogPerfHelper)
       val perfClean = helper.io.clean
       val perfDump = helper.io.dump
@@ -36,7 +36,7 @@ object XSPerfHistogram {
     lStrict:  Boolean = false,
     rStrict:  Boolean = false
   ) = {
-    if (params.enablePerf) {
+    if (params.enablePerf && !params.FPGAPlatform) {
       val helper = Module(new LogPerfHelper)
       val perfClean = helper.io.clean
       val perfDump = helper.io.dump
@@ -75,7 +75,7 @@ object XSPerfHistogram {
 
 object XSPerfMax {
   def apply(params: HCCacheParameters, perfName: String, perfCnt: UInt, enable: Bool) = {
-    if (params.enablePerf) {
+    if (params.enablePerf && !params.FPGAPlatform) {
       val helper = Module(new LogPerfHelper)
       val perfClean = helper.io.clean
       val perfDump = helper.io.dump
