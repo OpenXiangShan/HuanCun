@@ -2,7 +2,7 @@ package huancun.noninclusive
 
 import chisel3._
 import chisel3.util._
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tilelink.{TLBundleC, TLMessages}
 import huancun._
 import utility.MemReqSource
@@ -114,7 +114,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   when(c.fire && first && isProbeAckData) {
     setMatchVec := Cat((bufferSetVals.zipWithIndex).zip(bufferSet.zip(bufferTag)).map{
-      case ((v, i), (s, t)) => 
+      case ((v, i), (s, t)) =>
         Mux(busy && i.U === task_r.bufIdx, false.B, (t === tag) && (s === set) && v) // do not clean buffer of ongoing task
     }.reverse)
   }

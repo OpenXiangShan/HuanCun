@@ -1,6 +1,6 @@
 package huancun.tlctest
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import freechips.rocketchip.diplomacy.{AddressSet, DisableMonitors, LazyModule, LazyModuleImp}
 import freechips.rocketchip.tilelink.{TLBuffer, TLCacheCork, TLDelayer, TLFragmenter, TLRAM, TLWidthWidget, TLXbar}
