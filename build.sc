@@ -10,7 +10,6 @@ val defaultVersions = Map(
   "chisel3-plugin" -> "3.6.0",
   "chiseltest" -> "0.5.2",
   "scala" -> "2.13.10",
-  "scalatest" -> "3.2.7"
 )
 
 def getVersion(dep: String, org: String = "edu.berkeley.cs", cross: Boolean = false) = {
@@ -81,11 +80,11 @@ object HuanCun extends SbtModule with ScalafmtModule with CommonModule {
 
   override def millSourcePath = millOuterCtx.millSourcePath
 
-  override def ivyDeps = super.ivyDeps() ++ Agg(
-    getVersion("chiseltest"),
-  )
-
   override def moduleDeps = super.moduleDeps ++ Seq(rocketchip, utility)
 
-  object test extends SbtModuleTests with TestModule.ScalaTest
+  object test extends SbtModuleTests with TestModule.ScalaTest {
+    override def ivyDeps = super.ivyDeps() ++ Agg(
+      getVersion("chiseltest"),
+    )
+  }
 }
