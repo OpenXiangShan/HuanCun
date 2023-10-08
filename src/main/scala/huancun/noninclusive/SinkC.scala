@@ -114,7 +114,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   when(c.fire && first && isProbeAckData) {
     setMatchVec := Cat((bufferSetVals.zipWithIndex).zip(bufferSet.zip(bufferTag)).map{
-      case ((v, i), (s, t)) => 
+      case ((v, i), (s, t)) =>
         Mux(busy && i.U === task_r.bufIdx, false.B, (t === tag) && (s === set) && v) // do not clean buffer of ongoing task
     }.reverse)
   }

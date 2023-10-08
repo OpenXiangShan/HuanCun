@@ -260,7 +260,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
   for (i <- 0 until 2) {
     l2_l3_tllog_nodes(i) :=
       TLBuffer() :=
-      l2_nodes(i) := 
+      l2_nodes(i) :=
       l1d_l2_tllog_nodes(i) :=
       TLBuffer() :=
       l1d_nodes(i)
@@ -497,7 +497,7 @@ object TestTop_L2L3 extends App {
     )
   })
   val top = DisableMonitors(p => LazyModule(new TestTop_L2L3()(p)) )(config)
-   
+
 
   (new ChiselStage).execute(args, Seq(
     ChiselGeneratorAnnotation(() => top.module)

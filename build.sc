@@ -2,12 +2,12 @@ import mill._
 import scalalib._
 import scalafmt._
 import $file.`rocket-chip`.common
-import $file.`rocket-chip`.`api-config-chipsalliance`.`build-rules`.mill.build
+import $file.`rocket-chip`.cde.common
 import $file.`rocket-chip`.hardfloat.build
 
 val defaultVersions = Map(
-  "chisel3" -> "3.5.0",
-  "chisel3-plugin" -> "3.5.0",
+  "chisel3" -> "3.5.4",
+  "chisel3-plugin" -> "3.5.4",
   "chiseltest" -> "0.5.2",
   "scala" -> "2.12.13",
   "scalatest" -> "3.2.7"
@@ -43,8 +43,8 @@ object rocketchip extends `rocket-chip`.common.CommonRocketChip {
 
   override def millSourcePath = rcPath
 
-  object configRocket extends `rocket-chip`.`api-config-chipsalliance`.`build-rules`.mill.build.config with PublishModule {
-    override def millSourcePath = rcPath / "api-config-chipsalliance" / "design" / "craft"
+  object cdeRocket extends `rocket-chip`.cde.common.CDEModule with PublishModule {
+    override def millSourcePath = rcPath / "cde" / "cde"
 
     override def scalaVersion = T {
       rocketchip.scalaVersion()
@@ -67,22 +67,22 @@ object rocketchip extends `rocket-chip`.common.CommonRocketChip {
     }
 
     def chisel3IvyDeps = if(chisel3Module.isEmpty) Agg(
-      common.getVersion("chisel3")
+      `rocket-chip`.common.getVersion("chisel3")
     ) else Agg.empty[Dep]
     
-    def chisel3PluginIvyDeps = Agg(common.getVersion("chisel3-plugin", cross=true))
+    def chisel3PluginIvyDeps = Agg(`rocket-chip`.common.getVersion("chisel3-plugin", cross=true))
   }
 
   def hardfloatModule = hardfloatRocket
 
-  def configModule = configRocket
+  def cdeModule = cdeRocket
 
 }
 
 
 object utility extends SbtModule with ScalafmtModule with CommonModule {
 
-  override def ivyDeps = Agg(common.getVersion("chisel3"))
+  override def ivyDeps = Agg(`rocket-chip`.common.getVersion("chisel3"))
 
   override def millSourcePath = os.pwd / "Utility"
 
