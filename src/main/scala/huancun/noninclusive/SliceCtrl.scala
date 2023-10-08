@@ -215,7 +215,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.cmo_req.bits.param := io.req.bits.cmd(1, 0)
   io.cmo_req.bits.size := log2Up(blockBytes).U
   io.cmo_req.bits.source := 0.U  // DontCare
-  io.cmo_req.bits.set := io.req.bits.set
+  io.cmo_req.bits.set := io.req.bits.set >> bankBits
   io.cmo_req.bits.tag := io.req.bits.tag
   io.cmo_req.bits.off := 0.U  // DontCare
   io.cmo_req.bits.mask := 0.U  // DontCare
