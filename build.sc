@@ -8,7 +8,7 @@ import $file.`rocket-chip`.hardfloat.common
 val defaultVersions = Map(
   "chisel3" -> "3.6.0",
   "chisel3-plugin" -> "3.6.0",
-  "chiseltest" -> "0.5.2",
+  "chiseltest" -> "0.6.2",
   "scala" -> "2.13.10",
 )
 
