@@ -30,13 +30,15 @@ class B_Status(implicit p: Parameters) extends HuanCunBundle {
 }
 
 class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, SelfTagWrite] with HasClientInfo {
-  val io = IO(new BaseMSHRIO[DirResult, SelfDirWrite, SelfTagWrite] {
-    override val tasks = new MSHRTasks[SelfDirWrite, SelfTagWrite] {
+  class MSHRTasksWithClient(implicit p: Parameters)
+    extends MSHRTasks[SelfDirWrite, SelfTagWrite] {
       override val dir_write: DecoupledIO[SelfDirWrite] = DecoupledIO(new SelfDirWrite())
       override val tag_write: DecoupledIO[SelfTagWrite] = DecoupledIO(new SelfTagWrite())
       val client_dir_write = DecoupledIO(new ClientDirWrite())
       val client_tag_write = DecoupledIO(new ClientTagWrite())
     }
+  val io = IO(new BaseMSHRIO[DirResult, SelfDirWrite, SelfTagWrite] {
+    override val tasks = new MSHRTasksWithClient
     override val dirResult = Flipped(ValidIO(new DirResult()))
   })
 
