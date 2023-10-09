@@ -20,7 +20,7 @@ def getVersion(dep: String, org: String = "edu.berkeley.cs", cross: Boolean = fa
     ivy"$org::$dep:$version"
 }
 
-trait CommonModule extends ScalaModule {
+trait HasChisel extends ScalaModule {
   def chiselModule: Option[ScalaModule] = None
 
   def chiselPluginJar: T[Option[PathRef]] = None
@@ -39,7 +39,7 @@ trait CommonModule extends ScalaModule {
   override def scalacPluginIvyDeps = super.scalacPluginIvyDeps() ++ Agg(chiselPluginIvy.get)
 }
 
-object rocketchip extends `rocket-chip`.common.RocketChipModule with CommonModule {
+object rocketchip extends `rocket-chip`.common.RocketChipModule with HasChisel {
 
   val rcPath = os.pwd / "rocket-chip"
   override def millSourcePath = rcPath
@@ -48,15 +48,15 @@ object rocketchip extends `rocket-chip`.common.RocketChipModule with CommonModul
 
   def json4sJacksonIvy = ivy"org.json4s::json4s-jackson:4.0.5"
 
-  object macros extends `rocket-chip`.common.MacrosModule with CommonModule {
+  object macros extends `rocket-chip`.common.MacrosModule with HasChisel {
     def scalaReflectIvy = ivy"org.scala-lang:scala-reflect:${scalaVersion}"
   }
 
-  object cde extends `rocket-chip`.cde.common.CDEModule with CommonModule {
+  object cde extends `rocket-chip`.cde.common.CDEModule with HasChisel {
     override def millSourcePath = rcPath / "cde" / "cde"
   }
 
-  object hardfloat extends `rocket-chip`.hardfloat.common.HardfloatModule with CommonModule {
+  object hardfloat extends `rocket-chip`.hardfloat.common.HardfloatModule with HasChisel {
     override def millSourcePath = rcPath / "hardfloat" / "hardfloat"
   }
 
@@ -69,22 +69,36 @@ object rocketchip extends `rocket-chip`.common.RocketChipModule with CommonModul
 }
 
 
-object utility extends SbtModule with ScalafmtModule with CommonModule {
+object utility extends SbtModule with HasChisel {
   override def millSourcePath = os.pwd / "Utility"
 
   override def moduleDeps = super.moduleDeps ++ Seq(rocketchip)
 }
 
 
-object HuanCun extends SbtModule with ScalafmtModule with CommonModule {
+trait HuanCunModule extends ScalaModule {
+
+  def rocketModule: ScalaModule
+
+  def utilityModule: ScalaModule
+
+  override def moduleDeps = super.moduleDeps ++ Seq(rocketModule, utilityModule)
+
+}
+
+
+object HuanCun extends SbtModule with HasChisel with HuanCunModule {
 
   override def millSourcePath = millOuterCtx.millSourcePath
 
-  override def moduleDeps = super.moduleDeps ++ Seq(rocketchip, utility)
+  def rocketModule: ScalaModule = rocketchip
+
+  def utilityModule: ScalaModule = utility
 
   object test extends SbtModuleTests with TestModule.ScalaTest {
     override def ivyDeps = super.ivyDeps() ++ Agg(
       getVersion("chiseltest"),
     )
   }
+
 }
