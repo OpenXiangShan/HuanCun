@@ -1,6 +1,7 @@
 import mill._
 import scalalib._
 import scalafmt._
+import $file.common
 import $file.`rocket-chip`.common
 import $file.`rocket-chip`.cde.common
 import $file.`rocket-chip`.hardfloat.common
@@ -76,18 +77,7 @@ object utility extends SbtModule with HasChisel {
 }
 
 
-trait HuanCunModule extends ScalaModule {
-
-  def rocketModule: ScalaModule
-
-  def utilityModule: ScalaModule
-
-  override def moduleDeps = super.moduleDeps ++ Seq(rocketModule, utilityModule)
-
-}
-
-
-object HuanCun extends SbtModule with HasChisel with HuanCunModule {
+object HuanCun extends SbtModule with HasChisel with millbuild.common.HuanCunModule {
 
   override def millSourcePath = millOuterCtx.millSourcePath
 
