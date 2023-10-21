@@ -236,3 +236,17 @@ class PrefetchRecv extends Bundle {
   val addr_valid = Bool()
   val l2_pf_en = Bool()
 }
+
+class TPmetaReq extends Bundle {
+  // TODO: parameterize the hard code
+  val set = UInt(32.W)
+  val way = UInt(8.W)
+  val wmode = Bool()
+  val rawData = Vec(16, UInt((36-6).W))
+  val mode = UInt(3.W)
+}
+
+class TPmetaResp extends Bundle {
+  val rawData = Vec(16, UInt((36-6).W))
+  val mode = UInt(3.W)
+}
