@@ -25,7 +25,7 @@ import chisel3.util.log2Ceil
 import freechips.rocketchip.diplomacy.BufferParams
 import freechips.rocketchip.tilelink.{TLBufferParams, TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, BundleKeyBase, ControlKey}
-import huancun.prefetch.PrefetchParameters
+import huancun.prefetch.{PrefetchParameters, TPmetaParameters}
 import utility.{MemReqSource, ReqSourceKey}
 
 case object HCCacheParamsKey extends Field[HCCacheParameters](HCCacheParameters())
@@ -97,6 +97,7 @@ case class HCCacheParameters
   hartIds: Seq[Int] = Seq[Int](),
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   prefetch: Option[PrefetchParameters] = None,
+  tpmeta: Option[TPmetaParameters] = None,
   elaboratedTopDown: Boolean = true,
   clientCaches: Seq[CacheParameters] = Nil,
   inclusive: Boolean = true,
