@@ -69,5 +69,6 @@ class TPmeta(implicit p: Parameters) extends TPmetaModule
   io.resp.valid := RegNext(readReqValidReg)
   io.resp.bits.rawData := rdata.rawData
   io.resp.bits.mode := rdata.mode
+  io.resp.bits.hartid := RegNext(readReqReg).hartid
   io.req.ready := true.B
 }

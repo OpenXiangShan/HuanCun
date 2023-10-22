@@ -321,12 +321,17 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
     wrapper.tpmeta_recv_node match {
       case Some(x) =>
-        tpmeta.get.io.req <> x.in.head._1  // DecoupledIO[TPmetaReq]
-        // TODO: if there are more than one core, an arbiter is required
+        // tpmeta.get.io.req <> x.in.head._1
+        val arb = Module(new FastArbiter(new TPmetaReq, x.in.size))
+        for ((arb, req) <- arb.io.in.zip(x.in)) {
+          arb <> req._1
+        }
+        tpmeta.get.io.req <> arb.io.out // DecoupledIO[TPmetaReq]
       case None =>
     }
     wrapper.tpmeta_send_node match {
       case Some(x) =>
+        require(x.out.size == 1)
         x.out.head._1 <> tpmeta.get.io.resp  // ValidIO[TPmetaResp]
       case None =>
     }
