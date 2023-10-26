@@ -31,7 +31,7 @@ class TPmetaIO(implicit p: Parameters) extends TPmetaBundle {
 
 class metaEntry(implicit p:Parameters) extends TPmetaBundle {
   val rawData = Vec(16, UInt((36-6).W))
-  val mode = UInt(3.W)
+  val hartid = UInt(4.W)
   // TODO: val compressedData = UInt(512.W)
 }
 
@@ -50,7 +50,7 @@ class TPmeta(implicit p: Parameters) extends TPmetaModule
 
   val wdata = Wire(new metaEntry())
   wdata.rawData := io.req.bits.rawData
-  wdata.mode := io.req.bits.mode
+  wdata.hartid := io.req.bits.hartid
   tpDataTable.io.w.apply(
     valid = writeReqValid,
     data = wdata,
@@ -66,9 +66,8 @@ class TPmeta(implicit p: Parameters) extends TPmetaModule
     rdata := tpDataTable.io.r.resp.data(readReqReg.way)
   }
 
-  io.resp.valid := RegNext(readReqValidReg)
+  io.resp.valid := RegNext(readReqValidReg) && (rdata.hartid === RegNext(readReqReg).hartid)
   io.resp.bits.rawData := rdata.rawData
-  io.resp.bits.mode := rdata.mode
   io.resp.bits.hartid := RegNext(readReqReg).hartid
   io.req.ready := true.B
 }
