@@ -455,7 +455,7 @@ class SRAMTemplate[T <: Data]
     array.mbist.get.dft_ram_bypass := broadCastSignals.ram_bypass
   }
 
-  withClockAndReset(master_clock, reset) {
+  withClockAndReset(clock, reset) {
     val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
     if (shouldReset) {
       val _resetState = RegInit(true.B)
