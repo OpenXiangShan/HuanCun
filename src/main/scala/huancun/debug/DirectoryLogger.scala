@@ -62,7 +62,7 @@ class DirLogWriter(prefix: String)
       |    input clock,
       |    input reset
       |);
-      |    parameter string prefix;
+      |    parameter string prefix = "undefined";
       |
       |    always @(posedge clock) begin
       |        if(wen && !reset) begin
