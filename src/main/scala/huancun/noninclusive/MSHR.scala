@@ -941,10 +941,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     )
   }
 
+  val will_schedule_writeprobe = WireInit(false.B)
   val can_start = Mux(client_dir_conflict, probe_helper_finish, true.B)
   io.tasks.source_a.valid := io.enable && (!s_acquire || !s_transferput) && s_release && s_probe && w_probeacklast && can_start
-  io.tasks.source_b.valid := io.enable && !s_probe && s_release
-  io.tasks.source_c.valid := io.enable && (!s_release || !s_probeack && s_writerelease && w_sinkcack && w_probeack)
+  io.tasks.source_b.valid := io.enable && Mux(!req.fromCmoHelper, !s_probe && s_release, !s_probe)
+  io.tasks.source_c.valid := io.enable && (Mux(!req.fromCmoHelper, !s_release && s_writeprobe && !will_schedule_writeprobe, !s_release && w_probeack && s_writeprobe && !will_schedule_writeprobe) || !s_probeack && s_writerelease && w_sinkcack && w_probeack)
   io.tasks.source_d.valid := io.enable && !s_execute && can_start && w_grant && s_writeprobe && w_sinkcack && w_probeacklast && s_transferput // TODO: is there dependency between s_writeprobe and w_probeack?
   io.tasks.source_e.valid := !s_grantack && w_grantfirst
   io.tasks.dir_write.valid := io.enable && !s_wbselfdir && no_wait && can_start
@@ -1084,6 +1085,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
 
   oc.opcode := Mux(
+    req.fromCmoHelper,
+    ReleaseData,
+    Mux(
     req.fromB,
     Cat(
       Mux(req.fromProbeHelper, Release(2, 1), ProbeAck(2, 1)),
@@ -1091,7 +1095,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         req.needProbeAckData.getOrElse(false.B)) && highest_perm =/= INVALID
     ),
     if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), self_meta.dirty.asUInt)
-  )
+  ))
   oc.tag := Mux(req.fromB, req.tag, self_meta.tag)
   oc.set := req.set
 
@@ -1111,10 +1115,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     )
   )
   oc.param := Mux(
-    req.fromB,
-    probeack_param,
-    replace_param
-  )
+    req.fromCmoHelper,
+    TtoN, // DontCare Cmo RelaseData param
+    Mux(
+      req.fromB,
+      probeack_param,
+      replace_param
+    ))
   oc.source := io.id
   oc.way := meta_reg.self.way
   oc.dirty := Mux(req.fromB, probe_dirty || self_meta.hit && self_meta.dirty, self_meta.dirty)
@@ -1305,7 +1312,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     client_probeack_param_vec(client) := io.resps.sink_c.bits.param
   }
   when(req_valid && sinkc_resp_last && io.resps.sink_c.bits.hasData) {
+    will_schedule_writeprobe := true.B
     someClientHasProbeAckData := true.B
+  }.otherwise{
+    will_schedule_writeprobe := false.B
   }
 
   when(req_valid && sinkc_resp_last && probeack_last) {

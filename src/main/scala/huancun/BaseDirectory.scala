@@ -232,7 +232,7 @@ class SubDirectory[T <: Data](
   val tag_s2 = tagAll_s2(way_s2)
 
   val errorAll_s1 = VecInit(eccRead.zip(tagRead).map{x => tagCode.decode(x._1 ## x._2).error})
-  val errorAll_s2 = RegEnable(errorAll_s1, reqValidReg)
+  val errorAll_s2 = RegEnable(errorAll_s1, 0.U.asTypeOf(errorAll_s1), reqValidReg)
   val error_s2 = errorAll_s2(way_s2)
 
   io.resp.bits.hit := hit_s2
