@@ -67,7 +67,6 @@ case class PreferCacheField() extends BundleField[Bool](PreferCacheKey, Output(B
   // 2：isHitinAnotherCore
   // 3：isHitinCork
 case object HitLevelKey extends ControlKey[UInt](name = "hitlevel")
-
 case class HitLevelField(width: Int) extends BundleField[UInt](HitLevelKey, Output(UInt(width.W)), _ := 0.U(width.W))
 
 // indicate whether this block is dirty or not (only used in handle Release/ReleaseData)
