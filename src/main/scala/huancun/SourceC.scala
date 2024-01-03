@@ -19,7 +19,7 @@
 
 package huancun
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
@@ -52,14 +52,14 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
 
   // Handle task
   val beat = RegInit(0.U(beatBits.W))
-  when(io.bs_raddr.fire()) {
+  when(io.bs_raddr.fire) {
     beat := beat + 1.U
   }
   val task_latch = RegEnable(io.task.bits, !bs_busy && io.task.valid)
   val task = Mux(!bs_busy, io.task.bits, task_latch)
   val taskWithData = io.task.valid && !back_pressure && io.task.bits.opcode(0)
   when(taskWithData) { bs_busy := true.B }
-  when(io.bs_raddr.fire() && beat === ~0.U(beatBits.W)) { bs_busy := false.B }
+  when(io.bs_raddr.fire && beat === ~0.U(beatBits.W)) { bs_busy := false.B }
   io.task.ready := !bs_busy && !back_pressure
 
   // Read Datastorage
@@ -72,7 +72,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.bs_raddr.bits.noop := false.B
 
   // Stage 0 => Stage 1
-  val task_handled = Mux(has_data, io.bs_raddr.ready, io.task.fire())
+  val task_handled = Mux(has_data, io.bs_raddr.ready, io.task.fire)
   val s1_task = RegInit(0.U.asTypeOf(io.task.bits.cloneType))
   val s1_beat = RegInit(0.U(beatBits.W))
   val s1_valid = RegInit(false.B)

@@ -1,6 +1,6 @@
 init:
 	git submodule update --init
-	cd rocket-chip && git submodule update --init hardfloat api-config-chipsalliance
+	cd rocket-chip && git submodule update --init hardfloat cde
 
 compile:
 	mill -i HuanCun.compile
@@ -11,25 +11,24 @@ test:
 
 test-top-l2:
 	mill -i HuanCun.test.runMain huancun.TestTop_L2 -td build
-	mv build/TestTop_L2.v build/TestTop.v
 
 test-top-l2standalone:
 	mill -i HuanCun.test.runMain huancun.TestTop_L2_Standalone -td build
-	mv build/TestTop_L2_Standalone.v build/TestTop.v
 
 test-top-l2l3:
 	mill -i HuanCun.test.runMain huancun.TestTop_L2L3 -td build
-	mv build/TestTop_L2L3.v build/TestTop.v
 
 test-top-fullsys:
 	mill -i HuanCun.test.runMain huancun.TestTop_FullSys -td build
-	mv build/TestTop_FullSys.v build/TestTop.v
 
 basic-test:
 	mill -i HuanCun.test.testOnly -o -s huancun.ConnectionTester
 
 bsp:
 	mill -i mill.bsp.BSP/install
+
+idea:
+	mill -i mill.scalalib.GenIdea/idea
 
 clean:
 	rm -rf ./build

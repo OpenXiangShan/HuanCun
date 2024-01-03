@@ -2,7 +2,7 @@ package huancun
 
 import chisel3._
 import chisel3.util._
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util.BundleField
@@ -113,8 +113,8 @@ class XbarCircuit
     val out = MixedVec(edgeOut.map(e => TLBundle(e.bundle)))
   })
 
-  val inSeq = io.in.zip(edgeIn)
-  val outSeq = io.out.zip(edgeOut)
+  val inSeq = io.in.zip(edgeIn).toSeq
+  val outSeq = io.out.zip(edgeOut).toSeq
 
   TLXbar.circuit(policy, inSeq, outSeq)
 

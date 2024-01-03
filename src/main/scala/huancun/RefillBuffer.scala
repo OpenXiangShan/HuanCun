@@ -1,6 +1,6 @@
 package huancun
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 
@@ -38,7 +38,7 @@ class RefillBuffer(implicit p: Parameters) extends HuanCunModule {
 
   val (r, w) = (io.r, io.w)
   val rlast = r.last
-  val wlast = w.beat.andR()
+  val wlast = w.beat.andR
   val wfirst = w.beat === 0.U
 
   r.buffer_data := buffer(r.id)(r.beat)
@@ -49,14 +49,14 @@ class RefillBuffer(implicit p: Parameters) extends HuanCunModule {
   }
 
   when(r.valid && r.ready && rlast){ // last beat
-    // assert(valids(r.id).asUInt().andR(), "[%d] attempt to invalidate a invalid entry", r.id)
+    // assert(valids(r.id).asUInt.andR, "[%d] attempt to invalidate a invalid entry", r.id)
     valids(r.id).foreach(_ := false.B)
   }
 
-  val validMask = VecInit(valids.map(vec => vec.asUInt().orR())).asUInt()
+  val validMask = VecInit(valids.map(vec => vec.asUInt.orR)).asUInt
   val freeIdx = PriorityEncoder(~validMask)
 
-  w.ready := Mux(wfirst, RegNext(!validMask.andR(), true.B), true.B)
+  w.ready := Mux(wfirst, RegNext(!validMask.andR, true.B), true.B)
   w.id := Mux(wfirst,
     RegNext(freeIdx, 0.U),
     RegEnable(w.id, w.valid && w.ready && wfirst)

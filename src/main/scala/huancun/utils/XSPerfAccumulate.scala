@@ -1,25 +1,22 @@
 package huancun.utils
 
 import chisel3._
-import chisel3.util.experimental.BoringUtils
 import huancun.HCCacheParameters
+import utility.{LogPerfHelper, LogPerfIO}
 
 object XSPerfAccumulate {
   def apply(params: HCCacheParameters, perfName: String, perfCnt: UInt) = {
-    if (params.enablePerf) {
-      val logTimestamp = WireInit(0.U(64.W))
-      val perfClean = WireInit(false.B)
-      val perfDump = WireInit(false.B)
-      BoringUtils.addSink(logTimestamp, "logTimestamp")
-      BoringUtils.addSink(perfClean, "XSPERF_CLEAN")
-      BoringUtils.addSink(perfDump, "XSPERF_DUMP")
+    if (params.enablePerf && !params.FPGAPlatform) {
+      val helper = Module(new LogPerfHelper)
+      val perfClean = helper.io.clean
+      val perfDump = helper.io.dump
 
       val counter = RegInit(0.U(64.W))
       val next_counter = counter + perfCnt
       counter := Mux(perfClean, 0.U, next_counter)
 
       when(perfDump) {
-        XSPerfPrint(p"$perfName, $next_counter\n")
+        XSPerfPrint(p"$perfName, $next_counter\n")(helper.io)
       }
     }
   }
@@ -39,13 +36,10 @@ object XSPerfHistogram {
     lStrict:  Boolean = false,
     rStrict:  Boolean = false
   ) = {
-    if (params.enablePerf) {
-      val logTimestamp = WireInit(0.U(64.W))
-      val perfClean = WireInit(false.B)
-      val perfDump = WireInit(false.B)
-      BoringUtils.addSink(logTimestamp, "logTimestamp")
-      BoringUtils.addSink(perfClean, "XSPERF_CLEAN")
-      BoringUtils.addSink(perfDump, "XSPERF_DUMP")
+    if (params.enablePerf && !params.FPGAPlatform) {
+      val helper = Module(new LogPerfHelper)
+      val perfClean = helper.io.clean
+      val perfDump = helper.io.dump
 
       // drop each perfCnt value into a bin
       val nBins = (stop - start) / step
@@ -72,7 +66,7 @@ object XSPerfHistogram {
         }
 
         when(perfDump) {
-          XSPerfPrint(p"${perfName}_${binRangeStart}_${binRangeStop}, $counter\n")
+          XSPerfPrint(p"${perfName}_${binRangeStart}_${binRangeStop}, $counter\n")(helper.io)
         }
       }
     }
@@ -81,20 +75,17 @@ object XSPerfHistogram {
 
 object XSPerfMax {
   def apply(params: HCCacheParameters, perfName: String, perfCnt: UInt, enable: Bool) = {
-    if (params.enablePerf) {
-      val logTimestamp = WireInit(0.U(64.W))
-      val perfClean = WireInit(false.B)
-      val perfDump = WireInit(false.B)
-      BoringUtils.addSink(logTimestamp, "logTimestamp")
-      BoringUtils.addSink(perfClean, "XSPERF_CLEAN")
-      BoringUtils.addSink(perfDump, "XSPERF_DUMP")
+    if (params.enablePerf && !params.FPGAPlatform) {
+      val helper = Module(new LogPerfHelper)
+      val perfClean = helper.io.clean
+      val perfDump = helper.io.dump
 
       val max = RegInit(0.U(64.W))
       val next_max = Mux(enable && (perfCnt > max), perfCnt, max)
       max := Mux(perfClean, 0.U, next_max)
 
       when(perfDump) {
-        XSPerfPrint(p"${perfName}_max, $next_max\n")
+        XSPerfPrint(p"${perfName}_max, $next_max\n")(helper.io)
       }
     }
   }
@@ -113,11 +104,11 @@ object TransactionLatencyCounter {
 }
 
 object XSPerfPrint {
-  def apply(fmt: String, data: Bits*): Any =
-    apply(Printable.pack(fmt, data: _*))
+  def apply(fmt: String, data: Bits*)(ctrlInfo: LogPerfIO): Any =
+    apply(Printable.pack(fmt, data: _*))(ctrlInfo)
 
-  def apply(pable: Printable): Any = {
-    val commonInfo = p"[PERF ][time=${GTimer()}] 9527: "
+  def apply(pable: Printable)(ctrlInfo: LogPerfIO): Any = {
+    val commonInfo = p"[PERF ][time=${ctrlInfo.timer}] __PERCENTAGE_M__: "
     printf(commonInfo + pable)
   }
 }

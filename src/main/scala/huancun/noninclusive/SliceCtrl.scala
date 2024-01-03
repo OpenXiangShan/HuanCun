@@ -1,6 +1,6 @@
 package huancun.noninclusive
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import huancun._
@@ -34,7 +34,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
     0.U(offsetBits.W)
   )
   val (tag, set, _) = parseAddress(full_address)
-  when(io.req.fire()){
+  when(io.req.fire){
     req_reg := io.req.bits
     req_reg.set := set
     req_reg.tag := tag
@@ -43,10 +43,10 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   val data_beats = Wire(Vec(beatSize, UInt((8 * beatBytes).W)))
   data_beats := req_reg.data.asTypeOf(data_beats)
 
-  when(io.req.fire()){
+  when(io.req.fire){
     busy := true.B
   }
-  when(io.resp.fire()){
+  when(io.resp.fire){
     busy := false.B
     done := false.B
   }
@@ -60,7 +60,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   val s_dir_read = RegInit(false.B)
   val s_cmo = RegInit(false.B)
 
-  when(io.req.fire()){
+  when(io.req.fire){
     switch(io.req.bits.cmd){
       is(CacheCMD.CMD_R_S_DIR){
         s_dir_read := true.B
@@ -113,13 +113,13 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.dir_read.bits.replacerInfo := DontCare
   io.dir_read.bits.source := DontCare
 
-  when(io.dir_result.fire()){
+  when(io.dir_result.fire){
     switch(req_reg.cmd){
       is(CacheCMD.CMD_R_S_DIR){
-        req_reg.data(0) := io.dir_result.bits.self.asTypeOf(new SelfDirEntry()).asUInt()
+        req_reg.data(0) := io.dir_result.bits.self.asTypeOf(new SelfDirEntry()).asUInt
       }
       is(CacheCMD.CMD_R_C_DIR){
-        req_reg.data(0) := io.dir_result.bits.clients.states.asUInt()
+        req_reg.data(0) := io.dir_result.bits.clients.states.asUInt
       }
       is(CacheCMD.CMD_R_S_TAG){
         req_reg.data(0) := io.dir_result.bits.self.tag
@@ -161,10 +161,10 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.bs_r_addr.bits.noop := false.B
   io.bs_r_addr.bits.write := false.B
 
-  when(io.bs_r_addr.fire()){
+  when(io.bs_r_addr.fire){
     s_data_read := s_data_read + 1.U
   }
-  val data_wen = RegNextN(io.bs_r_addr.fire(), n = sramLatency, initOpt = Some(false.B))
+  val data_wen = RegNextN(io.bs_r_addr.fire, n = sramLatency, initOpt = Some(false.B))
   val w_counter = RegInit(0.U(log2Ceil(beatSize).W))
   when(data_wen){
     w_counter := w_counter + 1.U
@@ -189,23 +189,23 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.bs_w_addr.bits.noop := false.B
   io.bs_w_data.data := data_beats(s_data_write)
   io.bs_w_data.corrupt := false.B
-  when(io.bs_w_addr.fire()){
+  when(io.bs_w_addr.fire){
     s_data_write := s_data_write + 1.U
   }
 
-  when(io.s_dir_w.fire()){
+  when(io.s_dir_w.fire){
     s_wb_self_dir := false.B
     done := true.B
   }
-  when(io.c_dir_w.fire()){
+  when(io.c_dir_w.fire){
     s_wb_client_dir := false.B
     done := true.B
   }
-  when(io.s_tag_w.fire()){
+  when(io.s_tag_w.fire){
     s_wb_self_tag := false.B
     done := true.B
   }
-  when(io.c_tag_w.fire()){
+  when(io.c_tag_w.fire){
     s_wb_client_tag := false.B
     done := true.B
   }
@@ -233,7 +233,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.cmo_req.bits.isBop.foreach(_ := false.B)
 
   io.cmo_req.valid := s_cmo
-  when(io.cmo_req.fire()){
+  when(io.cmo_req.fire){
     s_cmo := false.B
     done := true.B
   }

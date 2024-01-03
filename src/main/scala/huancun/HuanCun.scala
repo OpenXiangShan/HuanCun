@@ -19,7 +19,7 @@
 
 package huancun
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
@@ -30,12 +30,12 @@ import huancun.prefetch._
 import utils.{ResetGen, XSPerfAccumulate}
 import utility.{Pipeline, FastArbiter}
 import huancun.noninclusive.MSHR
-import chisel3.util.experimental.BoringUtils
 
 trait HasHuanCunParameters {
   val p: Parameters
   val cacheParams = p(HCCacheParamsKey)
   val prefetchOpt = cacheParams.prefetch
+  val tpmetaOpt = cacheParams.tpmeta
   val topDownOpt  = if(cacheParams.elaboratedTopDown) Some(true) else None
   val hartIds = p(HCCacheParamsKey).hartIds
   val hasPrefetchBit = prefetchOpt.nonEmpty && prefetchOpt.get.hasPrefetchBit
@@ -152,18 +152,18 @@ trait HasHuanCunParameters {
   }
 
   def startBeat(offset: UInt): UInt = {
-    (offset >> log2Up(beatBytes)).asUInt()
+    (offset >> log2Up(beatBytes)).asUInt
   }
 
   def totalBeats(size: UInt): UInt = {
-    (UIntToOH1(size, log2Up(blockBytes)) >> log2Ceil(beatBytes)).asUInt()
+    (UIntToOH1(size, log2Up(blockBytes)) >> log2Ceil(beatBytes)).asUInt
   }
 
 }
 
 trait DontCareInnerLogic { this: Module =>
-  override def IO[T <: Data](iodef: T): T = {
-    val p = chisel3.experimental.IO.apply(iodef)
+  def IO[T <: Data](iodef: T): T = {
+    val p = chisel3.IO.apply(iodef)
     p <> DontCare
     p
   }
@@ -171,7 +171,7 @@ trait DontCareInnerLogic { this: Module =>
 
 abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with HasHuanCunParameters
 
-abstract class HuanCunModule(implicit val p: Parameters) extends MultiIOModule with HasHuanCunParameters
+abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
 
 class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
@@ -237,14 +237,24 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       Some(BundleBridgeSink(Some(() => new PrefetchRecv)))
     case _ => None
   }
+  val tpmeta_recv_node = tpmetaOpt.map(_ =>
+    BundleBridgeNexusNode[DecoupledIO[TPmetaReq]]()
+  )
+  val tpmeta_send_node = tpmetaOpt.map(_ =>
+    BundleBridgeSource(() => ValidIO(new TPmetaResp))
+  )
 
-  val addrNode = None
+  lazy val module = new HuanCunImp(this)
 
-  lazy val module = new LazyModuleImp(this) {
-    val banks = node.in.size
+  class HuanCunImp(wrapper: HuanCun) extends LazyModuleImp(wrapper) {
+    val banks = wrapper.node.in.size
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
+      val debugTopDown = new Bundle {
+        val robHeadPaddr = Vec(cacheParams.hartIds.length, Flipped(Valid(UInt(36.W))))
+        val addrMatch = Vec(cacheParams.hartIds.length, Output(Bool()))
+      }
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -271,12 +281,12 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         println(fs.map{f => s"$prefix/${f.key.name}: (${f.data.getWidth}-bit)"}.mkString("\n"))
       }
     }
-    print_bundle_fields(node.in.head._2.bundle.requestFields, "usr")
-    print_bundle_fields(node.in.head._2.bundle.echoFields, "echo")
+    print_bundle_fields(wrapper.node.in.head._2.bundle.requestFields, "usr")
+    print_bundle_fields(wrapper.node.in.head._2.bundle.echoFields, "echo")
 
     val pftParams: Parameters = p.alterPartial {
-      case EdgeInKey => node.in.head._2
-      case EdgeOutKey => node.out.head._2
+      case EdgeInKey => wrapper.node.in.head._2
+      case EdgeOutKey => wrapper.node.out.head._2
       case BankBitsKey => bankBits
     }
     def arbTasks[T <: Bundle](out: DecoupledIO[T], in: Seq[DecoupledIO[T]], name: Option[String] = None) = {
@@ -290,6 +300,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       out <> arbiter.io.out
     }
     val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
+    val tpmeta = tpmetaOpt.map(_ => Module(new TPmeta()(pftParams)))
     val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
@@ -299,7 +310,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         prefetcher.get.io.req.ready := Cat(prefetchReqsReady).orR
         arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
     }
-    pf_recv_node match {
+    wrapper.pf_recv_node match {
       case Some(x) =>
         prefetcher.get.io.recv_addr.valid := x.in.head._1.addr_valid
         prefetcher.get.io.recv_addr.bits := x.in.head._1.addr
@@ -307,6 +318,22 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case None =>
         prefetcher.foreach(_.io.recv_addr := DontCare)
         prefetcher.foreach(_.io_l2_pf_en := DontCare)
+    }
+    wrapper.tpmeta_recv_node match {
+      case Some(x) =>
+        // tpmeta.get.io.req <> x.in.head._1
+        val arb = Module(new FastArbiter(new TPmetaReq, x.in.size))
+        for ((arb, req) <- arb.io.in.zip(x.in)) {
+          arb <> req._1
+        }
+        tpmeta.get.io.req <> arb.io.out // DecoupledIO[TPmetaReq]
+      case None =>
+    }
+    wrapper.tpmeta_send_node match {
+      case Some(x) =>
+        require(x.out.size == 1)
+        x.out.head._1 <> tpmeta.get.io.resp  // ValidIO[TPmetaResp]
+      case None =>
     }
 
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
@@ -326,7 +353,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
     }
 
-    val slices = node.in.zip(node.out).zipWithIndex.map {
+    val slices = wrapper.node.in.zip(wrapper.node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
         val rst = if(cacheParams.level == 3 && !cacheParams.simulation) {
@@ -376,9 +403,9 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       case (s, i) => Pipeline(s.io.ctl_ecc, depth = 2, pipe = false, name = Some(s"ecc_buffer_$i"))
     }
     ecc_arb.io.in <> VecInit(slices_ecc)
-    io.ecc_error.valid := ecc_arb.io.out.fire()
+    io.ecc_error.valid := ecc_arb.io.out.fire
     io.ecc_error.bits := restoreAddressUInt(ecc_arb.io.out.bits.addr, ecc_arb.io.chosen)
-    ctrl_unit.foreach { c =>
+    wrapper.ctrl_unit.foreach { c =>
       val ctl_reqs = slices.zipWithIndex.map {
         case (s, i) => Pipeline.pipeTo(s.io.ctl_req, depth = 2, pipe = false, name = Some(s"req_buffer_$i"))
       }
@@ -398,13 +425,13 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       c.module.io_ecc <> ecc_arb.io.out
       c.module.io_ecc.bits.addr := io.ecc_error.bits
     }
-    if (ctrl_unit.isEmpty) {
+    if (wrapper.ctrl_unit.isEmpty) {
       slices.foreach(_.io.ctl_req <> DontCare)
       slices.foreach(_.io.ctl_req.valid := false.B)
       slices.foreach(_.io.ctl_resp.ready := false.B)
       ecc_arb.io.out.ready := true.B
     }
-    node.edges.in.headOption.foreach { n =>
+    wrapper.node.edges.in.headOption.foreach { n =>
       n.client.clients.zipWithIndex.foreach {
         case (c, i) =>
           println(s"\t${i} <= ${c.name}")
@@ -412,19 +439,20 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     }
 
     val topDown = topDownOpt.map(_ => Module(new TopDownMonitor()(p.alterPartial {
-      case EdgeInKey => node.in.head._2
-      case EdgeOutKey => node.out.head._2
+      case EdgeInKey => wrapper.node.in.head._2
+      case EdgeOutKey => wrapper.node.out.head._2
       case BankBitsKey => bankBits
     })))
-    topDownOpt.foreach {
-      _ => {
-        topDown.get.io.msStatus.zip(slices).foreach {
+    topDown match {
+      case Some(t) =>
+        t.io.msStatus.zip(slices).foreach {
           case (in, s) => in := s.io.ms_status.get
         }
-        topDown.get.io.dirResult.zip(slices).foreach {
+        t.io.dirResult.zip(slices).foreach {
           case (res, s) => res := s.io.dir_result.get
         }
-      }
+        t.io.debugTopDown <> io.debugTopDown
+      case None => io.debugTopDown.addrMatch.foreach(_ := false.B)
     }
   }
 

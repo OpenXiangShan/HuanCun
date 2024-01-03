@@ -19,13 +19,13 @@
 
 package huancun
 
-import chipsalliance.rocketchip.config.Field
+import org.chipsalliance.cde.config.Field
 import chisel3._
 import chisel3.util.log2Ceil
 import freechips.rocketchip.diplomacy.BufferParams
 import freechips.rocketchip.tilelink.{TLBufferParams, TLChannelBeatBytes, TLEdgeIn, TLEdgeOut}
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, BundleKeyBase, ControlKey}
-import huancun.prefetch.PrefetchParameters
+import huancun.prefetch.{PrefetchParameters, TPmetaParameters}
 import utility.{MemReqSource, ReqSourceKey}
 
 case object HCCacheParamsKey extends Field[HCCacheParameters](HCCacheParameters())
@@ -48,63 +48,29 @@ case class CacheParameters
 
 case object PrefetchKey extends ControlKey[Bool](name = "needHint")
 
-case class PrefetchField() extends BundleField(PrefetchKey) {
-  override def data: Bool = Output(Bool())
-
-  override def default(x: Bool): Unit = {
-    x := false.B
-  }
-}
+case class PrefetchField() extends BundleField[Bool](PrefetchKey, Output(Bool()), _ := false.B)
 
 case object AliasKey extends ControlKey[UInt]("alias")
 
-case class AliasField(width: Int) extends BundleField(AliasKey) {
-  override def data: UInt = Output(UInt(width.W))
-
-  override def default(x: UInt): Unit = {
-    x := 0.U(width.W)
-  }
-}
+case class AliasField(width: Int) extends BundleField[UInt](AliasKey, Output(UInt(width.W)), _ := 0.U(width.W))
 
 // try to keep data in cache is true
 // now it only works for non-inclusive cache (ignored in inclusive cache)
 case object PreferCacheKey extends ControlKey[Bool](name = "preferCache")
 
-case class PreferCacheField() extends BundleField(PreferCacheKey) {
-  override def data: Bool = Output(Bool())
+case class PreferCacheField() extends BundleField[Bool](PreferCacheKey, Output(Bool()), _ := false.B)
 
-  override def default(x: Bool): Unit = {
-    x := false.B
-  }
-}
+// indicate whether this block is granted from L3 or not (only used when grantData to L2)
+// now it only works for non-inclusive cache (ignored in inclusive cache)
+case object IsHitKey extends ControlKey[Bool](name = "isHitInL3")
+
+case class IsHitField() extends BundleField[Bool](IsHitKey, Output(Bool()), _ := true.B)
 
 // indicate whether this block is dirty or not (only used in handle Release/ReleaseData)
 // now it only works for non-inclusive cache (ignored in inclusive cache)
 case object DirtyKey extends ControlKey[Bool](name = "blockisdirty")
 
-case class DirtyField() extends BundleField(DirtyKey) {
-  override def data: Bool = Output(Bool())
-
-  override def default(x: Bool): Unit = {
-    x := true.B
-  }
-}
-
-// indicate where this granted-block is from(only used in handle Grant/GrantData)
-// now it only works for non-inclusive cache (ignored in inclusive cache) 
-  // 0：isHitinMem or default 
-  // 1：isHitinL3
-  // 2：isHitinAnotherCore
-  // 3：isHitinCork
-case object HitLevelL3toL2Key extends ControlKey[UInt]("HitLevelL3toL2") 
-
-case class HitLevelL3toL2Field() extends BundleField(HitLevelL3toL2Key) {
-  override def data: UInt = Output(UInt(2.W))
-
-  override def default(x: UInt): Unit = {
-    x := 0.U(2.W)
-  }
-}
+case class DirtyField() extends BundleField[Bool](DirtyKey, Output(Bool()), _ := true.B)
 
 case class CacheCtrl
 (
@@ -131,6 +97,7 @@ case class HCCacheParameters
   hartIds: Seq[Int] = Seq[Int](),
   channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
   prefetch: Option[PrefetchParameters] = None,
+  tpmeta: Option[TPmetaParameters] = None,
   elaboratedTopDown: Boolean = true,
   clientCaches: Seq[CacheParameters] = Nil,
   inclusive: Boolean = true,
@@ -153,7 +120,8 @@ case class HCCacheParameters
     c = BufferParams.default,
     d = BufferParams.default,
     e = BufferParams.default
-  )
+  ),
+  FPGAPlatform: Boolean = false
 ) {
   require(ways > 0)
   require(sets > 0)

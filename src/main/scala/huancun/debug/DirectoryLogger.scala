@@ -1,6 +1,6 @@
 package huancun.debug
 
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.experimental.{IntParam, StringParam}
 import chisel3.util._
@@ -62,7 +62,7 @@ class DirLogWriter(prefix: String)
       |    input clock,
       |    input reset
       |);
-      |    parameter string prefix;
+      |    parameter string prefix = "undefined";
       |
       |    always @(posedge clock) begin
       |        if(wen && !reset) begin
@@ -99,7 +99,7 @@ object DirectoryLogger {
       dirLogger.io.way := way
       dirLogger.io.typeId := typeId.U
       dirLogger.io.stamp := stamp
-      dirLogger.io.dir := state.asUInt()
+      dirLogger.io.dir := state.asUInt
       dirLogger.io.tag := tag
       dirLogger.io.wen := wen
       dirLogger.io.clock := clock

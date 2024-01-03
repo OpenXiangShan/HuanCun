@@ -3,7 +3,7 @@ package huancun
 import chisel3._
 import chisel3.util._
 import chiseltest._
-import chipsalliance.rocketchip.config.Parameters
+import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp, TransferSizes}
 import freechips.rocketchip.tilelink.{TLBundle, TLChannelBeatBytes, TLClientNode, TLMasterParameters, TLMasterPortParameters, TLPermissions}
 import tltest.{AddrState, ScoreboardData, TLCMasterAgent, TLCScalaB, TLCScalaD, TLCTrans, TLULMasterAgent}
@@ -36,7 +36,7 @@ abstract class BaseFakeClient(name: String, nBanks: Int, probe: Boolean = true)(
 class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0)(implicit p: Parameters)
   extends BaseFakeClient(name, nBanks, probe) {
 
-  lazy val module = new LazyModuleImp(this) {
+  class FakeClientImp(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
 
     val finish = IO(Output(Bool()))
 
@@ -54,7 +54,7 @@ class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0
 
       val cnt = RegInit(reqs.U)
       val addr = RegInit(0.U(edge.bundle.addressBits.W))
-      when(out.a.fire()) {
+      when(out.a.fire) {
         cnt := cnt - 1.U
         addr := addr + blockBytes.U
       }
@@ -79,16 +79,18 @@ class FakeClient(name: String, nBanks: Int, probe: Boolean = true, reqs: Int = 0
       }
       val grantCnt = RegInit(reqs.U)
       val grantAck = RegNext(edge.GrantAck(out.d.bits))
-      when(RegNext(out.d.fire() && edge.last(out.d))) {
+      when(RegNext(out.d.fire && edge.last(out.d))) {
         out.e.valid := probe.B
         out.e.bits := grantAck
       }
-      when(out.e.fire()) {
+      when(out.e.fire) {
         grantCnt := grantCnt - 1.U
       }
       f := grantCnt === 0.U
     }
   }
+
+  lazy val module = new FakeClientImp(this)
 }
 
 class FakeL1D(nBanks: Int, reqs: Int = 0)(implicit p: Parameters) extends FakeClient("L1D", nBanks, reqs = reqs)
@@ -120,10 +122,11 @@ class MasterAgent
     blockBytes,
     beatBytes
   )
-  lazy val module = new LazyModuleImp(this) {
+  class MasterAgentImp(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
     val tl_master_io = IO(Flipped(new TLBundle(node.out.head._1.params)))
     node.out.head._1 <> tl_master_io
   }
+  lazy val module = new MasterAgentImp(this)
 
   def peekFire[T <: Data](port: DecoupledIO[T]): Boolean = {
     port.valid.peek().litToBoolean && port.ready.peek().litToBoolean
@@ -131,7 +134,7 @@ class MasterAgent
 
   def peekReady[T <: Data](port: DecoupledIO[T]): Boolean = port.ready.peek().litToBoolean
 
-  def peekBigInt(sig: UInt): BigInt = sig.peek().litValue()
+  def peekBigInt(sig: UInt): BigInt = sig.peek().litValue
 
   def peekBoolean(sig: Bool): Boolean = sig.peek().litToBoolean
 
@@ -243,10 +246,11 @@ class MasterULAgent
     blockBytes,
     beatBytes
   )
-  lazy val module = new LazyModuleImp(this) {
+  class MasterULAgent(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
     val tl_master_io = IO(Flipped(new TLBundle(node.out.head._1.params)))
     node.out.head._1 <> tl_master_io
   }
+  lazy val module = new MasterULAgent(this)
 
   def peekFire[T <: Data](port: DecoupledIO[T]): Boolean = {
     port.valid.peek().litToBoolean && port.ready.peek().litToBoolean
@@ -254,7 +258,7 @@ class MasterULAgent
 
   def peekReady[T <: Data](port: DecoupledIO[T]): Boolean = port.ready.peek().litToBoolean
 
-  def peekBigInt(sig: UInt): BigInt = sig.peek().litValue()
+  def peekBigInt(sig: UInt): BigInt = sig.peek().litValue
 
   def peekBoolean(sig: Bool): Boolean = sig.peek().litToBoolean
 
