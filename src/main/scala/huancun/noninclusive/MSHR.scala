@@ -555,6 +555,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_sinkcack = RegInit(true.B)
 
   val acquire_flag = RegInit(false.B)
+  // hold part of s_acquire：
+    // send acquire to memory when receive an acquire from L2
+    // hold until read Directory next time
+  val s_acquire_hold_for_acquire = RegInit(false.B) 
+  // hold part of s_probe：
+    // send probe to another L2 when receive an acquire from L2
+    // hold until read Directory next time
+  val s_probe_hold_for_acquire = RegInit(false.B) 
+
+  // val sourceD_valid_hold = RegInit(false.B)
 
   def reset_all_flags(): Unit = {
     // Default value
@@ -595,10 +605,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     nested_c_hit_reg := false.B
     gotDirty := false.B
     acquire_flag := false.B
+    s_acquire_hold_for_acquire := false.B
+    s_probe_hold_for_acquire := false.B
+    // sourceD_valid_hold := false.B
     a_do_release := false.B
     a_do_probe := false.B
   }
   when(!s_acquire) { acquire_flag := acquire_flag | true.B }
+  
+  when(!s_acquire && req_acquire) { s_acquire_hold_for_acquire := s_acquire_hold_for_acquire | true.B }
+  when(!s_probe && req_acquire) { s_probe_hold_for_acquire := s_probe_hold_for_acquire | true.B }
 
   def x_schedule(): Unit = { // TODO
     // Do probe to maintain coherence
@@ -960,6 +976,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.tasks.prefetch_train.foreach(_.valid := !s_triggerprefetch.get)
   io.tasks.prefetch_resp.foreach(_.valid := !s_prefetchack.get && w_grantfirst)
 
+  // when(io.tasks.source_d.valid){
+    // sourceD_valid_hold := sourceD_valid_hold | true.B
+  // }
+  
   val oa = io.tasks.source_a.bits
   val ob = io.tasks.source_b.bits
   val oc = io.tasks.source_c.bits
@@ -989,6 +1009,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.mask := req.mask
   // full overwrite, we can always acquire perm, no need to acquire block
   val acquire_perm_NtoT = req.opcode === AcquirePerm && req.param === NtoT
+
+  // will hit in cork if the acquire from L2 need to acquire downwords L3 and the state transfer is BtoT
+  val acquire_BtoT = req.fromA && req_acquire && req.param === BtoT
 
   val acquire_opcode = if (cacheParams.name == "L2") {
     Mux(req.opcode === AcquirePerm && req.param === BtoT, AcquirePerm, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
@@ -1174,9 +1197,27 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     ),
     false.B
   )
-  od.isHit := self_meta.hit
   od.bufIdx := req.bufIdx
   od.bypassPut := bypassPut_latch
+
+// hitLevelL3toL2 makes sense when sourceD_valid is high
+  val hitFromCork = req.fromA && s_acquire_hold_for_acquire && acquire_BtoT
+  val hitFromMem = req.fromA && s_acquire_hold_for_acquire && !hitFromCork
+  val hitFromAnotherCore = req.fromA && !s_acquire_hold_for_acquire && s_probe_hold_for_acquire
+  val hitFromL3 = req.fromA && req_acquire && !s_acquire_hold_for_acquire && !s_probe_hold_for_acquire && self_meta.hit
+
+    when(hitFromCork){
+      od.hitLevelL3toL2 := 3.U
+    }.elsewhen(hitFromMem){
+      od.hitLevelL3toL2 := 0.U
+    }.elsewhen(hitFromAnotherCore){
+      od.hitLevelL3toL2 := 2.U
+    }.elsewhen(hitFromL3){
+      od.hitLevelL3toL2 := 1.U
+    }.otherwise{
+      od.hitLevelL3toL2 := 0.U
+    }
+
 
   oe.sink := sink
 

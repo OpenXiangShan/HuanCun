@@ -52,7 +52,7 @@ class SinkB(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.alloc.bits.alias.foreach(_ := 0.U)
   io.alloc.bits.preferCache := true.B
   io.alloc.bits.dirty := false.B // ignored
-   io.alloc.bits.isHit := true.B // ignored
+  io.alloc.bits.hitLevelL3toL2 := 0.U // ignored
   io.alloc.bits.fromProbeHelper := false.B
   io.alloc.bits.fromCmoHelper := false.B
   io.alloc.bits.needProbeAckData.foreach(_ := io.b.bits.data(0))
