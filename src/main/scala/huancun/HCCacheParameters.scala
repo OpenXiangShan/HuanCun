@@ -60,11 +60,15 @@ case object PreferCacheKey extends ControlKey[Bool](name = "preferCache")
 
 case class PreferCacheField() extends BundleField[Bool](PreferCacheKey, Output(Bool()), _ := false.B)
 
-// indicate whether this block is granted from L3 or not (only used when grantData to L2)
-// now it only works for non-inclusive cache (ignored in inclusive cache)
-case object IsHitKey extends ControlKey[Bool](name = "isHitInL3")
+// indicate where this granted-block is from(only used in handle Grant/GrantData)
+// now it only works for non-inclusive cache (ignored in inclusive cache) 
+  // 0：isHitinMem or default 
+  // 1：isHitinL3
+  // 2：isHitinAnotherCore
+  // 3：isHitinCork
+case object HitLevelKey extends ControlKey[UInt](name = "hitlevel")
 
-case class IsHitField() extends BundleField[Bool](IsHitKey, Output(Bool()), _ := true.B)
+case class HitLevelField(width: Int) extends BundleField[UInt](HitLevelKey, Output(UInt(width.W)), _ := 0.U(width.W))
 
 // indicate whether this block is dirty or not (only used in handle Release/ReleaseData)
 // now it only works for non-inclusive cache (ignored in inclusive cache)
@@ -108,7 +112,7 @@ case class HCCacheParameters
   reqField: Seq[BundleFieldBase] = Nil, // master
   respKey: Seq[BundleKeyBase] = Nil,
   reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey, ReqSourceKey), // slave
-  respField: Seq[BundleFieldBase] = Seq(HitLevelL3toL2Field()), 
+  respField: Seq[BundleFieldBase] = Seq(HitLevelField()), 
   ctrl: Option[CacheCtrl] = None,
   sramClkDivBy2: Boolean = false,
   sramDepthDiv: Int = 1,
