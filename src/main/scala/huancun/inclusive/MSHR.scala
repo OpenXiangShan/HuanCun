@@ -109,7 +109,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
         Mux(gotT, Mux(req_acquire, TRUNK, TIP), BRANCH),
         MuxLookup(
           meta.state,
-          BRANCH,
+          BRANCH)(
           Seq(
             INVALID -> BRANCH,
             BRANCH -> BRANCH,
@@ -392,7 +392,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     req.fromB,
     MuxLookup(
       Cat(meta.state, probe_next_state),
-      NtoN,
+      NtoN)(
       Seq( // TODO: optimize this
         Cat(TRUNK, TRUNK) -> TtoT,
         Cat(TIP, TIP) -> TtoT,
@@ -428,7 +428,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
     Mux(
       !req_acquire,
       req.param,
-      MuxLookup(req.param, req.param, Seq(NtoB -> Mux(req_promoteT, toT, toB), BtoT -> toT, NtoT -> toT))
+      MuxLookup(req.param, req.param)(Seq(NtoB -> Mux(req_promoteT, toT, toB), BtoT -> toT, NtoT -> toT))
     )
 
   od.size := req.size
