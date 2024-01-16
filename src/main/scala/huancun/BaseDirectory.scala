@@ -67,7 +67,8 @@ class SubDirectory[T <: Data](
   dir_init_fn: () => T,
   dir_hit_fn: T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
-  replacement: String)(implicit p: Parameters)
+  replacement: String,
+  associative: AssociativePolicy)(implicit p: Parameters)
     extends Module {
 
   val setBits = log2Ceil(sets)
@@ -95,16 +96,22 @@ class SubDirectory[T <: Data](
       val way = UInt(wayBits.W)
     }))
     val dir_w = Flipped(DecoupledIO(new Bundle() {
+      val tag = UInt(tagBits.W)
       val set = UInt(setBits.W)
       val way = UInt(wayBits.W)
       val dir = dir_init.cloneType
     }))
   })
 
+  val readSet = associative.get_hashed_index(Cat(io.read.bits.tag, io.read.bits.set))
+  val tagWriteSet = associative.get_hashed_index(Cat(io.tag_w.bits.tag, io.tag_w.bits.set))
+  val dirWriteSet = associative.get_hashed_index(Cat(io.dir_w.bits.tag, io.dir_w.bits.set))
+
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+//  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val metaArray = Seq.fill(ways)(Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, singlePort = true, input_clk_div_by_2 = clk_div_by_2)))
 
   val clkGate = Module(new STD_CLKGT_func)
   val clk_en = RegInit(false.B)
@@ -128,34 +135,66 @@ class SubDirectory[T <: Data](
   println(s"Tag ECC bits:$eccBits")
   val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+//  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val tagArray = Seq.fill(ways)(Module(new SRAMTemplate(UInt(tagBits.W), sets, singlePort = true, input_clk_div_by_2 = clk_div_by_2)))
   if(eccBits > 0){
-    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+//    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+    val eccArray = Seq.fill(ways)(Module(new SRAMTemplate(UInt(eccBits.W), sets, singlePort = true, input_clk_div_by_2 = clk_div_by_2)))
+    /*
     eccArray.io.w(
       io.tag_w.fire,
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
       io.tag_w.bits.set,
       UIntToOH(io.tag_w.bits.way)
     )
-    if (clk_div_by_2) {
-      eccArray.clock := masked_clock
+    */
+    eccArray.zipWithIndex.foreach { case(ecc, wayid) => 
+      ecc.io.w(
+        io.tag_w.fire && (wayid.asUInt === io.tag_w.bits.way),
+        tagCode.encode(io.tag_w.bits.tag).head(eccBits),
+        tagWriteSet(associative.get_func_id(wayid.asUInt)),
+        "b1".U
+      )
     }
-    eccRead := eccArray.io.r(io.read.fire, io.read.bits.set).resp.data
+    if (clk_div_by_2) {
+//      eccArray.clock := masked_clock
+      eccArray.foreach(_.clock := masked_clock)
+    }
+//    eccRead := eccArray.io.r(io.read.fire, io.read.bits.set).resp.data
+    eccRead :=  eccArray.zipWithIndex.map { case(ecc, wayid) => 
+      ecc.io.r(io.read.fire, readSet(associative.get_func_id(wayid.asUInt))).resp.data.reduce(Cat(_, _))
+    }
   } else {
     eccRead.foreach(_ := 0.U)
   }
-
+  /*
   tagArray.io.w(
     io.tag_w.fire,
     io.tag_w.bits.tag,
     io.tag_w.bits.set,
     UIntToOH(io.tag_w.bits.way)
   )
-  tagRead := tagArray.io.r(io.read.fire, io.read.bits.set).resp.data
+  */
+  tagArray.zipWithIndex.foreach{ case(tag, wayid) => 
+    tag.io.w(
+      io.tag_w.fire && (wayid.asUInt === io.tag_w.bits.way),
+      io.tag_w.bits.tag,
+      tagWriteSet(associative.get_func_id(wayid.asUInt)),
+      "b1".U
+    )
+  }
+//  tagRead := tagArray.io.r(io.read.fire, io.read.bits.set).resp.data
+  tagRead := tagArray.zipWithIndex.map { case(tag, wayid) => 
+    tag.io.r(io.read.fire, readSet(associative.get_func_id(wayid.asUInt))).resp.data.reduce(Cat(_, _))
+  }
 
   if (clk_div_by_2) {
+    /*
     metaArray.clock := masked_clock
     tagArray.clock := masked_clock
+    */
+    metaArray.foreach(_.clock := masked_clock)
+    tagArray.foreach(_.clock := masked_clock)
   }
 
   val reqReg = RegEnable(io.read.bits, io.read.fire)
@@ -169,8 +208,13 @@ class SubDirectory[T <: Data](
   val hit_s1 = Wire(Bool())
   val way_s1 = Wire(UInt(wayBits.W))
 
-  val repl = ReplacementPolicy.fromString(replacement, ways)
-  val repl_state = if(replacement == "random"){
+//  val repl = ReplacementPolicy.fromString(replacement, ways)
+  val (repl, repl_name) = if (associative.name == "set-associative") {
+    (ReplacementPolicy.fromString(replacement, ways), replacement)
+  } else {
+    (ReplacementPolicy.fromString("random", ways), "random")
+  }
+  val repl_state = if(repl_name == "random") {
     when(io.tag_w.fire){
       repl.miss
     }
@@ -186,7 +230,10 @@ class SubDirectory[T <: Data](
   }
 
   io.resp.valid := reqValidReg
-  val metas = metaArray.io.r(io.read.fire, io.read.bits.set).resp.data
+//  val metas = metaArray.io.r(io.read.fire, io.read.bits.set).resp.data
+  val metas = VecInit(metaArray.zipWithIndex.map{ case (meta, wayid) => 
+    meta.io.r(io.read.fire, readSet(associative.get_func_id(wayid.asUInt))).resp.data(0)
+  })
   val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
   val metaValidVec = metas.map(dir_hit_fn)
   val hitVec = tagMatchVec.zip(metaValidVec).map(x => x._1 && x._2)
@@ -220,12 +267,23 @@ class SubDirectory[T <: Data](
   io.resp.bits.tag := tag_s2
   io.resp.bits.error := io.resp.bits.hit && error_s2
 
+  /*
   metaArray.io.w(
     !resetFinish || dir_wen,
     Mux(resetFinish, io.dir_w.bits.dir, dir_init),
     Mux(resetFinish, io.dir_w.bits.set, resetIdx),
     Mux(resetFinish, UIntToOH(io.dir_w.bits.way), Fill(ways, true.B))
   )
+  */
+
+  metaArray.zipWithIndex.foreach{ case(meta, wayid) =>
+    meta.io.w(
+      !resetFinish || (dir_wen && (io.dir_w.bits.way === wayid.asUInt)),
+      Mux(resetFinish, io.dir_w.bits.dir, dir_init),
+      Mux(resetFinish, dirWriteSet(associative.get_func_id(wayid.asUInt)), resetIdx),
+      "b1".U
+    )
+  }
 
   val cycleCnt = Counter(true.B, 2)
   val resetMask = if (clk_div_by_2) cycleCnt._1(0) else true.B
@@ -262,11 +320,12 @@ abstract class SubDirectoryDoUpdate[T <: Data](
   dir_init_fn: () => T,
   dir_hit_fn:  T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
-  replacement: String)(implicit p: Parameters)
+  replacement: String,
+  associative: AssociativePolicy)(implicit p: Parameters)
     extends SubDirectory[T](
       wports, sets, ways, tagBits,
       dir_init_fn, dir_hit_fn, invalid_way_sel,
-      replacement
+      replacement, associative
     ) with HasUpdate {
 
   val update = doUpdate(reqReg.replacerInfo)

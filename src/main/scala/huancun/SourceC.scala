@@ -67,6 +67,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.bs_raddr.valid := has_data
   io.bs_raddr.bits.way := task.way
   io.bs_raddr.bits.set := task.set
+  io.bs_raddr.bits.tag := task.tag
   io.bs_raddr.bits.beat := beat
   io.bs_raddr.bits.write := false.B
   io.bs_raddr.bits.noop := false.B

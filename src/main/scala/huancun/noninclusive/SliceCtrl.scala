@@ -140,8 +140,10 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
 
   io.s_dir_w.bits.set := req_reg.set
   io.s_dir_w.bits.way := req_reg.way
+  io.s_dir_w.bits.tag := req_reg.tag
   io.s_dir_w.bits.data := req_reg.dir.asTypeOf(io.s_dir_w.bits.data)
 
+  io.c_dir_w.bits.tag := req_reg.tag
   io.c_dir_w.bits.set := req_reg.set
   io.c_dir_w.bits.way := req_reg.way
   io.c_dir_w.bits.data := req_reg.dir.asTypeOf(io.c_dir_w.bits.data)
@@ -157,6 +159,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.bs_r_addr.valid := s_data_read =/= beatSize.U
   io.bs_r_addr.bits.way := req_reg.way
   io.bs_r_addr.bits.set := req_reg.set
+  io.bs_r_addr.bits.tag := req_reg.tag
   io.bs_r_addr.bits.beat := s_data_read
   io.bs_r_addr.bits.noop := false.B
   io.bs_r_addr.bits.write := false.B
@@ -184,6 +187,7 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   io.bs_w_addr.valid := s_data_write =/= beatSize.U
   io.bs_w_addr.bits.way := req_reg.way
   io.bs_w_addr.bits.set := req_reg.set
+  io.bs_w_addr.bits.tag := req_reg.tag
   io.bs_w_addr.bits.beat := s_data_write
   io.bs_w_addr.bits.write := true.B
   io.bs_w_addr.bits.noop := false.B

@@ -24,6 +24,7 @@ class DirectoryEntry(implicit p: Parameters) extends HuanCunBundle {
 }
 
 class DirWrite(implicit p: Parameters) extends BaseDirWrite {
+  val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
   val way = UInt(wayBits.W)
   val data = new DirectoryEntry
@@ -68,7 +69,8 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
       },
       dir_hit_fn = x => x.state =/= MetaData.INVALID,
       invalid_way_sel = invalid_way_sel,
-      replacement = cacheParams.replacement
+      replacement = cacheParams.replacement,
+      associative = associativePolicy
     ) with UpdateOnAcquire
   )
   val rport = dir.io.read
@@ -101,6 +103,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
   io.tagWReq.ready := dir.io.tag_w.ready
   // Self Dir Write
   dir.io.dir_w.valid := io.dirWReq.valid
+  dir.io.dir_w.bits.tag := io.dirWReq.bits.tag
   dir.io.dir_w.bits.set := io.dirWReq.bits.set
   dir.io.dir_w.bits.way := io.dirWReq.bits.way
   dir.io.dir_w.bits.dir := io.dirWReq.bits.data

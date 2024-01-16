@@ -83,17 +83,20 @@ class ClientTagWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
 }
 
 class SelfDirWrite(implicit p: Parameters) extends BaseDirWrite {
+  val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
   val way = UInt(wayBits.W)
   val data = new SelfDirEntry
 }
 
 class ClientDirWrite(implicit p: Parameters) extends HuanCunBundle with HasClientInfo {
+  val tag = UInt(clientTagBits.W)
   val set = UInt(clientSetBits.W)
   val way = UInt(clientWayBits.W)
   val data = Vec(clientBits, new ClientDirEntry())
 
   def apply(lineAddr: UInt, way: UInt, data: Vec[ClientDirEntry]) = {
+    this.tag := lineAddr(clientTagBits + clientSetBits - 1, clientSetBits)
     this.set := lineAddr(clientSetBits - 1, 0)
     this.way := way
     this.data := data
@@ -151,7 +154,7 @@ class Directory(implicit p: Parameters)
   DirectoryLogger(cacheParams.name, TypeId.client_dir)(
     io.clientDirWReq.bits.set,
     io.clientDirWReq.bits.way,
-    0.U,
+    io.clientDirWReq.bits.tag,
     io.clientDirWReq.bits.data,
     stamp,
     io.clientDirWReq.fire,
@@ -191,7 +194,8 @@ class Directory(implicit p: Parameters)
       },
       dir_hit_fn = dirs => Cat(dirs.map(_.state =/= MetaData.INVALID)).orR,
       invalid_way_sel = client_invalid_way_fn,
-      replacement = "random"
+      replacement = "random",
+      associative = AssociativePolicy("set", setBits)
     )
   )
 
@@ -226,7 +230,8 @@ class Directory(implicit p: Parameters)
       },
       dir_hit_fn = selfHitFn,
       self_invalid_way_sel,
-      replacement = cacheParams.replacement
+      replacement = "random",
+      associative = associativePolicy
     ) with NonInclusiveCacheReplacerUpdate
   )
 
@@ -303,12 +308,14 @@ class Directory(implicit p: Parameters)
 
   // Self Dir Write
   selfDir.io.dir_w.valid := io.dirWReq.valid
+  selfDir.io.dir_w.bits.tag := io.dirWReq.bits.tag
   selfDir.io.dir_w.bits.set := io.dirWReq.bits.set
   selfDir.io.dir_w.bits.way := io.dirWReq.bits.way
   selfDir.io.dir_w.bits.dir := io.dirWReq.bits.data
   io.dirWReq.ready := selfDir.io.dir_w.ready && readyMask
   // Clients Dir Write
   clientDir.io.dir_w.valid := io.clientDirWReq.valid
+  clientDir.io.dir_w.bits.tag := io.clientDirWReq.bits.tag
   clientDir.io.dir_w.bits.set := io.clientDirWReq.bits.set
   clientDir.io.dir_w.bits.way := io.clientDirWReq.bits.way
   clientDir.io.dir_w.bits.dir := io.clientDirWReq.bits.data

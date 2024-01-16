@@ -70,6 +70,11 @@ trait HasHuanCunParameters {
   val bufIdxBits = log2Ceil(bufBlocks)
 
   val alwaysReleaseData = cacheParams.alwaysReleaseData
+  val associativePolicy = AssociativePolicy(
+    cacheParams.associative,
+    setBits,
+    cacheParams.hashGranularity
+  )
 
   // req -> sram ports 1 cycle
   // sram 1 or 2 cycles
@@ -274,6 +279,10 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       val clientParam = cacheParams.clientCaches.head
       println(s"[client] size:${sizeBytesToStr(clientParam.capacity.toDouble)}")
       println(s"[client] sets:${clientParam.sets} ways:${clientParam.ways} blockBytes:${clientParam.blockBytes}")
+    }
+    println(s"associative policy: ${cacheParams.associative}-associative")
+    if (cacheParams.associative == "skew") {
+      println( s"hash functions used: ${cacheParams.hashGranularity}")
     }
     println(s"blockGranularityBits: ${block_granularity}")
     def print_bundle_fields(fs: Seq[BundleFieldBase], prefix: String) = {

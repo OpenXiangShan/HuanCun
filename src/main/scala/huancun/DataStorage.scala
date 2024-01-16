@@ -132,16 +132,16 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   }
 
   /* Arbitrates r&w by bank according to priority */
-  val sourceC_req = req(wen = false, io.sourceC_raddr, io.sourceC_rdata)
+  val sourceC_rreq = req(wen = false, io.sourceC_raddr, io.sourceC_rdata)
   val sourceD_rreq = req(wen = false, io.sourceD_raddr, io.sourceD_rdata)
   val sourceD_wreq = req(wen = true, io.sourceD_waddr, io.sourceD_wdata)
   val sinkD_wreq = req(wen = true, io.sinkD_waddr, io.sinkD_wdata)
-  val sinkC_req = req(wen = true, io.sinkC_waddr, io.sinkC_wdata)
+  val sinkC_wreq = req(wen = true, io.sinkC_waddr, io.sinkC_wdata)
 
   val reqs =
     Seq(
-      sourceC_req,
-      sinkC_req,
+      sourceC_rreq,
+      sinkC_wreq,
       sinkD_wreq,
       sourceD_wreq,
       sourceD_rreq
@@ -235,7 +235,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val data_grps = outData.grouped(stackSize).toList.transpose
   val ecc_grps = eccData.map(_.toList.transpose)
   val d_sel = sourceD_rreq.bankEn.asBools.grouped(stackSize).toList.transpose
-  val c_sel = sourceC_req.bankEn.asBools.grouped(stackSize).toList.transpose
+  val c_sel = sourceC_rreq.bankEn.asBools.grouped(stackSize).toList.transpose
   for (i <- 0 until stackSize) {
     val dataSel = dataSelModules(i)
     dataSel.io.in := VecInit(data_grps(i))
