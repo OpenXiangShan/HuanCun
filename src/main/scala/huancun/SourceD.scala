@@ -92,6 +92,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
 
   io.bs_raddr.valid := s1_valid_r && !s1_req.useBypass
   io.bs_raddr.bits.way := s1_req.way
+  io.bs_raddr.bits.tag := s1_req.tag
   io.bs_raddr.bits.set := s1_req.set
   io.bs_raddr.bits.beat := s1_beat // TODO: support unaligned address
   io.bs_raddr.bits.write := false.B
@@ -262,6 +263,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.bs_waddr.bits.noop := false.B
   io.bs_waddr.bits.way  := s4_req.way
   io.bs_waddr.bits.set  := s4_req.set
+  io.bs_waddr.bits.tag  := s4_req.tag
   io.bs_waddr.bits.beat := s4_beat
   io.bs_waddr.bits.write := true.B
   io.bs_wdata.data := mergedData

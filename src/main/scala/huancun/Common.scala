@@ -167,6 +167,7 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle with HasChannelBi
   val tag = UInt(tagBits.W)
   val way = UInt(wayBits.W)
   val way_reg = UInt(wayBits.W)
+  val meta_valid = Bool()
   val is_miss = Bool()
   val blockB, blockC = Bool()
   val nestB, nestC = Bool()
@@ -193,6 +194,7 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle with HasChannelBi
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
   val way = UInt(width = wayBits.W)
+  val tag = UInt(width = tagBits.W)
   val set = UInt(width = setBits.W)
   val beat = UInt(width = beatBits.W)
   val write = Bool()

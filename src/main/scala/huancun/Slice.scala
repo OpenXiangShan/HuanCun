@@ -102,18 +102,55 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   val dataStorage = Module(new DataStorage())
 
+  val sinkD_wset = associativePolicy.get_hashed_index(
+    Cat(sinkD.io.bs_waddr.bits.tag, sinkD.io.bs_waddr.bits.set)
+  )
   dataStorage.io.sinkD_wdata := sinkD.io.bs_wdata
   dataStorage.io.sinkD_waddr <> sinkD.io.bs_waddr
+  dataStorage.io.sinkD_waddr.bits.set := sinkD_wset(
+    associativePolicy.choose_a_hash_func(sinkD.io.bs_waddr.bits.way)
+  )
   sourceC.io.bs_rdata := dataStorage.io.sourceC_rdata
   if(ctrl.nonEmpty){
     ctrl.get.io.bs_r_data := dataStorage.io.sourceC_rdata
   }
   sourceD.io.bs_rdata := dataStorage.io.sourceD_rdata
+  val sourceD_rset = associativePolicy.get_hashed_index(
+    Cat(sourceD.io.bs_raddr.bits.tag, sourceD.io.bs_raddr.bits.set)
+  )
   dataStorage.io.sourceD_raddr <> sourceD.io.bs_raddr
+  dataStorage.io.sourceD_raddr.bits.set := sourceD_rset(
+    associativePolicy.choose_a_hash_func(sourceD.io.bs_raddr.bits.way)
+  )
+  val sourceD_wset = associativePolicy.get_hashed_index(
+    Cat(sourceD.io.bs_waddr.bits.tag, sourceD.io.bs_waddr.bits.set)
+  )
   dataStorage.io.sourceD_waddr <> sourceD.io.bs_waddr
+  dataStorage.io.sourceD_waddr.bits.set := sourceD_wset(
+    associativePolicy.choose_a_hash_func(sourceD.io.bs_waddr.bits.way)
+  )
   dataStorage.io.sourceD_wdata <> sourceD.io.bs_wdata
-  dataStorage.io.sourceC_raddr <> ctrl_arb(sourceC.io.bs_raddr, ctrl.map(_.io.bs_r_addr))
-  dataStorage.io.sinkC_waddr <> ctrl_arb(sinkC.io.bs_waddr, ctrl.map(_.io.bs_w_addr))
+//  dataStorage.io.sourceC_raddr <> ctrl_arb(sourceC.io.bs_raddr, ctrl.map(_.io.bs_r_addr))
+//  dataStorage.io.sinkC_waddr <> ctrl_arb(sinkC.io.bs_waddr, ctrl.map(_.io.bs_w_addr))
+
+  val sourceC_arb = ctrl_arb(sourceC.io.bs_raddr, ctrl.map(_.io.bs_r_addr))
+  val sourceC_rset = associativePolicy.get_hashed_index(
+    Cat(sourceC_arb.bits.tag, sourceC_arb.bits.set)
+  )
+  dataStorage.io.sourceC_raddr <> sourceC_arb
+  dataStorage.io.sourceC_raddr.bits.set := sourceC_rset(
+    associativePolicy.choose_a_hash_func(sourceC_arb.bits.way)
+  )
+
+  val sinkC_arb = ctrl_arb(sinkC.io.bs_waddr, ctrl.map(_.io.bs_w_addr))
+  val sinkC_wset = associativePolicy.get_hashed_index(
+    Cat(sinkC_arb.bits.tag, sinkC_arb.bits.set)
+  )
+  dataStorage.io.sinkC_waddr <> sinkC_arb
+  dataStorage.io.sinkC_waddr.bits.set := sinkC_wset(
+    associativePolicy.choose_a_hash_func(sinkC_arb.bits.way)
+  )
+  
   dataStorage.io.sinkC_wdata := (if(ctrl.nonEmpty){
     Mux(ctrl.get.io.bs_w_addr.valid,
       ctrl.get.io.bs_w_data,
@@ -580,6 +617,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   })
   sinkD.io.way := sinkD_status.bits.way_reg
   sinkD.io.set := sinkD_status.bits.set
+  sinkD.io.tag := sinkD_status.bits.tag
   sinkD.io.inner_grant := sinkD_status.bits.will_grant_data
   sinkD.io.save_data_in_bs := sinkD_status.bits.will_save_data
 

@@ -113,6 +113,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val isProbeAckDataReg = RegEnable(isProbeAckData, io.c.fire)
   val resp_way = Mux(io.c.valid, io.way, RegEnable(io.way, io.c.fire))
   val resp_set = Mux(io.c.valid, set, RegEnable(set, io.c.fire))
+  val resp_tag = Mux(io.c.valid, tag, RegEnable(tag, io.c.fire))
   val resp_w_valid = (io.c.valid && !do_release && isProbeAckData) || (!first && isProbeAckDataReg) // ProbeAckData
   val req_w_valid =
     (io.task.fire && io.task.bits.save) || (busy_r && task_r.save)
@@ -122,6 +123,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.bs_waddr.valid := req_w_valid || resp_w_valid
   io.bs_waddr.bits.way := Mux(do_release, bs_w_task.way, resp_way)
   io.bs_waddr.bits.set := Mux(do_release, bs_w_task.set, resp_set) // TODO: do we need io.set?
+  io.bs_waddr.bits.tag := Mux(do_release, bs_w_task.tag, resp_tag)
   io.bs_waddr.bits.beat := w_counter
   io.bs_waddr.bits.write := true.B
   io.bs_waddr.bits.noop := Mux(do_release, !beatValids(bs_w_task.bufIdx)(w_counter), !c.valid)

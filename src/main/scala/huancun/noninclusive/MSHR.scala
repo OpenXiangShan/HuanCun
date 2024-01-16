@@ -1103,7 +1103,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), self_meta.dirty.asUInt)
   )
   oc.tag := Mux(req.fromB, req.tag, self_meta.tag)
-  oc.set := req.set
+//  oc.set := req.set
+  val req_hash_set = associativePolicy.get_hashed_index(Cat(req.tag, req.set))
+  val replace_release_set = associativePolicy.get_unhashed_index(self_meta.tag, req_hash_set)
+  oc.set := Mux(req.fromB, req.set, replace_release_set(associativePolicy.choose_a_hash_func(self_meta.way)))
 
   val probeack_param = MuxLookup( // TODO: optimize this
     Cat(highest_perm, probe_next_state(highest_perm, req.param)),
@@ -1222,6 +1225,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probe_dirty || self_meta.hit && self_meta.dirty
   )
 
+  io.tasks.dir_write.bits.tag := req.tag
   io.tasks.dir_write.bits.set := req.set
   io.tasks.dir_write.bits.way := meta_reg.self.way
   io.tasks.dir_write.bits.data := new_self_dir
@@ -1479,6 +1483,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.is_miss := !self_meta.hit
   io.status.bits.way := self_meta.way
   io.status.bits.way_reg := meta_reg.self.way  // used to ease timing issue
+  io.status.bits.meta_valid := io.dirResult.valid || meta_valid
   io.status.bits.will_grant_data := req.fromA && od.opcode(0) && io.tasks.source_d.bits.useBypass
   io.status.bits.will_save_data := req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
   io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)
@@ -1508,26 +1513,61 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val nest_c_set_match = io_c_status.set === req.set
   val nest_c_tag_match = io_c_status.tag === req.tag
   val nest_c_way_match = io_c_status.way === self_meta.way
+  val nest_c_hash_set = associativePolicy.get_hashed_index(Cat(io_c_status.tag, io_c_status.set))
+  val nest_c_block_match = nest_c_tag_match && nest_c_set_match
+  val nest_c_hash_match = Mux(
+    nest_c_way_match,
+    req_hash_set(associativePolicy.choose_a_hash_func(self_meta.way)) === nest_c_hash_set(associativePolicy.choose_a_hash_func(self_meta.way)),
+    false.B
+  )
 
+  /*
   val a_c_through = req.fromA && (
       nest_c_tag_match && !self_meta.hit && !nest_c_way_match ||
       !nest_c_tag_match && nest_c_way_match && (cache_alias_latch || (preferCache_latch && !acquirePermMiss) || Hold(self_meta.hit, false) || transmit_from_other_client_latch) ||
       nest_c_tag_match && nest_c_way_match && !self_meta.hit && a_do_release
     )
+  */
 
-  val b_c_through = req.fromB && (nest_c_tag_match && !self_meta.hit || nest_c_way_match && self_meta.hit =/= nest_c_tag_match)
+  val a_c_through = req.fromA && (
+      nest_c_block_match && !self_meta.hit && !nest_c_way_match ||
+      nest_c_block_match && !self_meta.hit && nest_c_way_match && a_do_release ||
+      !nest_c_block_match && nest_c_hash_match && (cache_alias_latch || (preferCache_latch && !acquirePermMiss) || Hold(self_meta.hit, false) || transmit_from_other_client_latch)
+  )
+
+//  val b_c_through = req.fromB && (nest_c_tag_match && !self_meta.hit || nest_c_way_match && self_meta.hit =/= nest_c_tag_match)
+  val b_c_through = req.fromB && (nest_c_block_match && !self_meta.hit || !nest_c_block_match && nest_c_hash_match && self_meta.hit)
 
   io_c_status.releaseThrough := req_valid &&
     io_c_status.nestedReleaseData &&
-    nest_c_set_match &&
+//    nest_c_set_match &&
     (a_c_through || b_c_through)
 
   // B nest A (A -> B)
+  val nest_b_set_match = io_b_status.set === req.set
+  val nest_b_tag_match = io_b_status.tag === req.tag
+  val nest_b_way_match = io_b_status.way === self_meta.way
+  val nest_b_hash_set = associativePolicy.get_hashed_index(Cat(io_b_status.tag, io_b_status.set))
+  val nest_b_block_match = nest_b_tag_match && nest_b_set_match
+  val nest_b_hash_match = Mux(
+    nest_b_way_match,
+    req_hash_set(associativePolicy.choose_a_hash_func(self_meta.way)) === nest_b_hash_set(associativePolicy.choose_a_hash_func(self_meta.way)),
+    false.B
+  )
+
+  val a_b_through = req.fromA && !nest_b_block_match && nest_b_hash_match && (preferCache_latch || self_meta.hit) && !acquirePermMiss
+
+  /*
   io_b_status.probeAckDataThrough := req_valid &&
     io_b_status.set === req.set && io_b_status.tag =/= req.tag &&
     io_b_status.way === self_meta.way &&
     io_b_status.nestedProbeAckData &&
     req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
+  */
+
+  io_b_status.probeAckDataThrough := req_valid &&
+    io_b_status.nestedProbeAckData &&
+    a_b_through
 
   val read_miss = !self_meta.hit || self_meta.state === INVALID
 }

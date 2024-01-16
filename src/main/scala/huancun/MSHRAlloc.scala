@@ -76,9 +76,44 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 //  val b_block_vec = get_match_vec(io.b_req.bits, block_granularity)
 //  val a_block_vec = get_match_vec(io.a_req.bits, block_granularity)
 
-  val c_match_vec = get_match_vec(io.c_req.bits, block_granularity)
-  val b_match_vec = get_match_vec(io.b_req.bits, block_granularity)
-  val a_match_vec = get_match_vec(io.a_req.bits, block_granularity)
+//  val c_match_vec = get_match_vec(io.c_req.bits, block_granularity)
+//  val b_match_vec = get_match_vec(io.b_req.bits, block_granularity)
+//  val a_match_vec = get_match_vec(io.a_req.bits, block_granularity)
+
+  val c_set_match_vec = get_match_vec(io.c_req.bits, block_granularity)
+  val b_set_match_vec = get_match_vec(io.b_req.bits, block_granularity)
+  val a_set_match_vec = get_match_vec(io.a_req.bits, block_granularity)
+
+  val mshrs_hash_sets = io.status.map(s => associativePolicy.get_hashed_index(Cat(s.bits.tag, s.bits.set)))
+  val c_req_hash_sets = associativePolicy.get_hashed_index(Cat(io.c_req.bits.tag, io.c_req.bits.set))
+  val b_req_hash_sets = associativePolicy.get_hashed_index(Cat(io.b_req.bits.tag, io.b_req.bits.set))
+  val a_req_hash_sets = associativePolicy.get_hashed_index(Cat(io.a_req.bits.tag, io.a_req.bits.set))
+
+  val c_hash_match_vec = io.status.zip(mshrs_hash_sets).map { case (status, vector) =>
+    Mux(status.bits.meta_valid,
+        vector(associativePolicy.choose_a_hash_func(status.bits.way)) ===
+          c_req_hash_sets(associativePolicy.choose_a_hash_func(status.bits.way)),
+        VecInit(vector.zip(c_req_hash_sets).map { case (mshr, req) => mshr === req }).asUInt.orR
+    ) && status.valid
+  }
+  val b_hash_match_vec = io.status.zip(mshrs_hash_sets).map { case (status, vector) =>
+    Mux(status.bits.meta_valid,
+        vector(associativePolicy.choose_a_hash_func(status.bits.way)) ===
+          b_req_hash_sets(associativePolicy.choose_a_hash_func(status.bits.way)),
+        VecInit(vector.zip(b_req_hash_sets).map { case (mshr, req) => mshr === req }).asUInt.orR
+    ) && status.valid
+  }
+  val a_hash_match_vec = io.status.zip(mshrs_hash_sets).map { case (status, vector) =>
+    Mux(status.bits.meta_valid,
+        vector(associativePolicy.choose_a_hash_func(status.bits.way)) ===
+          a_req_hash_sets(associativePolicy.choose_a_hash_func(status.bits.way)),
+        VecInit(vector.zip(a_req_hash_sets).map { case (mshr, req) => mshr === req }).asUInt.orR
+    ) && status.valid
+  }
+
+  val c_match_vec = VecInit((c_set_match_vec zip c_hash_match_vec).map{ case (i, j) => i || j })
+  val b_match_vec = VecInit((b_set_match_vec zip b_hash_match_vec).map{ case (i, j) => i || j })
+  val a_match_vec = VecInit((a_set_match_vec zip a_hash_match_vec).map{ case (i, j) => i || j })
 
   val nestC_vec = VecInit(
     io.status.map(s => s.valid && s.bits.nestC).init :+ false.B
@@ -95,9 +130,15 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val bc_mshr_status = io.status.init.last
   val c_mshr_status = io.status.last
 
+  val may_nestC_vec = VecInit((c_match_vec zip nestC_vec).map{ case (i, j) => i && j })
+  val may_nestB_vec = VecInit((b_match_vec zip nestB_vec).map{ case (i, j) => i && j })
+
   val double_nest = Cat(c_match_vec.init.init).orR && c_match_vec.init.last
-  val may_nestC = (c_match_vec.asUInt & nestC_vec.asUInt).orR && !(double_nest && !bc_mshr_status.bits.nestC)
-  val may_nestB = (b_match_vec.asUInt & nestB_vec.asUInt).orR
+//  val may_nestC = (c_match_vec.asUInt & nestC_vec.asUInt).orR && !(double_nest && !bc_mshr_status.bits.nestC)
+  val may_nestC = (PopCount(c_match_vec) === PopCount(may_nestC_vec)) && may_nestC_vec.asUInt.orR &&
+                  !(double_nest && !bc_mshr_status.bits.nestC)
+//  val may_nestB = (b_match_vec.asUInt & nestB_vec.asUInt).orR
+  val may_nestB = (PopCount(b_match_vec) === PopCount(may_nestB_vec)) && may_nestB_vec.asUInt.orR
 
   val abc_mshr_alloc = io.alloc.init.init
   val bc_mshr_alloc = io.alloc.init.last
@@ -155,9 +196,11 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   c_mshr_alloc.bits := io.c_req.bits
 
   io.bc_mask.valid := bc_mshr_alloc.valid
-  io.bc_mask.bits := b_match_vec
+//  io.bc_mask.bits := b_match_vec
+  io.bc_mask.bits := may_nestB_vec
   io.c_mask.valid := c_mshr_alloc.valid
-  io.c_mask.bits := c_match_vec
+//  io.c_mask.bits := c_match_vec
+  io.c_mask.bits := may_nestC_vec
 
   dirRead.valid := request.valid && Cat(accept_c, accept_b, accept_a).orR && dirRead.ready
   dirRead.bits.source := request.bits.source
