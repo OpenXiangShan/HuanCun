@@ -23,6 +23,7 @@ import org.chipsalliance.cde.config.Parameters
 import huancun.{TPmetaReq, TPmetaResp}
 import utility._
 
+import huancun.utils.SRAMTemplate
 
 class TPmetaIO(implicit p: Parameters) extends TPmetaBundle {
   val req = Flipped(DecoupledIO(new TPmetaReq))
