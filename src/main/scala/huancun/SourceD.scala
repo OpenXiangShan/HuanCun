@@ -151,6 +151,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   when (s2_latch) { s2_valid_pb := s1_need_pb }
 
   s1_queue.io.deq.ready := s2_full && s2_req.useBypass && s2_needData && s2_d.ready
+  s2_d := 0.U.asTypeOf(io.d.cloneType)
   s2_d.valid := s2_full && ((s1_queue.io.deq.valid && s2_req.useBypass && s2_needData) || !s2_needData)
   s2_d.bits.opcode := s2_req.opcode
   s2_d.bits.param := Mux(s2_releaseAck, 0.U, s2_req.param)
@@ -214,6 +215,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   pbQueue.io.deq.ready := s3_valid && s3_need_pb && s4_ready
 
   val s3_rdata = s3_queue.io.deq.bits.data
+  s3_d := 0.U.asTypeOf(io.d.cloneType)
   s3_d.valid := pipe.io.out.valid && (!s3_need_pb || (s4_ready && s3_counter === 0.U))
   s3_d.bits.opcode := s3_req.opcode
   s3_d.bits.param := Mux(s3_releaseAck, 0.U, s3_req.param)
