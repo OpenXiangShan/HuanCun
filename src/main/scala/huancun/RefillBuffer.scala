@@ -32,8 +32,8 @@ class RefillBuffer(implicit p: Parameters) extends HuanCunModule {
   })
 
   val buffer = Mem(bufBlocks, Vec(beatSize, new DSData()))
-  val valids = RegInit(VecInit(Seq.fill(bufBlocks){
-    VecInit(Seq.fill(beatSize){false.B})
+  val valids = RegInit(VecInit(Seq.fill(bufBlocks) {
+    VecInit(Seq.fill(beatSize) { false.B })
   }))
 
   val (r, w) = (io.r, io.w)
@@ -44,11 +44,11 @@ class RefillBuffer(implicit p: Parameters) extends HuanCunModule {
   r.buffer_data := buffer(r.id)(r.beat)
   r.ready := valids(r.id)(r.beat)
 
-  when(r.valid && r.beat === 0.U){
+  when(r.valid && r.beat === 0.U) {
     assert(r.ready, "[%d] first beat must hit!", r.id)
   }
 
-  when(r.valid && r.ready && rlast){ // last beat
+  when(r.valid && r.ready && rlast) { // last beat
     // assert(valids(r.id).asUInt.andR, "[%d] attempt to invalidate a invalid entry", r.id)
     valids(r.id).foreach(_ := false.B)
   }
@@ -57,12 +57,9 @@ class RefillBuffer(implicit p: Parameters) extends HuanCunModule {
   val freeIdx = PriorityEncoder(~validMask)
 
   w.ready := Mux(wfirst, RegNext(!validMask.andR, true.B), true.B)
-  w.id := Mux(wfirst,
-    RegNext(freeIdx, 0.U),
-    RegEnable(w.id, w.valid && w.ready && wfirst)
-  )
+  w.id := Mux(wfirst, RegNext(freeIdx, 0.U), RegEnable(w.id, w.valid && w.ready && wfirst))
 
-  when(w.valid && w.ready){
+  when(w.valid && w.ready) {
     assert(!valids(w.id)(w.beat), "[%d] attempt to write a valid entry", w.id)
     valids(w.id)(w.beat) := true.B
     buffer(w.id)(w.beat) := w.data

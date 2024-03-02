@@ -93,7 +93,7 @@ object DirectoryLogger {
   )(
     implicit p: Parameters
   ) = {
-    if(p(HCCacheParamsKey).enableDebug){
+    if (p(HCCacheParamsKey).enableDebug) {
       val dirLogger = Module(new DirLogWriter(prefix))
       dirLogger.io.set := set
       dirLogger.io.way := way

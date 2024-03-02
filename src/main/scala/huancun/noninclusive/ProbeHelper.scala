@@ -9,8 +9,8 @@ import huancun.utils.XSPerfAccumulate
 import utility.MemReqSource
 
 class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
-  extends HuanCunModule with HasClientInfo
-{
+    extends HuanCunModule
+    with HasClientInfo {
   val io = IO(new Bundle() {
     val dirResult = Flipped(Valid(new DirResult()))
     val probe = DecoupledIO(new MSHRRequest)
@@ -61,7 +61,7 @@ class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
     dir.replacerInfo.opcode === TLMessages.AcquireBlock)
   queue.io.enq.valid := req_acquire && io.dirResult.valid && dir_conflict
   queue.io.enq.bits := req
-  when(queue.io.enq.valid){ assert(queue.io.enq.ready) }
+  when(queue.io.enq.valid) { assert(queue.io.enq.ready) }
 
   io.probe <> queue.io.deq
 
@@ -71,10 +71,10 @@ class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
   //})
   val perfinfo = IO(Output(Vec(numPCntHcProb, (UInt(6.W)))))
   val perfEvents = Seq(
-    ("client_dir_conflict        ", queue.io.enq.fire             ),
+    ("client_dir_conflict        ", queue.io.enq.fire)
   )
 
-  for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
+  for (((perf_out, (perf_name, perf)), i) <- perfinfo.zip(perfEvents).zipWithIndex) {
     perf_out := RegNext(perf)
   }
 }

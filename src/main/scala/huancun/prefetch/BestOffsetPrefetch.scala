@@ -13,11 +13,8 @@ case class BOPParameters(
   scoreBits:      Int = 5,
   roundMax:       Int = 50,
   badScore:       Int = 1,
-  offsetList: Seq[Int] = Seq(
-    -32, -30, -27, -25, -24, -20, -18, -16, -15,
-    -12, -10,  -9,  -8,  -6,  -5,  -4,  -3,  -2,  -1,
-      1,   2,   3,   4,   5,   6,   8,   9,  10,
-     12,  15,  16,  18,  20,  24,  25,  27,  30//,
+  offsetList: Seq[Int] = Seq(-32, -30, -27, -25, -24, -20, -18, -16, -15, -12, -10, -9, -8, -6, -5, -4, -3, -2, -1, 1,
+    2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30 //,
     /*32,  36,
      40,  45,  48,  50,  54,  60,  64,  72,  75,  80,
      81,  90,  96, 100, 108, 120, 125, 128, 135, 144,
@@ -243,7 +240,10 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
 
   rrTable.io.r <> scoreTable.io.test
   rrTable.io.w.valid := io.resp.valid
-  rrTable.io.w.bits := Cat(Cat(io.resp.bits.tag, io.resp.bits.set) - signedExtend(prefetchOffset, setBits + fullTagBits), 0.U(offsetBits.W))
+  rrTable.io.w.bits := Cat(
+    Cat(io.resp.bits.tag, io.resp.bits.set) - signedExtend(prefetchOffset, setBits + fullTagBits),
+    0.U(offsetBits.W)
+  )
   scoreTable.io.req.valid := io.train.valid
   scoreTable.io.req.bits := oldAddr
 

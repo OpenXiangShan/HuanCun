@@ -120,10 +120,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val accept_a = io.a_req.valid && can_accept_a
 
   request.valid := io.c_req.valid || io.b_req.valid || io.a_req.valid
-  request.bits := Mux(io.c_req.valid,
-    io.c_req.bits,
-    Mux(io.b_req.valid, io.b_req.bits, io.a_req.bits)
-  )
+  request.bits := Mux(io.c_req.valid, io.c_req.bits, Mux(io.b_req.valid, io.b_req.bits, io.a_req.bits))
 
   /* Provide signals for outer components*/
   io.c_req.ready := dirRead.ready && can_accept_c
@@ -192,19 +189,39 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
       }
       val cntEnable =
         !io.status(i).valid && cnt =/= 0.U && cntStart && cnt < 5000.U // Ignore huge cnt during L3 dir reset
-      XSPerfHistogram(cacheParams, "mshr_latency_" + Integer.toString(i, 10), cnt, cntEnable, 0, 300, 10, rStrict = true)
-      XSPerfHistogram(cacheParams, "mshr_latency_" + Integer.toString(i, 10), cnt, cntEnable, 300, 1000, 50, lStrict = true)
+      XSPerfHistogram(
+        cacheParams,
+        "mshr_latency_" + Integer.toString(i, 10),
+        cnt,
+        cntEnable,
+        0,
+        300,
+        10,
+        rStrict = true
+      )
+      XSPerfHistogram(
+        cacheParams,
+        "mshr_latency_" + Integer.toString(i, 10),
+        cnt,
+        cntEnable,
+        300,
+        1000,
+        50,
+        lStrict = true
+      )
       XSPerfMax(cacheParams, "mshr_latency", cnt, cntEnable)
     }
   }
 
-  val pretch_block_vec = VecInit(io.status.map(s =>
-    s.valid && s.bits.is_prefetch &&
-      (s.bits.set(block_granularity - 1, 0) === io.a_req.bits.set(block_granularity - 1, 0))
-  ))
+  val pretch_block_vec = VecInit(
+    io.status.map(s =>
+      s.valid && s.bits.is_prefetch &&
+        (s.bits.set(block_granularity - 1, 0) === io.a_req.bits.set(block_granularity - 1, 0))
+    )
+  )
 
   XSPerfAccumulate(cacheParams, "nrWorkingABCmshr", PopCount(io.status.init.init.map(_.valid)))
-  XSPerfAccumulate(cacheParams, "nrWorkingBmshr", io.status.take(mshrs+1).last.valid)
+  XSPerfAccumulate(cacheParams, "nrWorkingBmshr", io.status.take(mshrs + 1).last.valid)
   XSPerfAccumulate(cacheParams, "nrWorkingCmshr", io.status.last.valid)
   XSPerfAccumulate(cacheParams, "conflictA", io.a_req.valid && conflict_a)
   XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && Cat(pretch_block_vec).orR)
@@ -215,16 +232,16 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   //})
   val perfinfo = IO(Output(Vec(numPCntHcMSHR, (UInt(6.W)))))
   val perfEvents = Seq(
-    ("nrWorkingABCmshr    ", PopCount(io.status.init.init.map(_.valid)) ),
-    ("nrWorkingBmshr      ", io.status.take(mshrs+1).last.valid         ),
-    ("nrWorkingCmshr      ", io.status.last.valid                       ),
-    ("conflictA           ", io.a_req.valid && conflict_a               ),
+    ("nrWorkingABCmshr    ", PopCount(io.status.init.init.map(_.valid))),
+    ("nrWorkingBmshr      ", io.status.take(mshrs + 1).last.valid),
+    ("nrWorkingCmshr      ", io.status.last.valid),
+    ("conflictA           ", io.a_req.valid && conflict_a),
     ("conflictByPrefetch  ", io.a_req.valid && Cat(pretch_block_vec).orR),
-    ("conflictB           ", io.b_req.valid && conflict_b               ),
-    ("conflictC           ", io.c_req.valid && conflict_c               ),
+    ("conflictB           ", io.b_req.valid && conflict_b),
+    ("conflictC           ", io.c_req.valid && conflict_c)
   )
 
-  for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
+  for (((perf_out, (perf_name, perf)), i) <- perfinfo.zip(perfEvents).zipWithIndex) {
     perf_out := RegNext(perf)
   }
 }

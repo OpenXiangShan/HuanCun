@@ -7,19 +7,20 @@ import freechips.rocketchip.util.Pow2ClockDivider
 class STD_CLKGT_func extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
     val TE = Input(Bool())
-    val E  = Input(Bool())
+    val E = Input(Bool())
     val CK = Input(Clock())
-    val Q  = Output(Clock())
+    val Q = Output(Clock())
   })
 
   addResource("/STD_CLKGT_func.v")
 }
 
-class SRAMWrapper[T <: Data]
-(
-  gen: T, set: Int, n: Int = 1,
-  clk_div_by_2: Boolean = false
-) extends Module {
+class SRAMWrapper[T <: Data](
+  gen:          T,
+  set:          Int,
+  n:            Int = 1,
+  clk_div_by_2: Boolean = false)
+    extends Module {
 
   val io = IO(new Bundle() {
     val r = Flipped(new SRAMReadBus(gen, set, 1))
@@ -30,16 +31,22 @@ class SRAMWrapper[T <: Data]
   val selBits = log2Ceil(n)
   val innerSetBits = log2Up(set) - selBits
   val r_setIdx = io.r.req.bits.setIdx.head(innerSetBits)
-  val r_sel = if(n == 1) 0.U else io.r.req.bits.setIdx(selBits - 1, 0)
+  val r_sel = if (n == 1) 0.U else io.r.req.bits.setIdx(selBits - 1, 0)
   val w_setIdx = io.w.req.bits.setIdx.head(innerSetBits)
-  val w_sel = if(n == 1) 0.U else io.w.req.bits.setIdx(selBits - 1, 0)
+  val w_sel = if (n == 1) 0.U else io.w.req.bits.setIdx(selBits - 1, 0)
 
-  val banks = (0 until n).map{ i =>
-    val ren = if(n == 1) true.B else i.U === r_sel
-    val wen = if(n == 1) true.B else i.U === w_sel
-    val sram = Module(new SRAMTemplate[T](
-      gen, innerSet, 1, singlePort = true, input_clk_div_by_2 = clk_div_by_2
-    ))
+  val banks = (0 until n).map { i =>
+    val ren = if (n == 1) true.B else i.U === r_sel
+    val wen = if (n == 1) true.B else i.U === w_sel
+    val sram = Module(
+      new SRAMTemplate[T](
+        gen,
+        innerSet,
+        1,
+        singlePort = true,
+        input_clk_div_by_2 = clk_div_by_2
+      )
+    )
 
     val clkGate = Module(new STD_CLKGT_func)
     val clk_en = RegInit(false.B)
@@ -61,7 +68,7 @@ class SRAMWrapper[T <: Data]
 
   val ren_vec_0 = VecInit(banks.map(_.io.r.req.fire))
   val ren_vec_1 = RegNext(ren_vec_0, 0.U.asTypeOf(ren_vec_0))
-  val ren_vec = if(clk_div_by_2){
+  val ren_vec = if (clk_div_by_2) {
     RegNext(ren_vec_1, 0.U.asTypeOf(ren_vec_0))
   } else ren_vec_1
 

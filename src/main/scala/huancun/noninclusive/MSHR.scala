@@ -30,13 +30,12 @@ class B_Status(implicit p: Parameters) extends HuanCunBundle {
 }
 
 class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, SelfTagWrite] with HasClientInfo {
-  class MSHRTasksWithClient(implicit p: Parameters)
-    extends MSHRTasks[SelfDirWrite, SelfTagWrite] {
-      override val dir_write: DecoupledIO[SelfDirWrite] = DecoupledIO(new SelfDirWrite())
-      override val tag_write: DecoupledIO[SelfTagWrite] = DecoupledIO(new SelfTagWrite())
-      val client_dir_write = DecoupledIO(new ClientDirWrite())
-      val client_tag_write = DecoupledIO(new ClientTagWrite())
-    }
+  class MSHRTasksWithClient(implicit p: Parameters) extends MSHRTasks[SelfDirWrite, SelfTagWrite] {
+    override val dir_write: DecoupledIO[SelfDirWrite] = DecoupledIO(new SelfDirWrite())
+    override val tag_write: DecoupledIO[SelfTagWrite] = DecoupledIO(new SelfTagWrite())
+    val client_dir_write = DecoupledIO(new ClientDirWrite())
+    val client_tag_write = DecoupledIO(new ClientTagWrite())
+  }
   val io = IO(new BaseMSHRIO[DirResult, SelfDirWrite, SelfTagWrite] {
     override val tasks = new MSHRTasksWithClient
     override val dirResult = Flipped(ValidIO(new DirResult()))
@@ -52,7 +51,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val req = Reg(new MSHRRequest)
   val req_valid = RegInit(false.B)
-  val iam = Reg(UInt((log2Up(clientBits)+1).W)) // Which client does this req come from?
+  val iam = Reg(UInt((log2Up(clientBits) + 1).W)) // Which client does this req come from?
   val meta_reg = Reg(new DirResult)
   val clients_meta_reg = WireInit(0.U.asTypeOf(io.dirResult.bits.clients.states))
   val meta = Wire(new DirResult)
@@ -80,7 +79,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val new_self_meta = WireInit(self_meta)
   val new_clients_meta = WireInit(clients_meta)
   val req_acquire = req.opcode === AcquireBlock || req.opcode === AcquirePerm
-  val req_put = req.opcode(2,1) === 0.U
+  val req_put = req.opcode(2, 1) === 0.U
   val req_needT = needT(req.opcode, req.param)
   val promoteT_safe = RegInit(true.B)
   val gotT = RegInit(false.B)
@@ -120,13 +119,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     Seq(Mux(self_meta.hit, self_meta.state, INVALID)) ++
       clients_meta.zipWithIndex.map {
         case (m, i) =>
-          Mux(req_acquire && iam === i.U && !cache_alias,
-            INVALID,
-            Mux(m.hit, m.state, INVALID)
-          )
+          Mux(req_acquire && iam === i.U && !cache_alias, INVALID, Mux(m.hit, m.state, INVALID))
       }
   )
-
 
   val need_block_downwards = RegInit(false.B)
   val inv_self_dir = RegInit(false.B)
@@ -137,9 +132,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // but only when state perm > clientStates' perm or replacing a dirty block
   val replace_clients_perm = ParallelMax(self_meta.clientStates)
   val replace_need_release = self_meta.state > replace_clients_perm || self_meta.dirty && isT(self_meta.state)
-  val replace_param = MuxLookup(
-    Cat(self_meta.state, replace_clients_perm),
-    TtoB)(
+  val replace_param = MuxLookup(Cat(self_meta.state, replace_clients_perm), TtoB)(
     Seq(
       Cat(BRANCH, INVALID) -> BtoN,
       Cat(BRANCH, BRANCH) -> BtoB,
@@ -163,10 +156,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val prefetch_need_data = prefetch_miss && !self_meta.hit
 
   // self cache does not have the acquired block, but some other client owns the block
-  val transmit_from_other_client = !self_meta.hit && Hold(VecInit(clients_meta.zipWithIndex.map {
-    case (meta, i) =>
-      (req.opcode === Get || req_put || i.U =/= iam) && meta.hit
-  }).asUInt.orR, l2Only = false) && (!req.isPrefetch.getOrElse(false.B) || prefetch_need_data)
+  val transmit_from_other_client = !self_meta.hit && Hold(
+    VecInit(clients_meta.zipWithIndex.map {
+      case (meta, i) =>
+        (req.opcode === Get || req_put || i.U =/= iam) && meta.hit
+    }).asUInt.orR,
+    l2Only = false
+  ) && (!req.isPrefetch.getOrElse(false.B) || prefetch_need_data)
 
   val a_need_data = req.fromA && (req.opcode === Get || req_put || req.opcode === AcquireBlock || req.opcode === Hint)
   val acquireperm_alias = req.fromA && req.opcode === AcquirePerm && cache_alias
@@ -198,12 +194,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // 2. transmit from other clients
   val a_probe_clients = VecInit(clients_meta.zipWithIndex.map {
     case (m, i) =>
-      Mux(i.U === iam && req_acquire,
+      Mux(
+        i.U === iam && req_acquire,
         cache_alias,
         m.hit && (
           req_needT && m.state =/= INVALID || isT(m.state) ||
-            !self_meta.hit   // transmit from other client since we are non-inclusive
-          )
+            !self_meta.hit // transmit from other client since we are non-inclusive
+        )
       )
   })
 
@@ -228,28 +225,33 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   def onXReq(): Unit = {
     new_self_meta.dirty := false.B
-    new_self_meta.state := Mux(req.param === 1.U,
-      Mux(self_meta.hit,
-        Mux(isT(self_meta.state), TIP, BRANCH),
-        self_meta.state),
+    new_self_meta.state := Mux(
+      req.param === 1.U,
+      Mux(self_meta.hit, Mux(isT(self_meta.state), TIP, BRANCH), self_meta.state),
       INVALID
     )
     new_self_meta.clientStates.zipWithIndex.foreach {
       case (state, i) =>
-        state := Mux(self_meta.hit, Mux(self_meta.clientStates(i) =/= INVALID && req.param === 1.U, BRANCH, INVALID), self_meta.clientStates(i))
+        state := Mux(
+          self_meta.hit,
+          Mux(self_meta.clientStates(i) =/= INVALID && req.param === 1.U, BRANCH, INVALID),
+          self_meta.clientStates(i)
+        )
     }
     new_clients_meta.zipWithIndex.foreach {
       case (m, i) =>
-        m.state := Mux(m.hit, Mux(clients_meta(i).state =/= INVALID && req.param === 1.U, BRANCH, INVALID), clients_meta(i).state)
+        m.state := Mux(
+          m.hit,
+          Mux(clients_meta(i).state =/= INVALID && req.param === 1.U, BRANCH, INVALID),
+          clients_meta(i).state
+        )
     }
   }
 
   def onCReq(): Unit = {
     // Release / ReleaseData
     new_self_meta.dirty := self_meta.hit && self_meta.dirty || req.dirty && isParamFromT(req.param)
-    new_self_meta.state := MuxLookup(
-      req.param,
-      self_meta.state)(
+    new_self_meta.state := MuxLookup(req.param, self_meta.state)(
       Seq(
         TtoT -> TRUNK,
         TtoB -> TIP,
@@ -288,10 +290,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         TRUNK     ->    TIP
         BRANCH    ->    BRANCH
       --------------------------
-    */
+     */
     new_self_meta.dirty := req.fromProbeHelper && !probeAckDataThrough && (self_meta.hit && self_meta.dirty || probe_dirty)
-    new_self_meta.state := Mux(self_meta.hit,
-      Mux(req.fromProbeHelper && !probeAckDataThrough,
+    new_self_meta.state := Mux(
+      self_meta.hit,
+      Mux(
+        req.fromProbeHelper && !probeAckDataThrough,
         Mux(isT(self_meta.state), TIP, BRANCH),
         probe_next_state(self_meta.state, req.param)
       ),
@@ -312,60 +316,66 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // new_self_meta.dirty := self_meta.hit && self_meta.dirty || probe_dirty || !req.opcode(2)
     new_self_meta.dirty := Mux(
       req_acquire,
-      Mux(req_needT,
+      Mux(
+        req_needT,
         false.B,
-        Mux(self_meta.hit,
-          Mux(req_promoteT, false.B, self_meta.dirty || probe_dirty),
-          gotDirty || probe_dirty
-        )
+        Mux(self_meta.hit, Mux(req_promoteT, false.B, self_meta.dirty || probe_dirty), gotDirty || probe_dirty)
       ),
-      Mux(req_put,
-        true.B,  // Put
-        gotDirty || probe_dirty || (self_meta.hit && self_meta.dirty), // Hint & Get
+      Mux(
+        req_put,
+        true.B, // Put
+        gotDirty || probe_dirty || (self_meta.hit && self_meta.dirty) // Hint & Get
       )
     )
     new_self_meta.state := Mux(
       req_needT,
-      Mux(req_acquire,
+      Mux(
+        req_acquire,
         TRUNK,
         // for prefetch, if client hit, we should not change self_meta
         // however, we won't update self_meta in that case
         // so this is the case for Put
         TIP
       ),
-      Mux(!self_meta.hit,
+      Mux(
+        !self_meta.hit,
         Mux(
           transmit_from_other_client || cache_alias, // For cache alias, !promoteT is granteed
           Mux(gotT, Mux(req_acquire && promoteT_safe, TRUNK, TIP), highest_perm_reg),
-          Mux(gotT,
+          Mux(
+            gotT,
             Mux(req_acquire && promoteT_safe, TRUNK, TIP),
             // for prefetch, if client already hit, self meta won't update,
             // so we don't care new_self_meta.state.
             // if client miss, we will be BRANCH
             BRANCH
-          ),
-        ),
-        MuxLookup(self_meta.state, INVALID)(Seq(
-          INVALID -> BRANCH,
-          BRANCH -> BRANCH,
-          // if prefetch read && hit && self is Trunk
-          // self meta won't update, we don't care new_meta
-          TRUNK -> TIP,
-          TIP -> Mux(
-            meta_no_clients && req_acquire, // promoteT
-            TRUNK, TIP
           )
-        ))
+        ),
+        MuxLookup(self_meta.state, INVALID)(
+          Seq(
+            INVALID -> BRANCH,
+            BRANCH -> BRANCH,
+            // if prefetch read && hit && self is Trunk
+            // self meta won't update, we don't care new_meta
+            TRUNK -> TIP,
+            TIP -> Mux(
+              meta_no_clients && req_acquire, // promoteT
+              TRUNK,
+              TIP
+            )
+          )
+        )
       )
     )
-    when(inv_self_dir){
+    when(inv_self_dir) {
       new_self_meta.state := INVALID
     }
     new_self_meta.clientStates.zipWithIndex.foreach {
       case (state, i) =>
         val perm_after_probe = shrink_next_state(client_probeack_param_vec(i))
         when(iam === i.U) {
-          state := Mux(req_acquire,
+          state := Mux(
+            req_acquire,
             Mux(req_needT || req_promoteT, TIP, BRANCH),
             Mux(
               req.opcode === Get,
@@ -374,7 +384,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             )
           )
         }.otherwise {
-          val cond = if(cacheParams.name == "L2") {
+          val cond = if (cacheParams.name == "L2") {
             Mux(a_probe_clients(i), perm_after_probe, clients_meta_reg(i).state)
           } else {
             perm_after_probe
@@ -389,7 +399,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
             Mux(
               req.opcode === Get,
               Mux(clients_meta_reg(i).hit && a_do_probe, perm_after_probe, INVALID), // Get
-              Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID), clients_meta_reg(i).state)
+              Mux(
+                prefetch_miss_need_probe,
+                Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID),
+                clients_meta_reg(i).state
+              )
             )
           )
         }
@@ -405,7 +419,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           )
           m.alias.foreach(_ := Mux(req_acquire, req.alias.get, clients_meta_reg(i).alias.get))
         }.otherwise {
-          val cond = if(cacheParams.name == "L2") {
+          val cond = if (cacheParams.name == "L2") {
             Mux(a_probe_clients(i), perm_after_probe, clients_meta_reg(i).state)
           } else {
             perm_after_probe
@@ -418,12 +432,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
               // NtoB
               Mux(clients_meta_reg(i).hit && a_do_probe, cond, clients_meta_reg(i).state)
             ),
-            Mux(prefetch_miss_need_probe, Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID), clients_meta_reg(i).state)
+            Mux(
+              prefetch_miss_need_probe,
+              Mux(req.param === PREFETCH_READ, perm_after_probe, INVALID),
+              clients_meta_reg(i).state
+            )
           )
           m.alias.foreach(_ := clients_meta_reg(i).alias.get)
         }
 
-        when (req.opcode === Get) {
+        when(req.opcode === Get) {
           m.state := Mux(clients_meta_reg(i).hit && a_do_probe, perm_after_probe, clients_meta_reg(i).state)
           m.alias.foreach(_ := clients_meta_reg(i).alias.get)
         }
@@ -468,9 +486,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   val debug_addr = Cat(req.tag, req.set, 0.U(offsetBits.W))
-  assert(RegNext(!meta_valid || !req.fromC || req.fromCmoHelper || clients_meta(iam).hit),
+  assert(
+    RegNext(!meta_valid || !req.fromC || req.fromCmoHelper || clients_meta(iam).hit),
     s"${cacheParams.name} Release should always hit: mshrId:[%d] addr: [%x]",
-    io.id, debug_addr
+    io.id,
+    debug_addr
   ) // Release should always hit
 
   // nested writeback to meta_reg
@@ -506,8 +526,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
   val nested_c_hit_reg = RegInit(false.B)
   val nested_c_hit = WireInit(nested_c_hit_reg)
-  when (meta_valid && !self_meta.hit && req.fromA &&
-    io.nestedwb.set === req.set && io.nestedwb.c_set_hit
+  when(
+    meta_valid && !self_meta.hit && req.fromA &&
+      io.nestedwb.set === req.set && io.nestedwb.c_set_hit
   ) {
     nested_c_hit := true.B
     nested_c_hit_reg := true.B
@@ -516,10 +537,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   meta_reg.clients.states.zipWithIndex.foreach {
     case (reg, i) =>
       when(change_clients_meta(i)) {
-        when(io.nestedwb.clients.get (i).isToB) {
+        when(io.nestedwb.clients.get(i).isToB) {
           // reg.state := BRANCH
         }
-        when(io.nestedwb.clients.get (i).isToN) {
+        when(io.nestedwb.clients.get(i).isToN) {
           reg.state := INVALID
           reg.hit := false.B
         }
@@ -657,7 +678,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       req.opcode(0) <=> s_writerelease
       set_release_through <=> send outer release
       so 'w_releaseack' should be set
-    */
+     */
     when(will_release_through && req.opcode(0)) {
       w_releaseack := false.B
     }
@@ -674,12 +695,14 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_probeack := false.B
     }
     when(self_meta.hit) {
-      when(probe_shrink_perm(self_meta.state, req.param)){
+      when(probe_shrink_perm(self_meta.state, req.param)) {
         s_wbselfdir := false.B
       }.otherwise({
-        assert(probe_is_report(self_meta.state, req.param),
+        assert(
+          probe_is_report(self_meta.state, req.param),
           "Probe not supported: [self: %d] [req: %d]\n",
-          self_meta.state, req.param
+          self_meta.state,
+          req.param
         )
       })
     }
@@ -689,7 +712,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         when(meta.hit) {
           assert(
             probe_shrink_perm(meta.state, req.param) || probe_is_report(meta.state, req.param),
-            "Invalid Probe Request: [client: %d] [req: %d]\n", meta.state, req.param
+            "Invalid Probe Request: [client: %d] [req: %d]\n",
+            meta.state,
+            req.param
           )
         }
       }
@@ -716,7 +741,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_probeackfirst := false.B
     w_probeacklast := false.B
     w_probeack := false.B
-    when(!self_meta.hit){
+    when(!self_meta.hit) {
       s_wbselfdir := false.B
       s_wbselftag := false.B
     }
@@ -727,23 +752,24 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // A channel requests
     // TODO: consider parameterized write-through policy for put/atomics
     s_execute := req.opcode === Hint
-    when(!self_meta.hit && self_meta.state =/= INVALID && replace_need_release &&
-      (
-        (preferCache && (req.opcode === AcquireBlock || req.opcode === Get)) ||
-          (
-            prefetch_need_data ||
-            transmit_from_other_client || // inner probe -> replace -> release
-            cache_alias                   // inner probe -> replace -> release
-          )
+    when(
+      !self_meta.hit && self_meta.state =/= INVALID && replace_need_release &&
+        (
+          (preferCache && (req.opcode === AcquireBlock || req.opcode === Get)) ||
+            (
+              prefetch_need_data ||
+                transmit_from_other_client || // inner probe -> replace -> release
+                cache_alias // inner probe -> replace -> release
+            )
         )
-    ){
+    ) {
       s_release := false.B
       w_releaseack := false.B
       a_do_release := true.B
     }
 
     // need Acquire downwards
-    when (
+    when(
       Mux(
         req_acquire,
         Mux(req_needT, !isT(highest_perm_except_me), highest_perm_except_me === INVALID),
@@ -753,8 +779,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       s_acquire := false.B // for bypassPut case, s_acquire actually means s_put
       w_grantfirst := false.B
       w_grantlast := false.B
-      w_grant := false.B  // for bypassPut case, w_grant actually means w_accessack
-      when (!bypassGet && !bypassPut) {
+      w_grant := false.B // for bypassPut case, w_grant actually means w_accessack
+      when(!bypassGet && !bypassPut) {
         s_grantack := false.B
       }
       // for acquirePermMiss and (miss && !preferCache):
@@ -766,14 +792,14 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     // need probe
     clients_meta.zipWithIndex.foreach {
       case (meta, i) =>
-        when (req.opcode =/= Get && !req_put) {
+        when(req.opcode =/= Get && !req_put) {
           // Acquire / Hint
           when(i.U =/= iam) {
             when(
               meta.hit && (
                 req_acquire && (req_needT || !self_meta.hit || isT(meta.state)) ||
-                req.opcode === Hint && prefetch_miss_need_probe
-                )
+                  req.opcode === Hint && prefetch_miss_need_probe
+              )
             ) {
               set_probe()
               s_wbclientsdir := false.B
@@ -786,7 +812,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
           }
         }.otherwise {
           // Get / Put
-          when (meta.hit && (isT(meta.state) || !self_meta.hit || req_put)) {
+          when(meta.hit && (isT(meta.state) || !self_meta.hit || req_put)) {
             set_probe()
             when(self_meta.hit) { // For get/put, self meta hit and need probe, then wbselfdir is necessary
               s_wbselfdir := false.B
@@ -845,16 +871,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
     reset_all_flags()
 
-    when(meta.self.error || meta.clients.error){
-      when(req.fromC){
+    when(meta.self.error || meta.clients.error) {
+      when(req.fromC) {
         s_execute := false.B
       }
-      when(req.fromB){
+      when(req.fromB) {
         s_probeack := false.B
       }
       when(req.fromA) {
         s_execute := false.B
-        when(req_acquire){
+        when(req_acquire) {
           w_grantack := false.B
         }
       }
@@ -868,7 +894,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       }.elsewhen(req.fromB) {
         b_schedule()
       }.otherwise {
-        when (!(req.opcode === Hint && clients_hit)) {
+        when(!(req.opcode === Hint && clients_hit)) {
           a_schedule()
         }
       }
@@ -902,7 +928,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   when(io.dirResult.valid) {
     when(req.fromB) {
-      will_probeack_through := clients_have_T || (req.needProbeAckData.getOrElse(false.B) && highest_perm =/= INVALID && !self_meta.hit)
+      will_probeack_through := clients_have_T || (req.needProbeAckData.getOrElse(
+        false.B
+      ) && highest_perm =/= INVALID && !self_meta.hit)
       will_drop_probeack := !will_probeack_through
       will_save_probeack := will_probeack_through && !io_probeAckDataThrough && self_meta.hit && req.param === toB
       when(req.fromProbeHelper) {
@@ -934,11 +962,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   )
   val probe_helper_finish = RegInit(false.B)
   val client_set_match = req.set(clientSetBits - 1, 0) === io_b_status.set(clientSetBits - 1, 0)
-  when(req_valid && io_b_status.probeHelperFinish && client_set_match){
+  when(req_valid && io_b_status.probeHelperFinish && client_set_match) {
     probe_helper_finish := true.B
   }
-  when(req_valid && req.fromA && req_acquire && client_dir_conflict && probe_helper_finish){
-    assert(RegNext(!clients_meta_busy, true.B),
+  when(req_valid && req.fromA && req_acquire && client_dir_conflict && probe_helper_finish) {
+    assert(
+      RegNext(!clients_meta_busy, true.B),
       s"Error ${cacheParams.name}: meta still conflict when probe helper finish! mshrId: %d",
       io.id
     )
@@ -974,7 +1003,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // then we must grant data
   val client_dir_error = req_acquire && clients_meta(iam).hit &&
     (growFrom(req.param) < clients_meta(iam).state)
-  val client_hit_acquire_prem = if(cacheParams.level == 2) {
+  val client_hit_acquire_prem = if (cacheParams.level == 2) {
     // L2 is special:
     // we always grant data to L1,
     // so we can only acquire perm when we hit (have data)
@@ -991,25 +1020,29 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val acquire_perm_NtoT = req.opcode === AcquirePerm && req.param === NtoT
 
   val acquire_opcode = if (cacheParams.name == "L2") {
-    Mux(req.opcode === AcquirePerm && req.param === BtoT, AcquirePerm, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
+    Mux(
+      req.opcode === AcquirePerm && req.param === BtoT,
+      AcquirePerm,
+      Mux(req.opcode === Hint, AcquireBlock, req.opcode)
+    )
   } else {
     Mux(req_put, AcquireBlock, Mux(req.opcode === Hint, AcquireBlock, req.opcode))
     // for put & !bypassPut, cache hierachy should have B/T. AcquirePerm is enough
   }
 
   val acquire_param = if (cacheParams.name == "L2") {
-    Mux(req.opcode === Hint,
-      Mux(req_needT, Mux(highest_perm_reg === BRANCH, BtoT, NtoT), NtoB),
-      req.param
-    )
+    Mux(req.opcode === Hint, Mux(req_needT, Mux(highest_perm_reg === BRANCH, BtoT, NtoT), NtoB), req.param)
   } else {
-    Mux(req.opcode === Hint,
+    Mux(
+      req.opcode === Hint,
       Mux(req_needT, Mux(highest_perm_reg === BRANCH, BtoT, NtoT), NtoB),
       Mux(req.opcode === AcquireBlock && req.param === BtoT, NtoT, Mux(req_put, NtoT, req.param))
     )
   }
 
-  oa.opcode := Mux(!s_transferput || bypassGet, req.opcode,
+  oa.opcode := Mux(
+    !s_transferput || bypassGet,
+    req.opcode,
     /*
     Mux(self_meta.hit, AcquireBlock,
       Mux(client_hit_acquire_prem || acquire_perm_NtoT,
@@ -1017,10 +1050,12 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
         AcquireBlock
       )
     )
-    */
+     */
     Mux(req.opcode === Get, AcquireBlock, acquire_opcode)
   )
-  oa.param := Mux(!s_transferput, req.param,
+  oa.param := Mux(
+    !s_transferput,
+    req.param,
     /*
     Mux(req_needT,
       Mux(self_meta.hit,
@@ -1034,7 +1069,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       ),
       NtoB
     )
-    */
+     */
     Mux(req.opcode === Get, NtoB, acquire_param)
   )
   oa.source := io.id
@@ -1042,16 +1077,19 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   oa.putData := bypassPut_latch
   oa.bufIdx := req.bufIdx
   oa.size := req.size
-  oa.reqSource := Mux(req.opcode === Hint,
+  oa.reqSource := Mux(
+    req.opcode === Hint,
     if (cacheParams.level == 2) req.reqSource else MemReqSource.Prefetch2L3Unknown.id.U,
     req.reqSource
   )
 
   ob.tag := req.tag
   ob.set := req.set
-  ob.alias.foreach(a => a.zip(clients_meta.map(_.alias.get)).foreach{
-    case (sink, source) => sink := source
-  })
+  ob.alias.foreach(a =>
+    a.zip(clients_meta.map(_.alias.get)).foreach {
+      case (sink, source) => sink := source
+    }
+  )
   assert(ob.set.getWidth == req.set.getWidth)
   ob.param := Mux(
     req.fromB,
@@ -1059,7 +1097,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     Mux(
       req.opcode === Hint,
       Mux(req.param === PREFETCH_READ, toB, toN),
-      Mux(req.fromCmoHelper,
+      Mux(
+        req.fromCmoHelper,
         Mux(req.param === 1.U, toB, toN),
         Mux(
           req_needT || cache_alias,
@@ -1080,7 +1119,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       Mux(
         req.fromA,
         a_probe_clients, // Acquire / Get
-        Mux(req.fromCmoHelper,
+        Mux(
+          req.fromCmoHelper,
           x_probe_clients,
           b_probe_clients // Probe
         )
@@ -1089,8 +1129,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     io.dirResult.valid
   )
   ob.clients := probe_clients
-  ob.needData.foreach(_ :=
-    (a_need_data && !self_meta.hit) || (req.fromB && req.needProbeAckData.getOrElse(false.B))
+  ob.needData.foreach(
+    _ :=
+      (a_need_data && !self_meta.hit) || (req.fromB && req.needProbeAckData.getOrElse(false.B))
   )
 
   oc.opcode := Mux(
@@ -1107,7 +1148,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val probeack_param = MuxLookup( // TODO: optimize this
     Cat(highest_perm, probe_next_state(highest_perm, req.param)),
-    NtoN)(
+    NtoN
+  )(
     Seq(
       Cat(TRUNK, TRUNK) -> TtoT,
       Cat(TIP, TIP) -> TtoT,
@@ -1198,9 +1240,11 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req.bufIdx,
     RegEnable(io.resps.sink_c.bits.bufIdx, io.resps.sink_c.valid && io.resps.sink_c.bits.hasData)
   )
-  ic.opcode := Mux(s_writeprobe,
+  ic.opcode := Mux(
+    s_writeprobe,
     req.opcode,
-    Mux(req.fromProbeHelper || req.fromCmoHelper,
+    Mux(
+      req.fromProbeHelper || req.fromCmoHelper,
       ReleaseData, // convert ProbeAckData -> ReleaseData
       ProbeAckData
     )
@@ -1217,7 +1261,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   ic.save := Mux(s_writeprobe, releaseSave, probeAckDataSave)
   ic.drop := Mux(s_writeprobe, releaseDrop, probeAckDataDrop)
   ic.release := Mux(s_writeprobe, releaseThrough, probeAckDataThrough)
-  ic.dirty := Mux(s_writeprobe,
+  ic.dirty := Mux(
+    s_writeprobe,
     req.dirty || self_meta.hit && self_meta.dirty,
     probe_dirty || self_meta.hit && self_meta.dirty
   )
@@ -1278,10 +1323,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   when(io.tasks.tag_write.fire) {
     s_wbselftag := true.B
   }
-  when(io.tasks.client_dir_write.fire){
+  when(io.tasks.client_dir_write.fire) {
     s_wbclientsdir := true.B
   }
-  when(io.tasks.client_tag_write.fire){
+  when(io.tasks.client_tag_write.fire) {
     s_wbclientstag := true.B
   }
   when(io.tasks.sink_c.fire) {
@@ -1303,7 +1348,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val sink_c_resp_valid = io.resps.sink_c.valid && !w_probeacklast
   val probeack_bit = getClientBitOH(io.resps.sink_c.bits.source)
   // ! This is the last client sending probeack
-  val probeack_last = if(clientBits == 1) sink_c_resp_valid else (probes_done | probeack_bit) === probe_clients
+  val probeack_last = if (clientBits == 1) sink_c_resp_valid else (probes_done | probeack_bit) === probe_clients
 
   // Update client_probeack_param_vec according to the param of ProbeAck
   client_probeack_param_vec := client_probeack_param_vec_reg
@@ -1320,20 +1365,20 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   when(req_valid && sinkc_resp_last && probeack_last) {
-    when(someClientHasProbeAckData || io.resps.sink_c.bits.hasData){
+    when(someClientHasProbeAckData || io.resps.sink_c.bits.hasData) {
       // TODO: this is slow, optimize this
       s_writeprobe := false.B
       w_sinkcack := false.B
-      when(req.fromB && req.fromProbeHelper && probeAckDataThrough || req.fromCmoHelper && probeAckDataThrough){
+      when(req.fromB && req.fromProbeHelper && probeAckDataThrough || req.fromCmoHelper && probeAckDataThrough) {
         w_releaseack := false.B // inner ProbeAck -> outer Release
       }
-    }.otherwise{
-      when(req.fromB && ((probeAckDataThrough && io.resps.sink_c.bits.param =/= NtoN) || !req.fromProbeHelper)){
+    }.otherwise {
+      when(req.fromB && ((probeAckDataThrough && io.resps.sink_c.bits.param =/= NtoN) || !req.fromProbeHelper)) {
         // client didn't response data
         // but we still need to send probeack
         // let sourceC do this
         s_probeack := false.B
-        when(req.fromProbeHelper){
+        when(req.fromProbeHelper) {
           w_releaseack := false.B
         }
       }
@@ -1346,7 +1391,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     w_probeacklast := w_probeacklast || probeack_last && resp.last
     w_probeack := w_probeack || probeack_last && (resp.last || req.off === 0.U)
     probe_dirty := probe_dirty || resp.hasData || nested_c_hit
-    when (
+    when(
       !acquire_flag && req.fromA &&
         probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit
     ) {
@@ -1358,7 +1403,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       w_grantfirst := false.B
       w_grantlast := false.B
       w_grant := false.B
-      when (!bypassGet && !bypassPut_latch) {
+      when(!bypassGet && !bypassPut_latch) {
         s_grantack := false.B
       }
       need_block_downwards := true.B
@@ -1366,7 +1411,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
     // we assume clients will ack data for us at first,
     // if they only ack perm, we should change our schedule
-    when (
+    when(
       req.fromA && probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit
     ) {
       when(!(preferCache || self_meta.hit)) {
@@ -1380,15 +1425,19 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   when(req_valid && io.resps.sink_d.valid) {
-    when(io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData || io.resps.sink_d.bits.opcode === AccessAckData || io.resps.sink_d.bits.opcode === AccessAck) {
+    when(
+      io.resps.sink_d.bits.opcode === Grant || io.resps.sink_d.bits.opcode === GrantData || io.resps.sink_d.bits.opcode === AccessAckData || io.resps.sink_d.bits.opcode === AccessAck
+    ) {
       sink := io.resps.sink_d.bits.sink
       w_grantfirst := true.B
       w_grantlast := w_grantlast || io.resps.sink_d.bits.last
-      w_grant := (req.off === 0.U && req.size === log2Ceil(blockBytes).U) || io.resps.sink_d.bits.last  // if req.off != 0, w_grant indicates all beats are acked
+      w_grant := (req.off === 0.U && req.size === log2Ceil(
+        blockBytes
+      ).U) || io.resps.sink_d.bits.last // if req.off != 0, w_grant indicates all beats are acked
       bad_grant := io.resps.sink_d.bits.denied
       gotT := io.resps.sink_d.bits.param === toT
       gotDirty := io.resps.sink_d.bits.dirty
-      when (!req_put) {
+      when(!req_put) {
         req.bufIdx := io.resps.sink_d.bits.bufIdx
       }
     }
@@ -1430,13 +1479,13 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   }
 
   def Hold[T <: Data](x: T, l2Only: Boolean): T = {
-    if(l2Only && cacheParams.name != "L2") {
+    if (l2Only && cacheParams.name != "L2") {
       x
     } else {
       val reg = RegInit(0.U.asTypeOf(x))
-      when(io.dirResult.valid){
+      when(io.dirResult.valid) {
         reg := x
-      }.elsewhen(will_be_free){
+      }.elsewhen(will_be_free) {
         reg := 0.U
       }
       (x.asUInt | reg.asUInt).asTypeOf(x)
@@ -1445,9 +1494,9 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   def Keep[T <: Data](x: T): T = {
     val reg = RegInit(0.U.asTypeOf(x))
-    when(io.dirResult.valid){
+    when(io.dirResult.valid) {
       reg := x
-    }.elsewhen(will_be_free){
+    }.elsewhen(will_be_free) {
       reg := 0.U
     }
     reg.asUInt.asTypeOf(x)
@@ -1478,7 +1527,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.status.bits.tag := req.tag
   io.status.bits.is_miss := !self_meta.hit
   io.status.bits.way := self_meta.way
-  io.status.bits.way_reg := meta_reg.self.way  // used to ease timing issue
+  io.status.bits.way_reg := meta_reg.self.way // used to ease timing issue
   io.status.bits.will_grant_data := req.fromA && od.opcode(0) && io.tasks.source_d.bits.useBypass
   io.status.bits.will_save_data := req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
   io.status.bits.is_prefetch := req.isPrefetch.getOrElse(false.B)
@@ -1510,12 +1559,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val nest_c_way_match = io_c_status.way === self_meta.way
 
   val a_c_through = req.fromA && (
-      nest_c_tag_match && !self_meta.hit && !nest_c_way_match ||
-      !nest_c_tag_match && nest_c_way_match && (cache_alias_latch || (preferCache_latch && !acquirePermMiss) || Hold(self_meta.hit, false) || transmit_from_other_client_latch) ||
+    nest_c_tag_match && !self_meta.hit && !nest_c_way_match ||
+      !nest_c_tag_match && nest_c_way_match && (cache_alias_latch || (preferCache_latch && !acquirePermMiss) || Hold(
+        self_meta.hit,
+        false
+      ) || transmit_from_other_client_latch) ||
       nest_c_tag_match && nest_c_way_match && !self_meta.hit && a_do_release
-    )
+  )
 
-  val b_c_through = req.fromB && (nest_c_tag_match && !self_meta.hit || nest_c_way_match && self_meta.hit =/= nest_c_tag_match)
+  val b_c_through =
+    req.fromB && (nest_c_tag_match && !self_meta.hit || nest_c_way_match && self_meta.hit =/= nest_c_tag_match)
 
   io_c_status.releaseThrough := req_valid &&
     io_c_status.nestedReleaseData &&

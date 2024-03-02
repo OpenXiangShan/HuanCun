@@ -107,9 +107,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
         !meta.hit, // The rest are Acquire (NtoB) / Intent (PrefetchRead) / Get
         // If tag miss, new state depends on what L3 grants
         Mux(gotT, Mux(req_acquire, TRUNK, TIP), BRANCH),
-        MuxLookup(
-          meta.state,
-          BRANCH)(
+        MuxLookup(meta.state, BRANCH)(
           Seq(
             INVALID -> BRANCH,
             BRANCH -> BRANCH,
@@ -247,7 +245,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
           }
         }
       }
-    }.elsewhen(req.opcode(2,1) === 0.U) { // Put
+    }.elsewhen(req.opcode(2, 1) === 0.U) { // Put
       // need pprobe
       when(meta.hit && meta.state === TRUNK) {
         s_pprobe := false.B
@@ -377,7 +375,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   oa.source := io.id
   oa.needData := !(req.opcode === AcquirePerm) || req.size =/= offsetBits.U
   oa.bufIdx := req.bufIdx
-  oa.putData := req.opcode(2,1) === 0.U
+  oa.putData := req.opcode(2, 1) === 0.U
   oa.size := req.size
 
   ob.tag := Mux(!s_rprobe, meta.tag, req.tag)
@@ -385,14 +383,16 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, DirWrite, TagWr
   ob.param := Mux(!s_rprobe, toN, Mux(req.fromB, req.param, Mux(req_needT, toN, toB)))
   ob.clients := meta.clients & ~probe_exclude // TODO: Provides all clients needing probe
 
-  oc.opcode := Mux(req.fromB, Cat(ProbeAck(2,1), meta.dirty.asUInt), if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), meta.dirty.asUInt))
+  oc.opcode := Mux(
+    req.fromB,
+    Cat(ProbeAck(2, 1), meta.dirty.asUInt),
+    if (alwaysReleaseData) ReleaseData else Cat(Release(2, 1), meta.dirty.asUInt)
+  )
   oc.tag := meta.tag
   oc.set := req.set
   oc.param := Mux(
     req.fromB,
-    MuxLookup(
-      Cat(meta.state, probe_next_state),
-      NtoN)(
+    MuxLookup(Cat(meta.state, probe_next_state), NtoN)(
       Seq( // TODO: optimize this
         Cat(TRUNK, TRUNK) -> TtoT,
         Cat(TIP, TIP) -> TtoT,

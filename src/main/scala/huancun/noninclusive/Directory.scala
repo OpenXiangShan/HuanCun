@@ -43,9 +43,12 @@ class SelfDirResult(implicit p: Parameters) extends SelfDirEntry {
 }
 
 class ClientDirResult(implicit p: Parameters) extends HuanCunBundle with HasClientInfo {
-  val states = Vec(clientBits, new ClientDirEntry {
-    val hit = Bool()
-  })
+  val states = Vec(
+    clientBits,
+    new ClientDirEntry {
+      val hit = Bool()
+    }
+  )
   val tag_match = Bool()
   val tag = UInt(clientTagBits.W)
   val way = UInt(clientWayBits.W)
@@ -210,7 +213,7 @@ class Directory(implicit p: Parameters)
     (
       has_invalid_way || has_trunk_way,
       Mux(has_invalid_way, invalid_way, Mux(repl_way_is_trunk, repl, trunk_way))
-      )
+    )
   }
   val selfDir = Module(
     new SubDirectoryDoUpdate[SelfDirEntry](
@@ -245,7 +248,7 @@ class Directory(implicit p: Parameters)
     p.bits.replacerInfo := req.bits.replacerInfo
     p.bits.wayMode := req.bits.wayMode
     p.bits.way := req.bits.way
-    when(req.fire && req.bits.wayMode){
+    when(req.fire && req.bits.wayMode) {
       assert(req.bits.idOH(1, 0) === "b11".U)
     }
   }
@@ -280,7 +283,7 @@ class Directory(implicit p: Parameters)
   resp.bits.clients.way := clientResp.bits.way
   resp.bits.clients.tag := clientResp.bits.tag
   resp.bits.clients.error := Cat(resp.bits.clients.states.map(_.hit)).orR && clientResp.bits.error
-  resp.bits.clients.states.zip(clientResp.bits.dir).foreach{
+  resp.bits.clients.states.zip(clientResp.bits.dir).foreach {
     case (s, dir) =>
       s.state := dir.state
       s.hit := clientResp.bits.hit && dir.state =/= INVALID
@@ -317,11 +320,23 @@ class Directory(implicit p: Parameters)
   assert(dirReadPorts == 1)
   val req_r = RegEnable(req.bits, req.fire)
   XSPerfAccumulate(cacheParams, "selfdir_A_req", req_r.replacerInfo.channel(0) && resp.valid)
-  XSPerfAccumulate(cacheParams, "selfdir_A_hit", RegNext(req_r.replacerInfo.channel(0) && resp.valid) && resp.bits.self.hit)
+  XSPerfAccumulate(
+    cacheParams,
+    "selfdir_A_hit",
+    RegNext(req_r.replacerInfo.channel(0) && resp.valid) && resp.bits.self.hit
+  )
   XSPerfAccumulate(cacheParams, "selfdir_B_req", req_r.replacerInfo.channel(1) && resp.valid)
-  XSPerfAccumulate(cacheParams, "selfdir_B_hit", RegNext(req_r.replacerInfo.channel(1) && resp.valid) && resp.bits.self.hit)
+  XSPerfAccumulate(
+    cacheParams,
+    "selfdir_B_hit",
+    RegNext(req_r.replacerInfo.channel(1) && resp.valid) && resp.bits.self.hit
+  )
   XSPerfAccumulate(cacheParams, "selfdir_C_req", req_r.replacerInfo.channel(2) && resp.valid)
-  XSPerfAccumulate(cacheParams, "selfdir_C_hit", RegNext(req_r.replacerInfo.channel(2) && resp.valid) && resp.bits.self.hit)
+  XSPerfAccumulate(
+    cacheParams,
+    "selfdir_C_hit",
+    RegNext(req_r.replacerInfo.channel(2) && resp.valid) && resp.bits.self.hit
+  )
 
   XSPerfAccumulate(cacheParams, "selfdir_dirty", RegNext(resp.valid) && resp.bits.self.dirty)
   XSPerfAccumulate(cacheParams, "selfdir_TIP", RegNext(resp.valid) && resp.bits.self.state === TIP)
@@ -333,20 +348,20 @@ class Directory(implicit p: Parameters)
   //})
   val perfinfo = IO(Output(Vec(numPCntHcDir, (UInt(6.W)))))
   val perfEvents = Seq(
-    ("selfdir_A_req     ", req_r.replacerInfo.channel(0) && resp.valid                      ),
+    ("selfdir_A_req     ", req_r.replacerInfo.channel(0) && resp.valid),
     ("selfdir_A_hit     ", RegNext(req_r.replacerInfo.channel(0) && resp.valid) && resp.bits.self.hit),
-    ("selfdir_B_req     ", req_r.replacerInfo.channel(1) && resp.valid                      ),
+    ("selfdir_B_req     ", req_r.replacerInfo.channel(1) && resp.valid),
     ("selfdir_B_hit     ", RegNext(req_r.replacerInfo.channel(1) && resp.valid) && resp.bits.self.hit),
-    ("selfdir_C_req     ", req_r.replacerInfo.channel(2) && resp.valid                      ),
+    ("selfdir_C_req     ", req_r.replacerInfo.channel(2) && resp.valid),
     ("selfdir_C_hit     ", RegNext(req_r.replacerInfo.channel(2) && resp.valid) && resp.bits.self.hit),
-    ("selfdir_dirty     ", RegNext(resp.valid) && resp.bits.self.dirty                               ),
-    ("selfdir_TIP       ", RegNext(resp.valid) && resp.bits.self.state === TIP                       ),
-    ("selfdir_BRANCH    ", RegNext(resp.valid) && resp.bits.self.state === BRANCH                    ),
-    ("selfdir_TRUNK     ", RegNext(resp.valid) && resp.bits.self.state === TRUNK                     ),
-    ("selfdir_INVALID   ", RegNext(resp.valid) && resp.bits.self.state === INVALID                   ),
+    ("selfdir_dirty     ", RegNext(resp.valid) && resp.bits.self.dirty),
+    ("selfdir_TIP       ", RegNext(resp.valid) && resp.bits.self.state === TIP),
+    ("selfdir_BRANCH    ", RegNext(resp.valid) && resp.bits.self.state === BRANCH),
+    ("selfdir_TRUNK     ", RegNext(resp.valid) && resp.bits.self.state === TRUNK),
+    ("selfdir_INVALID   ", RegNext(resp.valid) && resp.bits.self.state === INVALID)
   )
 
-  for (((perf_out,(perf_name,perf)),i) <- perfinfo.zip(perfEvents).zipWithIndex) {
+  for (((perf_out, (perf_name, perf)), i) <- perfinfo.zip(perfEvents).zipWithIndex) {
     perf_out := RegNext(perf)
   }
 }

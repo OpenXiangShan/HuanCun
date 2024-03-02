@@ -106,7 +106,11 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
   if (cacheParams.level == 2) {
     allocInfo.preferCache := a.bits.user.lift(PreferCacheKey).getOrElse(true.B)
   } else {
-    allocInfo.preferCache := Mux((a.bits.opcode === TLMessages.Get || a.bits.opcode(2,1) === 0.U), true.B, a.bits.user.lift(PreferCacheKey).getOrElse(true.B))
+    allocInfo.preferCache := Mux(
+      (a.bits.opcode === TLMessages.Get || a.bits.opcode(2, 1) === 0.U),
+      true.B,
+      a.bits.user.lift(PreferCacheKey).getOrElse(true.B)
+    )
   }
   allocInfo.dirty := false.B // ignored
   allocInfo.isHit := true.B // ignored

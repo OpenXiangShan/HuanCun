@@ -30,16 +30,14 @@ import utility.{MemReqSource, ReqSourceKey}
 
 case object HCCacheParamsKey extends Field[HCCacheParameters](HCCacheParameters())
 
-case class CacheParameters
-(
-  name: String,
-  sets: Int,
-  ways: Int,
+case class CacheParameters(
+  name:             String,
+  sets:             Int,
+  ways:             Int,
   blockGranularity: Int,
-  blockBytes: Int = 64,
-  aliasBitsOpt: Option[Int] = None,
-  inner: Seq[CacheParameters] = Nil
-) {
+  blockBytes:       Int = 64,
+  aliasBitsOpt:     Option[Int] = None,
+  inner:            Seq[CacheParameters] = Nil) {
   val capacity = sets * ways * blockBytes
   val setBits = log2Ceil(sets)
   val offsetBits = log2Ceil(blockBytes)
@@ -72,57 +70,48 @@ case object DirtyKey extends ControlKey[Bool](name = "blockisdirty")
 
 case class DirtyField() extends BundleField[Bool](DirtyKey, Output(Bool()), _ := true.B)
 
-case class CacheCtrl
-(
-  address: BigInt,
+case class CacheCtrl(
+  address:   BigInt,
   beatBytes: Int = 8,
   // used to generate core soft reset
-  numCores: Int = 1
-)
+  numCores: Int = 1)
 
-case class HCCacheParameters
-(
-  name: String = "L2",
-  level: Int = 2,
-  ways: Int = 4,
-  sets: Int = 128,
-  blockBytes: Int = 64,
-  pageBytes: Int = 4096,
-  replacement: String = "plru",
-  mshrs: Int = 14,
-  dirReadPorts: Int = 1,
-  dirReg: Boolean = true,
-  enableDebug: Boolean = false,
-  enablePerf: Boolean = true,
-  hartIds: Seq[Int] = Seq[Int](),
-  channelBytes: TLChannelBeatBytes = TLChannelBeatBytes(32),
-  prefetch: Option[PrefetchParameters] = None,
-  tpmeta: Option[TPmetaParameters] = None,
+case class HCCacheParameters(
+  name:              String = "L2",
+  level:             Int = 2,
+  ways:              Int = 4,
+  sets:              Int = 128,
+  blockBytes:        Int = 64,
+  pageBytes:         Int = 4096,
+  replacement:       String = "plru",
+  mshrs:             Int = 14,
+  dirReadPorts:      Int = 1,
+  dirReg:            Boolean = true,
+  enableDebug:       Boolean = false,
+  enablePerf:        Boolean = true,
+  hartIds:           Seq[Int] = Seq[Int](),
+  channelBytes:      TLChannelBeatBytes = TLChannelBeatBytes(32),
+  prefetch:          Option[PrefetchParameters] = None,
+  tpmeta:            Option[TPmetaParameters] = None,
   elaboratedTopDown: Boolean = true,
-  clientCaches: Seq[CacheParameters] = Nil,
-  inclusive: Boolean = true,
+  clientCaches:      Seq[CacheParameters] = Nil,
+  inclusive:         Boolean = true,
   alwaysReleaseData: Boolean = false,
   tagECC:            Option[String] = None,
   dataECC:           Option[String] = None,
-  echoField: Seq[BundleFieldBase] = Nil,
-  reqField: Seq[BundleFieldBase] = Nil, // master
-  respKey: Seq[BundleKeyBase] = Nil,
-  reqKey: Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey, ReqSourceKey), // slave
-  respField: Seq[BundleFieldBase] = Nil,
-  ctrl: Option[CacheCtrl] = None,
-  sramClkDivBy2: Boolean = false,
-  sramDepthDiv: Int = 1,
-  simulation: Boolean = false,
-  innerBuf: TLBufferParams = TLBufferParams(),
-  outerBuf: TLBufferParams = TLBufferParams(
-    a = BufferParams.default,
-    b = BufferParams.default,
-    c = BufferParams.default,
-    d = BufferParams.default,
-    e = BufferParams.default
-  ),
-  FPGAPlatform: Boolean = false
-) {
+  echoField:         Seq[BundleFieldBase] = Nil,
+  reqField:          Seq[BundleFieldBase] = Nil, // master
+  respKey:           Seq[BundleKeyBase] = Nil,
+  reqKey:            Seq[BundleKeyBase] = Seq(PrefetchKey, PreferCacheKey, AliasKey, ReqSourceKey), // slave
+  respField:         Seq[BundleFieldBase] = Nil,
+  ctrl:              Option[CacheCtrl] = None,
+  sramClkDivBy2:     Boolean = false,
+  sramDepthDiv:      Int = 1,
+  simulation:        Boolean = false,
+  innerBuf:          TLBufferParams = TLBufferParams(),
+  outerBuf: TLBufferParams = TLBufferParams(a = BufferParams.default, b = BufferParams.default, c =
+      BufferParams.default, d = BufferParams.default, e = BufferParams.default),
+  FPGAPlatform: Boolean = false) {
   require(ways > 0)
   require(sets > 0)
   require(channelBytes.d.get >= 8)

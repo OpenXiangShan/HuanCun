@@ -26,7 +26,6 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages.{AcquireBlock, AcquirePerm, ReleaseAck}
 import utility._
 
-
 class SourceD(implicit p: Parameters) extends HuanCunModule {
 
   /*
@@ -65,9 +64,9 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   def needData(req: SourceDReq): Bool = {
     req.fromA && (
       req.opcode === TLMessages.GrantData ||
-        req.opcode === TLMessages.AccessAckData ||
-        req.opcode === TLMessages.AccessAck && !req.bypassPut
-      )
+      req.opcode === TLMessages.AccessAckData ||
+      req.opcode === TLMessages.AccessAck && !req.bypassPut
+    )
   }
 
   // stage1
@@ -80,7 +79,8 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s1_counter = RegInit(0.U(beatBits.W)) // how many beats have been sent
   val s1_total_beats = Mux(s1_needData, totalBeats(s1_req.size), 0.U(beatBits.W))
   val s1_beat = startBeat(s1_req.off) | s1_counter
-  val s1_valid_r = (busy || (io.task.valid && io.task.bits.opcode =/= TLMessages.PutPartialData)) && s1_needData && !s1_block_r
+  val s1_valid_r =
+    (busy || (io.task.valid && io.task.bits.opcode =/= TLMessages.PutPartialData)) && s1_needData && !s1_block_r
   val s1_last = s1_counter === s1_total_beats
   val s1_bypass_hit = io.bypass_read.valid && io.bypass_read.ready
   val s1_bypass_data = io.bypass_read.buffer_data
@@ -105,7 +105,7 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   when(io.task.fire) {
     busy := true.B
   }
-  when(Mux(s1_req.useBypass, s1_bypass_hit, io.bs_raddr.fire)){
+  when(Mux(s1_req.useBypass, s1_bypass_hit, io.bs_raddr.fire)) {
     s1_block_r := true.B
   }
   when(s1_valid && s2_ready) {
@@ -119,11 +119,12 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.task.ready := !busy
   s1_valid := (busy || (io.task.valid && io.task.bits.opcode =/= TLMessages.PutPartialData)) && (
     !s1_valid_r ||
-      Mux(s1_req.useBypass,
-        s1_bypass_hit,                    // wait data from refill buffer
-        io.bs_raddr.ready                 // wait data from bankedstore
+      Mux(
+        s1_req.useBypass,
+        s1_bypass_hit, // wait data from refill buffer
+        io.bs_raddr.ready // wait data from bankedstore
       )
-    )
+  )
 
   // stage2
   val s2_latch = s1_valid && s2_ready
@@ -143,12 +144,12 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   io.pb_pop.valid := s2_valid_pb && s2_req.fromA
   io.pb_pop.bits.bufIdx := s2_req.bufIdx
   io.pb_pop.bits.count := s2_counter
-  io.pb_pop.bits.last  := s2_last
+  io.pb_pop.bits.last := s2_last
 
   val pbQueue = Module(new Queue(new PutBufferBeatEntry, beatSize * sramLatency, flow = false, pipe = false))
 
-  when (pb_ready) { s2_valid_pb := false.B }
-  when (s2_latch) { s2_valid_pb := s1_need_pb }
+  when(pb_ready) { s2_valid_pb := false.B }
+  when(s2_latch) { s2_valid_pb := s1_need_pb }
 
   s1_queue.io.deq.ready := s2_full && s2_req.useBypass && s2_needData && s2_d.ready
   s2_d.valid := s2_full && ((s1_queue.io.deq.valid && s2_req.useBypass && s2_needData) || !s2_needData)
@@ -250,18 +251,19 @@ class SourceD(implicit p: Parameters) extends HuanCunModule {
   val s4_last = RegEnable(s3_last, s4_latch)
   val s4_full = RegInit(false.B)
 
-  when (io.bs_waddr.ready || !s4_need_pb) { s4_full := false.B }
-  when (s4_latch) { s4_full := true.B }
+  when(io.bs_waddr.ready || !s4_need_pb) { s4_full := false.B }
+  when(s4_latch) { s4_full := true.B }
 
   val selects = s4_pbdata.mask.asBools
-  val mergedData = Cat(selects.zipWithIndex.map { case (s, i) =>
-    VecInit(Seq(s4_rdata, s4_pbdata.data).map(_((i + 1) * 8 - 1, i * 8)))(s)
-  }.reverse)  // merge data according to mask
+  val mergedData = Cat(selects.zipWithIndex.map {
+    case (s, i) =>
+      VecInit(Seq(s4_rdata, s4_pbdata.data).map(_((i + 1) * 8 - 1, i * 8)))(s)
+  }.reverse) // merge data according to mask
 
   io.bs_waddr.valid := s4_full && s4_need_pb
   io.bs_waddr.bits.noop := false.B
-  io.bs_waddr.bits.way  := s4_req.way
-  io.bs_waddr.bits.set  := s4_req.set
+  io.bs_waddr.bits.way := s4_req.way
+  io.bs_waddr.bits.set := s4_req.set
   io.bs_waddr.bits.beat := s4_beat
   io.bs_waddr.bits.write := true.B
   io.bs_wdata.data := mergedData

@@ -77,7 +77,7 @@ object utility extends SbtModule with HasChisel {
 }
 
 
-object HuanCun extends SbtModule with HasChisel with millbuild.common.HuanCunModule {
+object HuanCun extends SbtModule with HasChisel with ScalafmtModule with millbuild.common.HuanCunModule {
 
   override def millSourcePath = millOuterCtx.millSourcePath
 

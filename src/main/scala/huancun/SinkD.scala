@@ -32,7 +32,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val bypass_write = Flipped(new SinkDBufferWrite)
     val way = Input(UInt(wayBits.W))
     val set = Input(UInt(setBits.W))
-    val inner_grant = Input(Bool())  // sourceD will use bypass data
+    val inner_grant = Input(Bool()) // sourceD will use bypass data
     val save_data_in_bs = Input(Bool())
     val resp = ValidIO(new SinkDResp)
     val sourceD_r_hazard = Flipped(ValidIO(new SourceDHazard))
@@ -44,7 +44,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
 
   val source_latch = RegEnable(io.d.bits.source, io.d.valid)
   val first_resp = RegInit(true.B)
-  when (io.d.valid) {
+  when(io.d.valid) {
     first_resp := false.B
   }
   val new_source = first_resp || io.d.bits.source =/= source_latch
@@ -52,7 +52,10 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val indexed_way = RegEnable(io.way, io.d.valid)
   val w_safe = !new_source && !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(indexed_set, indexed_way))
 
-  assert(!io.d.valid || !needData || io.d.bits.size === log2Up(blockBytes).U, "SinkD must receive aligned message when needData")
+  assert(
+    !io.d.valid || !needData || io.d.bits.size === log2Up(blockBytes).U,
+    "SinkD must receive aligned message when needData"
+  )
 
   val bypass_ready = io.inner_grant && needData && io.bypass_write.ready
   val bs_ready = (needData && w_safe || !first) &&

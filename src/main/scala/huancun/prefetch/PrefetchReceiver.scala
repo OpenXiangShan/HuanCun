@@ -8,12 +8,12 @@ import huancun._
 import utility.{MemReqSource, Pipeline}
 
 case class PrefetchReceiverParams(n: Int = 32) extends PrefetchParameters {
-  override val hasPrefetchBit: Boolean = true
+  override val hasPrefetchBit:  Boolean = true
   override val inflightEntries: Int = n
 }
 
 case class L3PrefetchReceiverParams(n: Int = 32) extends PrefetchParameters {
-  override val hasPrefetchBit: Boolean = true
+  override val hasPrefetchBit:  Boolean = true
   override val inflightEntries: Int = n
 }
 

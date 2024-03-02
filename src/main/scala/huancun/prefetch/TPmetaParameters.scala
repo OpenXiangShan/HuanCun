@@ -24,10 +24,10 @@ import huancun.HasHuanCunParameters
 
 trait TPmetaParameters {
   val metaEntries: Int
-  val metaAssoc: Int
-  val busBytes: Int
-  val deltaBits: Int
-  val nrDelta: Int
+  val metaAssoc:   Int
+  val busBytes:    Int
+  val deltaBits:   Int
+  val nrDelta:     Int
 }
 
 case class DefaultTPmetaParameters() extends TPmetaParameters {

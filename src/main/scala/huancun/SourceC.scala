@@ -76,7 +76,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val s1_task = RegInit(0.U.asTypeOf(io.task.bits.cloneType))
   val s1_beat = RegInit(0.U(beatBits.W))
   val s1_valid = RegInit(false.B)
-  when(s1_valid){
+  when(s1_valid) {
     s1_valid := false.B
   }
   when(task_handled) {
@@ -89,7 +89,7 @@ class SourceC(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   s1_info.valid := s1_valid
   s1_info.bits.apply(s1_task, s1_beat)
 
-  val pipeOut = Pipe(s1_info, sramLatency-1)
+  val pipeOut = Pipe(s1_info, sramLatency - 1)
 
   queue.io.enq.valid := pipeOut.valid
   queue.io.enq.bits.opcode := pipeOut.bits.task.opcode

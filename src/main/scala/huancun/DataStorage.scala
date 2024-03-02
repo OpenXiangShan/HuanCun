@@ -22,7 +22,7 @@ package huancun
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.utils.{SRAMWrapper, XSPerfAccumulate}
+import huancun.utils.{PrtParam, SRAMWrapper, XSPerfAccumulate}
 import utility._
 
 class DataStorage(implicit p: Parameters) extends HuanCunModule {
@@ -41,15 +41,36 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   })
 
   /* Define some internal parameters */
+
+  /** number of stack per row */
   val nrStacks = 2
+  /** bits of stack in addr */
   val stackBits = log2Ceil(nrStacks)
+  /** bytes of bank in DataStorage */
   val bankBytes = 8
+
+  /** row is block(two beats): 2 * 32bytes = 64bytes = blockBytes */
   val rowBytes = nrStacks * beatBytes
+  /** sizeBytes: block * blockBytes; number of rows(blocks) in DataStorage, equal to sets * ways */
   val nrRows = sizeBytes / rowBytes
+  /** number of banks in row */
   val nrBanks = rowBytes / bankBytes
   val rowBits = log2Ceil(nrRows)
+  /** number of banks in stack */
   val stackSize = nrBanks / nrStacks
   val sramSinglePort = true
+
+  PrtParam(s"nrSatcks: $nrStacks") // 2
+  PrtParam(s"stackBits: $stackBits") // 1
+  PrtParam(s"bankBytes: $bankBytes") // 8
+  PrtParam(s"rowBytes: $rowBytes") // 64
+  PrtParam(s"beatBytes: $beatBytes") // 32
+  PrtParam(s"sizeBytes = blocks * blockBytes: $sizeBytes = $blocks * $blockBytes") // 512 * 64
+  PrtParam(s"nrRows: $nrRows") // 512
+  PrtParam(s"nrBanks: $nrBanks") // 8
+  PrtParam(s"stackSize: $stackSize") // 4
+  PrtParam(s"ways: ${cacheParams.ways}, sets: ${cacheParams.sets}") // 4, 128
+
 
   // Suppose * as one bank
   // All banks can be grouped by nrStacks. We call such group as stack
@@ -61,6 +82,9 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val eccBits = dataCode.width(8 * bankBytes) - 8 * bankBytes
   println(s"Data ECC bits:$eccBits")
 
+  PrtParam(s"cacheParams.sramDepthDiv: ${cacheParams.sramDepthDiv}")
+  PrtParam(s"cacheParams.sramClkDivBy2: ${cacheParams.sramClkDivBy2}")
+  /** 8 banks */
   val bankedData = Seq.fill(nrBanks) {
     Module(
       new SRAMWrapper(
@@ -73,43 +97,55 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   }
   val dataEccArray = if (eccBits > 0) {
     Seq.fill(nrStacks) {
-      Module(new SRAMWrapper(
-        gen = UInt((eccBits * stackSize).W),
-        set = nrRows,
-        n = cacheParams.sramDepthDiv,
-        clk_div_by_2 = cacheParams.sramClkDivBy2
-      ))
+      Module(
+        new SRAMWrapper(
+          gen = UInt((eccBits * stackSize).W),
+          set = nrRows,
+          n = cacheParams.sramDepthDiv,
+          clk_div_by_2 = cacheParams.sramClkDivBy2
+        )
+      )
     }
   } else null
+
+  // TODO: add mask array here
 
   val stackRdy = if (cacheParams.sramClkDivBy2) {
     RegInit(VecInit(Seq.fill(nrStacks) {
       true.B
     }))
-  } else VecInit(Seq.fill(nrStacks) {
-    true.B
-  })
+  } else
+    VecInit(Seq.fill(nrStacks) {
+      true.B
+    })
 
   /* Convert to internal request signals */
   class DSRequest extends HuanCunBundle {
     val wen = Bool()
     val index = UInt((rowBytes * 8).W)
     val bankSel = UInt(nrBanks.W)
+    /** record the sum of previous bankSel */
     val bankSum = UInt(nrBanks.W)
     val bankEn = UInt(nrBanks.W)
     val data = Vec(nrBanks, UInt((8 * bankBytes).W))
   }
 
   def req(wen: Boolean, addr: DecoupledIO[DSAddress], data: DSData) = {
-    // Remap address
-    // [beat, set, way, block] => [way, set, beat, block]
-    //                            [index, stack, block]
-    val innerAddr = Cat(addr.bits.way, addr.bits.set, addr.bits.beat)
+    /** Remap address
+     * [beat, set, way, block] => [way, set, beat, block]
+     *                            [index, stack, block]
+     */
+    val innerAddr = Cat(addr.bits.way, addr.bits.set, addr.bits.beat) // 2bits, 7bits, 1bits
     val innerIndex = innerAddr >> stackBits
     val stackIdx = innerAddr(stackBits - 1, 0)
-    val stackSel = UIntToOH(stackIdx, stackSize) // Select which stack to access
+    /** Select which stack to access */
+    val stackSel = UIntToOH(stackIdx, stackSize)
+    PrtParam(s"stackIdx: ${stackIdx.getWidth}bits, stackSel: ${stackSel.getWidth}")
 
     val out = Wire(new DSRequest)
+    /** check if there exists at least one true value in "stackSize" bits in bankSum
+     * if exists true, then accessVec(i) come to be false, and current request's benkEn is false
+     */
     val accessVec = Cat(
       Seq
         .tabulate(nrStacks) { i =>
@@ -123,10 +159,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     out.index := innerIndex
     // FillInterleaved: 0010 => 00000000 00000000 11111111 00000000
     out.bankSel := Mux(addr.valid, FillInterleaved(stackSize, stackSel), 0.U) // TODO: consider mask
-    out.bankEn := Mux(addr.bits.noop || !stackRdy(stackIdx),
-      0.U,
-      out.bankSel & FillInterleaved(stackSize, accessVec)
-    )
+    out.bankEn := Mux(addr.bits.noop || !stackRdy(stackIdx), 0.U, out.bankSel & FillInterleaved(stackSize, accessVec))
+    // out.data: 8 * 64B.
     out.data := Cat(Seq.fill(nrStacks)(data.data)).asTypeOf(out.data.cloneType)
     out
   }
@@ -161,8 +195,11 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   val cycleCnt = Counter(true.B, 2)
   // mark accessed banks as busy
+  PrtParam(s"cacheParams.sramClkDivBy2: ${cacheParams.sramClkDivBy2}")
   if (cacheParams.sramClkDivBy2) {
-    bank_en.grouped(stackSize).toList
+    bank_en
+      .grouped(stackSize)
+      .toList
       .map(banks => Cat(banks).orR)
       .zip(stackRdy)
       .foreach {
@@ -209,25 +246,25 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   }
 
   if (eccBits > 0) {
-    for (((banks, ecc), eccArray) <-
-           bankedData.grouped(stackSize).toList
-             .zip(eccData.get)
-             .zip(dataEccArray)
-         ) {
+    for (
+      ((banks, ecc), eccArray) <-
+        bankedData
+          .grouped(stackSize)
+          .toList
+          .zip(eccData.get)
+          .zip(dataEccArray)
+    ) {
       eccArray.io.w.req.valid := banks.head.io.w.req.valid
       eccArray.io.w.req.bits.apply(
         setIdx = banks.head.io.w.req.bits.setIdx,
-        data = VecInit(banks.map(b =>
-          dataCode.encode(b.io.w.req.bits.data(0)).head(eccBits)
-        )).asUInt,
+        data = VecInit(banks.map(b => dataCode.encode(b.io.w.req.bits.data(0)).head(eccBits))).asUInt,
         waymask = 1.U
       )
       eccArray.io.r.req.valid := banks.head.io.r.req.valid
       eccArray.io.r.req.bits.apply(setIdx = banks.head.io.r.req.bits.setIdx)
       ecc := eccArray.io.r.resp.data(0).asTypeOf(Vec(stackSize, UInt(eccBits.W)))
     }
-  } else {
-  }
+  } else {}
 
   val dataSelModules = Array.fill(stackSize) {
     Module(new DataSel(nrStacks, 2, bankBytes * 8, eccBits))
@@ -256,7 +293,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
 
   io.ecc.valid := io.sourceD_rdata.corrupt || io.sourceC_rdata.corrupt
   io.ecc.bits.errCode := EccInfo.ERR_DATA
-  io.ecc.bits.addr := Mux(io.sourceD_rdata.corrupt,
+  io.ecc.bits.addr := Mux(
+    io.sourceD_rdata.corrupt,
     Cat(d_addr_reg.set, d_addr_reg.way, d_addr_reg.beat),
     Cat(c_addr_reg.set, c_addr_reg.way, c_addr_reg.beat)
   )
@@ -291,7 +329,7 @@ class DataSel(inNum: Int, outNum: Int, width: Int, eccBits: Int)(implicit p: Par
 
     if (eccBits > 0) {
       val oeccs = RegEnable(io.ecc_in.get, en)
-      val err = oeccs.zip(odata).map{
+      val err = oeccs.zip(odata).map {
         case (e, d) => dataCode.decode(e ## d).error
       }
       io.err_out(i) := RegEnable(Mux1H(sel_r, err).orR, false.B, RegNext(en, false.B))

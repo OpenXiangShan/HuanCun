@@ -50,7 +50,7 @@ abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrit
   val read:    DecoupledIO[DirRead]
   val result:  Valid[T_RESULT]
   val dirWReq: DecoupledIO[T_DIR_W]
-  val tagWReq:  DecoupledIO[T_TAG_W]
+  val tagWReq: DecoupledIO[T_TAG_W]
 }
 
 abstract class BaseDirectory[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
@@ -60,14 +60,16 @@ abstract class BaseDirectory[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite,
 }
 
 class SubDirectory[T <: Data](
-  wports:      Int,
-  sets:        Int,
-  ways:        Int,
-  tagBits:     Int,
-  dir_init_fn: () => T,
-  dir_hit_fn: T => Bool,
+  wports:          Int,
+  sets:            Int,
+  ways:            Int,
+  tagBits:         Int,
+  dir_init_fn:     () => T,
+  dir_hit_fn:      T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
-  replacement: String)(implicit p: Parameters)
+  replacement:     String
+)(
+  implicit p: Parameters)
     extends Module {
 
   val setBits = log2Ceil(sets)
@@ -104,7 +106,9 @@ class SubDirectory[T <: Data](
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val metaArray = Module(
+    new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2)
+  )
 
   val clkGate = Module(new STD_CLKGT_func)
   val clk_en = RegInit(false.B)
@@ -128,9 +132,13 @@ class SubDirectory[T <: Data](
   println(s"Tag ECC bits:$eccBits")
   val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
-  if(eccBits > 0){
-    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val tagArray = Module(
+    new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2)
+  )
+  if (eccBits > 0) {
+    val eccArray = Module(
+      new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2)
+    )
     eccArray.io.w(
       io.tag_w.fire,
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
@@ -170,8 +178,8 @@ class SubDirectory[T <: Data](
   val way_s1 = Wire(UInt(wayBits.W))
 
   val repl = ReplacementPolicy.fromString(replacement, ways)
-  val repl_state = if(replacement == "random"){
-    when(io.tag_w.fire){
+  val repl_state = if (replacement == "random") {
+    when(io.tag_w.fire) {
       repl.miss
     }
     0.U
@@ -199,7 +207,7 @@ class SubDirectory[T <: Data](
      stage #: wait for sram
      stage 1: generate hit/way, io.resp.valid = TRUE (will latch into MSHR)
      stage 2: output latched hit/way, output dir/tag
-  */
+   */
   hit_s1 := Cat(hitVec).orR
   way_s1 := Mux(reqReg.wayMode, reqReg.way, Mux(hit_s1, hitWay, chosenWay))
 
@@ -210,7 +218,7 @@ class SubDirectory[T <: Data](
   val meta_s2 = metaAll_s2(way_s2)
   val tag_s2 = tagAll_s2(way_s2)
 
-  val errorAll_s1 = VecInit(eccRead.zip(tagRead).map{x => tagCode.decode(x._1 ## x._2).error})
+  val errorAll_s1 = VecInit(eccRead.zip(tagRead).map { x => tagCode.decode(x._1 ## x._2).error })
   val errorAll_s2 = RegEnable(errorAll_s1, reqValidReg)
   val error_s2 = errorAll_s2(way_s2)
 
@@ -255,19 +263,27 @@ trait UpdateOnAcquire extends HasUpdate {
 }
 
 abstract class SubDirectoryDoUpdate[T <: Data](
-  wports:      Int,
-  sets:        Int,
-  ways:        Int,
-  tagBits:     Int,
-  dir_init_fn: () => T,
-  dir_hit_fn:  T => Bool,
+  wports:          Int,
+  sets:            Int,
+  ways:            Int,
+  tagBits:         Int,
+  dir_init_fn:     () => T,
+  dir_hit_fn:      T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
-  replacement: String)(implicit p: Parameters)
+  replacement:     String
+)(
+  implicit p: Parameters)
     extends SubDirectory[T](
-      wports, sets, ways, tagBits,
-      dir_init_fn, dir_hit_fn, invalid_way_sel,
+      wports,
+      sets,
+      ways,
+      tagBits,
+      dir_init_fn,
+      dir_hit_fn,
+      invalid_way_sel,
       replacement
-    ) with HasUpdate {
+    )
+    with HasUpdate {
 
   val update = doUpdate(reqReg.replacerInfo)
   when(reqValidReg && update) {

@@ -170,12 +170,14 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle with HasChannelBi
   val is_miss = Bool()
   val blockB, blockC = Bool()
   val nestB, nestC = Bool()
+
   /**
     *   for missed acquire, if 'will_grant_data' is true:
     *     sinkD must write refill buffer
     *     soruceD must read data from refill buffer
     */
   val will_grant_data = Bool()
+
   /**
     *   for missed acquire/get, if 'will_save_data' is true:
     *     sinkD must write bankedstore to keep it in cache
@@ -200,6 +202,7 @@ class DSAddress(implicit p: Parameters) extends HuanCunBundle {
 }
 
 class DSData(implicit p: Parameters) extends HuanCunBundle {
+  /** data is a beat */
   val data = UInt((beatBytes * 8).W)
   val corrupt = Bool()
 }
@@ -243,10 +246,10 @@ class TPmetaReq extends Bundle {
   val set = UInt(32.W)
   val way = UInt(4.W)
   val wmode = Bool()
-  val rawData = Vec(16, UInt((36-6).W))
+  val rawData = Vec(16, UInt((36 - 6).W))
 }
 
 class TPmetaResp extends Bundle {
   val hartid = UInt(4.W)
-  val rawData = Vec(16, UInt((36-6).W))
+  val rawData = Vec(16, UInt((36 - 6).W))
 }

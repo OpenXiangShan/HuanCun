@@ -16,7 +16,7 @@ class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
 
   def isBOP: Bool = pfSource === MemReqSource.Prefetch2L2BOP.id.U
   def isSMS: Bool = pfSource === MemReqSource.Prefetch2L2SMS.id.U
-  def isTP: Bool = pfSource === MemReqSource.Prefetch2L2TP.id.U
+  def isTP:  Bool = pfSource === MemReqSource.Prefetch2L2TP.id.U
 }
 
 class PrefetchResp(implicit p: Parameters) extends PrefetchBundle {
@@ -112,10 +112,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       bop.io.resp <> io.resp
       // send to prq
       pftQueue.io.enq.valid := l1_pf.io.req.valid || (bop_en && bop.io.req.valid)
-      pftQueue.io.enq.bits := Mux(l1_pf.io.req.valid,
-        l1_pf.io.req.bits,
-        bop.io.req.bits
-      )
+      pftQueue.io.enq.bits := Mux(l1_pf.io.req.valid, l1_pf.io.req.bits, bop.io.req.bits)
       l1_pf.io.req.ready := true.B
       bop.io.req.ready := true.B
       pipe.io.in <> pftQueue.io.deq

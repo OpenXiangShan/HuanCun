@@ -113,10 +113,19 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   }
 
   when(c.fire && first && isProbeAckData) {
-    setMatchVec := Cat((bufferSetVals.zipWithIndex).zip(bufferSet.zip(bufferTag)).map{
-      case ((v, i), (s, t)) =>
-        Mux(busy && i.U === task_r.bufIdx, false.B, (t === tag) && (s === set) && v) // do not clean buffer of ongoing task
-    }.reverse)
+    setMatchVec := Cat(
+      (bufferSetVals.zipWithIndex)
+        .zip(bufferSet.zip(bufferTag))
+        .map {
+          case ((v, i), (s, t)) =>
+            Mux(
+              busy && i.U === task_r.bufIdx,
+              false.B,
+              (t === tag) && (s === set) && v
+            ) // do not clean buffer of ongoing task
+        }
+        .reverse
+    )
   }
   when(setMatchVec.orR) {
     assert(PopCount(setMatchVec) === 1.U, "SinkC: ProbeAckData cleaner detects multiple data")
@@ -177,13 +186,13 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   when(w_fire_save) { w_counter_save := w_counter_save + 1.U }
   when(w_fire_through) { w_counter_through := w_counter_through + 1.U }
 
-  when((w_counter_save === (beats-1).U) && w_fire_save) { w_save_done_r := true.B }
-  when((w_counter_through === (beats-1).U) && w_fire_through) { w_through_done_r := true.B }
+  when((w_counter_save === (beats - 1).U) && w_fire_save) { w_save_done_r := true.B }
+  when((w_counter_through === (beats - 1).U) && w_fire_through) { w_through_done_r := true.B }
 
   val w_done =
-      ((w_counter_save === (beats-1).U) && (w_counter_through === (beats-1).U) && w_fire_save && w_fire_through) ||
-      ((w_counter_save === (beats-1).U) && w_through_done_r && w_fire_save) ||
-      (w_save_done_r && (w_counter_through === (beats-1).U) && w_fire_through)
+    ((w_counter_save === (beats - 1).U) && (w_counter_through === (beats - 1).U) && w_fire_save && w_fire_through) ||
+      ((w_counter_save === (beats - 1).U) && w_through_done_r && w_fire_save) ||
+      (w_save_done_r && (w_counter_through === (beats - 1).U) && w_fire_through)
 
   when(w_done || busy && task_r.drop) {
     w_counter_save := 0.U
