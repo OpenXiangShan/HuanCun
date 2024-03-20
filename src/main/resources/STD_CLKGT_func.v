@@ -10,6 +10,12 @@ module STD_CLKGT_func (
 
   assign clk_en = E | TE;
 
+`ifdef VCS
+  always @(CK or clk_en) begin
+    if (CK == 1'b0)
+      clk_en_reg <= clk_en;
+  end
+`else
 `ifdef VERILATOR_5
   always @(CK or clk_en) begin
     if (CK == 1'b0)
@@ -20,6 +26,7 @@ module STD_CLKGT_func (
     begin
       clk_en_reg = clk_en;
     end
+`endif
 `endif
 
   assign Q = CK & clk_en_reg;
