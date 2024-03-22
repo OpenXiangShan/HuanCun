@@ -192,6 +192,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val someClientHasProbeAckData = RegInit(false.B)
 
+  // has been nested C
+  val nested_c_hit_reg = RegInit(false.B)
+  val nested_c_hit = WireInit(nested_c_hit_reg)
+
   // Which clients should be probed?
   // a req:
   // 1. cache alias
@@ -444,7 +448,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val new_clients_dir = Wire(Vec(clientBits, new ClientDirEntry))
   val new_self_dir = Wire(new SelfDirEntry)
-  new_self_dir.dirty := new_self_meta.dirty
+  new_self_dir.dirty := new_self_meta.dirty || nested_c_hit
   new_self_dir.state := new_self_meta.state
   new_self_dir.clientStates := new_self_meta.clientStates
   new_self_dir.prefetch.foreach(_ := self_meta.prefetch.get || prefetch_miss)
@@ -504,8 +508,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       meta_reg.self.clientStates.foreach(_ := INVALID)
     }
   }
-  val nested_c_hit_reg = RegInit(false.B)
-  val nested_c_hit = WireInit(nested_c_hit_reg)
+
   when (meta_valid && !self_meta.hit && req.fromA &&
     io.nestedwb.set === req.set && io.nestedwb.c_set_hit
   ) {
