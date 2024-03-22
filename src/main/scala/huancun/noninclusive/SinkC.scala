@@ -10,20 +10,20 @@ import utility.MemReqSource
 class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   val beats = blockBytes / beatBytes
-  val buffer = Reg(Vec(bufBlocks, Vec(beats, UInt((beatBytes * 8).W))))
-  val bufferTag = Reg(Vec(bufBlocks, UInt(tagBits.W)))
-  val bufferSet = Reg(Vec(bufBlocks, UInt(setBits.W)))
-  val bufferSetVals = RegInit(VecInit(Seq.fill(bufBlocks)(false.B)))
-  val beatValsSave = RegInit(VecInit(Seq.fill(bufBlocks) {
+  val buffer = Reg(Vec(sinkCbufBlocks, Vec(beats, UInt((beatBytes * 8).W))))
+  val bufferTag = Reg(Vec(sinkCbufBlocks, UInt(tagBits.W)))
+  val bufferSet = Reg(Vec(sinkCbufBlocks, UInt(setBits.W)))
+  val bufferSetVals = RegInit(VecInit(Seq.fill(sinkCbufBlocks)(false.B)))
+  val beatValsSave = RegInit(VecInit(Seq.fill(sinkCbufBlocks) {
     VecInit(Seq.fill(beats) { false.B })
   }))
-  val beatValsThrough = RegInit(VecInit(Seq.fill(bufBlocks) {
+  val beatValsThrough = RegInit(VecInit(Seq.fill(sinkCbufBlocks) {
     VecInit(Seq.fill(beats) { false.B })
   }))
-  val beatVals = VecInit(Seq.fill(bufBlocks) {
+  val beatVals = VecInit(Seq.fill(sinkCbufBlocks) {
     VecInit(Seq.fill(beats) { false.B })
   })
-  val beatValsTimer = RegInit(VecInit(Seq.fill(bufBlocks)(0.U(16.W))))
+  val beatValsTimer = RegInit(VecInit(Seq.fill(sinkCbufBlocks)(0.U(16.W))))
   beatVals.zipWithIndex.map {
     case (b, i) =>
       b.zip(beatValsSave(i).zip(beatValsThrough(i))).map {
@@ -91,7 +91,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val task = io.task.bits
   val task_r = RegEnable(io.task.bits, io.task.fire)
   val busy = RegInit(false.B) // busy also serve as task_r.valid
-  val setMatchVec = RegInit(0.U(bufBlocks.W))
+  val setMatchVec = RegInit(0.U(sinkCbufBlocks.W))
 
   // buffer write
   when(c.fire && hasData) {
