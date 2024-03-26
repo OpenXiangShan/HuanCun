@@ -244,9 +244,15 @@ class TPmetaReq extends Bundle {
   val way = UInt(4.W)
   val wmode = Bool()
   val rawData = Vec(16, UInt((36-6).W))
+  val compressedData = UInt(512.W)
+  val mode = UInt(3.W)
+  val trigger = UInt(36.W)
 }
 
 class TPmetaResp extends Bundle {
   val hartid = UInt(4.W)
   val rawData = Vec(16, UInt((36-6).W))
+  val compressedData = UInt(512.W)
+  val mode = UInt(3.W)
+  val trigger = UInt(36.W)
 }
