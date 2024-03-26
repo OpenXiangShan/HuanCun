@@ -136,7 +136,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // When replacing a block in data array, it is not always necessary to send Release,
   // but only when state perm > clientStates' perm or replacing a dirty block
   val replace_clients_perm = ParallelMax(self_meta.clientStates)
-  val replace_need_release = self_meta.state > replace_clients_perm || self_meta.dirty && isT(self_meta.state)
+  val replace_need_release = self_meta.state > replace_clients_perm || self_meta.dirty && (self_meta.state === BRANCH || self_meta.state === TIP)
   val replace_param = MuxLookup(
     Cat(self_meta.state, replace_clients_perm),
     TtoB)(
@@ -191,6 +191,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val probeAckDataSave = RegInit(false.B)
 
   val someClientHasProbeAckData = RegInit(false.B)
+
+  // has been nested C
+  val nested_c_hit_reg = RegInit(false.B)
+  val nested_c_hit = WireInit(nested_c_hit_reg)
 
   // Which clients should be probed?
   // a req:
@@ -444,7 +448,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   val new_clients_dir = Wire(Vec(clientBits, new ClientDirEntry))
   val new_self_dir = Wire(new SelfDirEntry)
-  new_self_dir.dirty := new_self_meta.dirty
+  new_self_dir.dirty := new_self_meta.dirty || nested_c_hit
   new_self_dir.state := new_self_meta.state
   new_self_dir.clientStates := new_self_meta.clientStates
   new_self_dir.prefetch.foreach(_ := self_meta.prefetch.get || prefetch_miss)
@@ -504,8 +508,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
       meta_reg.self.clientStates.foreach(_ := INVALID)
     }
   }
-  val nested_c_hit_reg = RegInit(false.B)
-  val nested_c_hit = WireInit(nested_c_hit_reg)
+
   when (meta_valid && !self_meta.hit && req.fromA &&
     io.nestedwb.set === req.set && io.nestedwb.c_set_hit
   ) {
