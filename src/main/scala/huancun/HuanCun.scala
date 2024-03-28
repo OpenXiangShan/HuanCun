@@ -68,6 +68,8 @@ trait HasHuanCunParameters {
 
   val bufBlocks = mshrs / 2
   val bufIdxBits = log2Ceil(bufBlocks)
+  val sinkCbufBlocks = mshrsAll // sinkC buffer require more blocks to avoid deadlock
+  require(sinkCbufBlocks >= bufBlocks, "sinkCbufBlocks should bigger than bufBlocks")
 
   val alwaysReleaseData = cacheParams.alwaysReleaseData
 
