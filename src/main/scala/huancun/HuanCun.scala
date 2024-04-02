@@ -103,6 +103,8 @@ trait HasHuanCunParameters {
 
   lazy val outerSinkBits = edgeOut.bundle.sinkBits
 
+  lazy val hartIdLen: Int = log2Up(cacheParams.hartIds.length)
+
   val block_granularity = if (!cacheParams.inclusive && cacheParams.clientCaches.nonEmpty) {
     cacheParams.clientCaches.head.blockGranularity
   } else setBits

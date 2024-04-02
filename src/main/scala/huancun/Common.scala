@@ -237,16 +237,16 @@ class PrefetchRecv extends Bundle {
   val l2_pf_en = Bool()
 }
 
-class TPmetaReq extends Bundle {
+class TPmetaReq(implicit p: Parameters) extends HuanCunBundle {
   // FIXME: parameterize the hard code
-  val hartid = UInt(4.W) // max 16 harts
+  val hartid = UInt(hartIdLen.W)
   val set = UInt(32.W)
   val way = UInt(4.W)
   val wmode = Bool()
   val rawData = Vec(16, UInt((36-6).W))
 }
 
-class TPmetaResp extends Bundle {
-  val hartid = UInt(4.W)
+class TPmetaResp(implicit p: Parameters) extends HuanCunBundle {
+  val hartid = UInt(hartIdLen.W)
   val rawData = Vec(16, UInt((36-6).W))
 }
