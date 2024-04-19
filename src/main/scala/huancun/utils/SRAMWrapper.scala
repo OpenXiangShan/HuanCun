@@ -3,17 +3,7 @@ package huancun.utils
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.Pow2ClockDivider
-
-class STD_CLKGT_func extends BlackBox with HasBlackBoxResource {
-  val io = IO(new Bundle {
-    val TE = Input(Bool())
-    val E  = Input(Bool())
-    val CK = Input(Clock())
-    val Q  = Output(Clock())
-  })
-
-  addResource("/STD_CLKGT_func.v")
-}
+import utility.ClockGate
 
 class SRAMWrapper[T <: Data]
 (
@@ -41,7 +31,7 @@ class SRAMWrapper[T <: Data]
       gen, innerSet, 1, singlePort = true, input_clk_div_by_2 = clk_div_by_2
     ))
 
-    val clkGate = Module(new STD_CLKGT_func)
+    val clkGate = Module(new ClockGate)
     val clk_en = RegInit(false.B)
     clk_en := ~clk_en
     clkGate.io.TE := false.B
