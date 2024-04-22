@@ -3,7 +3,7 @@ package huancun.utils
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.Pow2ClockDivider
-import utility.{ClockGate}
+import utility.ClockGate
 
 class SRAMWrapper[T <: Data]
 (
