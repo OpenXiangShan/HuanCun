@@ -3,7 +3,7 @@ package huancun.utils
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.Pow2ClockDivider
-import utility.ClockGate
+import utility.{ClockGate}
 
 class SRAMWrapper[T <: Data]
 (
@@ -31,13 +31,9 @@ class SRAMWrapper[T <: Data]
       gen, innerSet, 1, singlePort = true, input_clk_div_by_2 = clk_div_by_2
     ))
 
-    val clkGate = Module(new ClockGate)
     val clk_en = RegInit(false.B)
     clk_en := ~clk_en
-    clkGate.io.TE := false.B
-    clkGate.io.E := clk_en
-    clkGate.io.CK := clock
-    val masked_clock = clkGate.io.Q
+    val masked_clock = ClockGate(false.B, clk_en, clock)
 
     if (clk_div_by_2) {
       sram.clock := masked_clock

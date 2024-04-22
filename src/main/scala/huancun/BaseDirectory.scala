@@ -26,8 +26,7 @@ import chisel3.util.random.LFSR
 import freechips.rocketchip.tilelink.TLMessages
 import freechips.rocketchip.util.{Pow2ClockDivider, ReplacementPolicy}
 import huancun.utils._
-import utility.{Code}
-import utility.ClockGate
+import utility.{ClockGate, Code}
 
 trait BaseDirResult extends HuanCunBundle {
   val idOH = UInt(mshrsAll.W) // which mshr the result should be sent to
@@ -107,13 +106,9 @@ class SubDirectory[T <: Data](
   val resetIdx = RegInit((sets - 1).U)
   val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
 
-  val clkGate = Module(new ClockGate)
   val clk_en = RegInit(false.B)
   clk_en := ~clk_en
-  clkGate.io.TE := false.B
-  clkGate.io.E := clk_en
-  clkGate.io.CK := clock
-  val masked_clock = clkGate.io.Q
+  val masked_clock = ClockGate(false.B, clk_en, clock)
 
   val tag_wen = io.tag_w.valid
   val dir_wen = io.dir_w.valid
