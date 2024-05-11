@@ -23,6 +23,7 @@ import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.diplomacy._
+import freechips.rocketchip.tile.MaxHartIdBits
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
@@ -103,7 +104,7 @@ trait HasHuanCunParameters {
 
   lazy val outerSinkBits = edgeOut.bundle.sinkBits
 
-  lazy val hartIdLen: Int = log2Up(cacheParams.hartIds.length)
+  lazy val hartIdLen: Int = p(MaxHartIdBits)
 
   val block_granularity = if (!cacheParams.inclusive && cacheParams.clientCaches.nonEmpty) {
     cacheParams.clientCaches.head.blockGranularity
