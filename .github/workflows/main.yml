@@ -50,7 +50,7 @@ jobs:
 
       - name: Unit test
         run: |
-            git clone https://github.com/OpenXiangShan/tl-test
+            git clone https://github.com/OpenXiangShan/tl-test -b huancun
             make test-top-l2
             cd ./tl-test
             mkdir build && cd build
@@ -92,7 +92,7 @@ jobs:
 
       - name: Unit test
         run: |
-          git clone https://github.com/OpenXiangShan/tl-test
+          git clone https://github.com/OpenXiangShan/tl-test -b huancun
           make test-top-l2l3
           cd ./tl-test
           mkdir build && cd build
