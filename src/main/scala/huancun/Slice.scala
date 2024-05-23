@@ -212,6 +212,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io_c_status.way := c_mshr.io.status.bits.way
       mshr.io_c_status.nestedReleaseData :=
         c_mshr.io.status.valid && non_inclusive(c_mshr).io_is_nestedReleaseData
+      mshr.io_c_status.metaValid := non_inclusive(c_mshr).io_metaValid
+      mshr.io_c_status.reqDirty := non_inclusive(c_mshr).io_reqDirty
       mshr.io_b_status.set := bc_mshr.io.status.bits.set
       mshr.io_b_status.tag := bc_mshr.io.status.bits.tag
       mshr.io_b_status.way := bc_mshr.io.status.bits.way
@@ -231,6 +233,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io_c_status.way := c_mshr.io.status.bits.way
       mshr.io_c_status.nestedReleaseData :=
         c_mshr.io.status.valid && non_inclusive(c_mshr).io_is_nestedReleaseData
+      mshr.io_c_status.metaValid := non_inclusive(c_mshr).io_metaValid
+      mshr.io_c_status.reqDirty := non_inclusive(c_mshr).io_reqDirty
       mshr.io_b_status.set := 0.U
       mshr.io_b_status.tag := 0.U
       mshr.io_b_status.way := 0.U
@@ -246,6 +250,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       mshr.io_c_status.tag := 0.U
       mshr.io_c_status.way := 0.U
       mshr.io_c_status.nestedReleaseData := false.B
+      mshr.io_c_status.metaValid := false.B
+      mshr.io_c_status.reqDirty := false.B
       mshr.io_b_status.set := 0.U
       mshr.io_b_status.tag := 0.U
       mshr.io_b_status.way := 0.U

@@ -18,6 +18,8 @@ class C_Status(implicit p: Parameters) extends HuanCunBundle {
   val way = Input(UInt(wayBits.W))
   val nestedReleaseData = Input(Bool())
   val releaseThrough = Output(Bool())
+  val metaValid = Input(Bool())
+  val reqDirty = Input(Bool())
 }
 
 class B_Status(implicit p: Parameters) extends HuanCunBundle {
@@ -49,6 +51,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val io_is_nestedReleaseData = IO(Output(Bool()))
   val io_is_nestedProbeAckData = IO(Output(Bool()))
   val io_probeHelperFinish = IO(Output(Bool()))
+  val io_metaValid = IO(Output(Bool()))
+  val io_reqDirty = IO(Output(Bool()))
 
   val req = Reg(new MSHRRequest)
   val req_valid = RegInit(false.B)
@@ -558,6 +562,10 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val w_sinkcack = RegInit(true.B)
 
   val acquire_flag = RegInit(false.B)
+  val nestC_save_flag = RegInit(false.B)
+  val nestC_saveDirty_flag = RegInit(false.B)
+  val nestC_save = WireInit(false.B)
+  val nestC_saveDirty = WireInit(false.B)
 
   def reset_all_flags(): Unit = {
     // Default value
@@ -600,6 +608,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     acquire_flag := false.B
     a_do_release := false.B
     a_do_probe := false.B
+    nestC_save_flag := false.B
+    nestC_saveDirty_flag := false.B
   }
   when(!s_acquire) { acquire_flag := acquire_flag | true.B }
 
@@ -1134,7 +1144,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
 
   od.sinkId := io.id
   od.useBypass := (!self_meta.hit || self_meta.state === BRANCH && req_needT) &&
-    (!probe_dirty || acquire_flag && oa.opcode =/= AcquirePerm) &&
+    (!probe_dirty && !nestC_save || acquire_flag && oa.opcode =/= AcquirePerm) &&
     !(meta_reg.self.error || meta_reg.clients.error) && !req_put
   od.sourceId := req.source
   od.set := req.set
@@ -1172,8 +1182,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req_acquire,
     Mux(
       self_meta.hit,
-      Mux(req.param === NtoB && !req_promoteT, false.B, self_meta.dirty || probe_dirty || gotDirty),
-      gotDirty || probe_dirty
+      Mux(req.param === NtoB && !req_promoteT, false.B, self_meta.dirty || probe_dirty || gotDirty || nestC_saveDirty),
+      gotDirty || probe_dirty || nestC_saveDirty
     ),
     false.B
   )
@@ -1351,7 +1361,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     probe_dirty := probe_dirty || resp.hasData || nested_c_hit
     when (
       !acquire_flag && req.fromA &&
-        probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit
+        probeack_last && resp.last && !resp.hasData && !nested_c_hit && !self_meta.hit && !nestC_save
     ) {
       when(acquireperm_alias && !req_client_meta.hit) {
         printf("BUG_REPRODUCE: nested acquire perm alias\n")
@@ -1506,6 +1516,8 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   // B nest A (B -> A)
   io_is_nestedProbeAckData := req.fromB /*&& clients_hit*/ && req_valid
   io_probeHelperFinish := req.fromB && req.fromProbeHelper && no_schedule && no_wait
+  io_metaValid := meta_valid || io.dirResult.valid
+  io_reqDirty := req.dirty && req_valid
 
   // C nest A/B (A/B -> C)
   val nest_c_set_match = io_c_status.set === req.set
@@ -1533,4 +1545,23 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     req.fromA && (preferCache_latch || self_meta.hit) && !acquirePermMiss
 
   val read_miss = !self_meta.hit || self_meta.state === INVALID
+
+  val nestedReleaseDataSave = req_valid &&
+    io_c_status.nestedReleaseData &&
+    nest_c_set_match && nest_c_tag_match &&
+    (nest_c_way_match && io_c_status.metaValid) &&
+    ~a_c_through
+
+  val nestedReleaseDirtyDataSave = nestedReleaseDataSave && io_c_status.reqDirty
+
+  when(nestedReleaseDataSave) {
+    nestC_save_flag := true.B
+  }
+
+  when(nestedReleaseDirtyDataSave) {
+    nestC_saveDirty_flag := true.B
+  }
+
+  nestC_save := nestC_save_flag || nestedReleaseDataSave
+  nestC_saveDirty := nestC_saveDirty_flag || nestedReleaseDirtyDataSave
 }
