@@ -558,12 +558,22 @@ class SRAMTemplate[T <: Data]
 
     /** ***********************************mbist rdata output************************************************* */
     val nodeSelected = myArrayIds.map(_.U === mbistArray)
-    val rdataInUIntHold = RegEnable(rdata.asUInt, 0.U, mbistSelected(0) && RegNext(toSRAMRen | needBypass, false.B))
-    val rdataFitToNodes = Seq.tabulate(myNodeNum)(idx => {
-      val highIdx = Seq(idx * myDataWidth + myDataWidth - 1, rdata.getWidth - 1).min
-      rdataInUIntHold(highIdx, idx * myDataWidth)
-    })
-    myMbistBundle.rdata := ParallelMux(nodeSelected zip rdataFitToNodes)
+    if (clk_div_by_2) {
+      val REN_ECO_REG = RegNext(toSRAMRen | needBypass, false.B)
+      val rdataInUIntHold = RegEnable(rdata.asUInt, 0.U, mbistSelected(0) && RegNext(REN_ECO_REG, false.B))
+      val rdataFitToNodes = Seq.tabulate(myNodeNum)(idx => {
+        val highIdx = Seq(idx * myDataWidth + myDataWidth - 1, rdata.getWidth - 1).min
+        rdataInUIntHold(highIdx, idx * myDataWidth)
+      })
+      myMbistBundle.rdata := ParallelMux(nodeSelected zip rdataFitToNodes)
+    } else {
+      val rdataInUIntHold = RegEnable(rdata.asUInt, 0.U, mbistSelected(0) && RegNext(toSRAMRen | needBypass, false.B))
+      val rdataFitToNodes = Seq.tabulate(myNodeNum)(idx => {
+        val highIdx = Seq(idx * myDataWidth + myDataWidth - 1, rdata.getWidth - 1).min
+        rdataInUIntHold(highIdx, idx * myDataWidth)
+      })
+      myMbistBundle.rdata := ParallelMux(nodeSelected zip rdataFitToNodes)
+    }
 
     /** ****************************************************************************************************** */
   }
