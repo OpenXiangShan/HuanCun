@@ -22,7 +22,7 @@ package huancun
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.utils.{SRAMWrapper, XSPerfAccumulate}
+import huancun.utils.SRAMWrapper
 import utility._
 
 class DataStorage(implicit p: Parameters) extends HuanCunModule {
@@ -264,7 +264,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val debug_stack_used = PopCount(bank_en.grouped(stackSize).toList.map(seq => Cat(seq).orR))
 
   for (i <- 1 to nrStacks) {
-    XSPerfAccumulate(cacheParams, s"DS_${i}_stacks_used", debug_stack_used === i.U)
+    XSPerfAccumulate(s"DS_${i}_stacks_used", debug_stack_used === i.U)
   }
 
 }

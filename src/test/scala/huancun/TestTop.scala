@@ -2,7 +2,7 @@ package huancun
 
 import chisel3._
 import chisel3.util._
-import utility.{TLClientsMerger, ChiselDB, FileRegisters, TLLogger}
+import utility._
 import huancun.debug._
 import org.chipsalliance.cde.config._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
@@ -54,7 +54,18 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
   val l1d_l2_tllog_nodes = (0 until 2) map(i => TLLogger(s"L1D_L2_$i"))
   val master_nodes = l1d_nodes
 
-  val l2 = LazyModule(new HuanCun())
+  val l2 = LazyModule(new HuanCun()(p.alter((site, here, up) => {
+    case LogUtilsOptionsKey => LogUtilsOptions(
+      here(HCCacheParamsKey).enableDebug,
+      here(HCCacheParamsKey).enablePerf,
+      here(HCCacheParamsKey).FPGAPlatform
+    )
+    case PerfCounterOptionsKey => PerfCounterOptions(
+      here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
+      false,
+      0
+    )
+  })))
   val xbar = TLXbar()
   val ram = LazyModule(new TLRAM(AddressSet(0, 0xffffL), beatBytes = 32))
 
@@ -147,7 +158,18 @@ class TestTop_L2_Standalone()(implicit p: Parameters) extends LazyModule {
   val l1d_l2_tllog_nodes = (0 until 2) map(i => TLLogger(s"L1D_L2_$i"))
   val master_nodes = l1d_nodes
 
-  val l2 = LazyModule(new HuanCun())
+  val l2 = LazyModule(new HuanCun()(p.alter((site, here, up) => {
+    case LogUtilsOptionsKey => LogUtilsOptions(
+      here(HCCacheParamsKey).enableDebug,
+      here(HCCacheParamsKey).enablePerf,
+      here(HCCacheParamsKey).FPGAPlatform
+    )
+    case PerfCounterOptionsKey => PerfCounterOptions(
+      here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
+      false,
+      0
+    )
+  })))
   val xbar = TLXbar()
   val l3 = createManagerNode("Fake_L3", 16)
 
@@ -218,7 +240,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
   val l2_l3_tllog_nodes = (0 until 2) map(i => TLLogger(s"L2_L3_$i"))
   val master_nodes = l1d_nodes
 
-  val l2_nodes = (0 until 2) map( i => LazyModule(new HuanCun()(new Config((_, _, _) => {
+  val l2_nodes = (0 until 2) map( i => LazyModule(new HuanCun()(new Config((site, here, up) => {
     case HCCacheParamsKey => HCCacheParameters(
       name = s"L2",
       level = 2,
@@ -229,9 +251,19 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       echoField = Seq(DirtyField()),
       respKey = Seq(IsHitKey)
     )
+    case LogUtilsOptionsKey => LogUtilsOptions(
+      here(HCCacheParamsKey).enableDebug,
+      here(HCCacheParamsKey).enablePerf,
+      here(HCCacheParamsKey).FPGAPlatform
+    )
+    case PerfCounterOptionsKey => PerfCounterOptions(
+      here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
+      false,
+      i
+    )
   }))).node)
 
-  val l3 = LazyModule(new HuanCun()(new Config((_, _, _) => {
+  val l3 = LazyModule(new HuanCun()(new Config((site, here, up) => {
     case HCCacheParamsKey => HCCacheParameters(
       name = "L3",
       level = 3,
@@ -240,6 +272,16 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
       echoField = Seq(DirtyField()),
       respField  = Seq(IsHitField()),
       simulation = true
+    )
+    case LogUtilsOptionsKey => LogUtilsOptions(
+      here(HCCacheParamsKey).enableDebug,
+      here(HCCacheParamsKey).enablePerf,
+      here(HCCacheParamsKey).FPGAPlatform
+    )
+    case PerfCounterOptionsKey => PerfCounterOptions(
+      here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
+      false,
+      0
     )
   })))
 
@@ -335,7 +377,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
     clientNode
   }
 
-  val l2_nodes = (0 until nrL2) map (i => LazyModule(new HuanCun()(new Config((_, _, _) => {
+  val l2_nodes = (0 until nrL2) map (i => LazyModule(new HuanCun()(new Config((site, here, up) => {
     case HCCacheParamsKey => HCCacheParameters(
       name = "L2",
       level = 2,
@@ -351,9 +393,19 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
       sramDepthDiv = 2,
       simulation = true
     )
+    case LogUtilsOptionsKey => LogUtilsOptions(
+      here(HCCacheParamsKey).enableDebug,
+      here(HCCacheParamsKey).enablePerf,
+      here(HCCacheParamsKey).FPGAPlatform
+    )
+    case PerfCounterOptionsKey => PerfCounterOptions(
+      here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
+      false,
+      i
+    )
   }))).node)
 
-  val l3 = LazyModule(new HuanCun()(new Config((_, _, _) => {
+  val l3 = LazyModule(new HuanCun()(new Config((site, here, up) => {
     case HCCacheParamsKey => HCCacheParameters(
       name = "L3",
       level = 3,
@@ -364,6 +416,16 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
       sramClkDivBy2 = true,
       sramDepthDiv = 4,
       simulation = true,
+    )
+    case LogUtilsOptionsKey => LogUtilsOptions(
+      here(HCCacheParamsKey).enableDebug,
+      here(HCCacheParamsKey).enablePerf,
+      here(HCCacheParamsKey).FPGAPlatform
+    )
+    case PerfCounterOptionsKey => PerfCounterOptions(
+      here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
+      false,
+      0
     )
   })))
 

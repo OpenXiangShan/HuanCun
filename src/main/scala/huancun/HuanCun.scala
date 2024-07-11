@@ -28,7 +28,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.prefetch._
-import utils.{ResetGen, XSPerfAccumulate}
+import utils.ResetGen
 import utility.{Pipeline, FastArbiter}
 import huancun.noninclusive.MSHR
 
