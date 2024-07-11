@@ -4,8 +4,7 @@ import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import huancun.noninclusive.DirResult
-import huancun.utils.{XSPerfAccumulate, XSPerfHistogram}
-import utility.MemReqSource
+import utility.{MemReqSource, XSPerfAccumulate, XSPerfHistogram}
 
 class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
   val banks = 1 << bankBits
@@ -36,7 +35,7 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
     }
 
     addrMatch := Cat(addrMatchVec.flatten).orR
-    XSPerfAccumulate(cacheParams, s"${cacheParams.name}MissMatch_${hartId}", addrMatch)
+    XSPerfAccumulate(s"${cacheParams.name}MissMatch_${hartId}", addrMatch)
   }
 
   /* ====== PART TWO ======
@@ -56,16 +55,16 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
   // val missVecAll      = allMSHRMatchVec(s => s.fromA && s.is_miss)
 
   val totalMSHRs = banks * mshrsAll
-  XSPerfHistogram(cacheParams, "parallel_misses_CPU" , PopCount(missVecCPU), true.B, 0, totalMSHRs, 1)
-  XSPerfHistogram(cacheParams, "parallel_misses_Pref", PopCount(missVecPref), true.B, 0, totalMSHRs, 1)
-  XSPerfHistogram(cacheParams, "parallel_misses_All" , PopCount(missVecCPU)+PopCount(missVecPref), true.B, 0, 32, 1)
+  XSPerfHistogram("parallel_misses_CPU" , PopCount(missVecCPU), true.B, 0, totalMSHRs, 1)
+  XSPerfHistogram("parallel_misses_Pref", PopCount(missVecPref), true.B, 0, totalMSHRs, 1)
+  XSPerfHistogram("parallel_misses_All" , PopCount(missVecCPU)+PopCount(missVecPref), true.B, 0, 32, 1)
 
   /* ====== PART THREE ======
  * Distinguish req sources and count num & miss
  */
   // count releases
   val releaseCnt = allMSHRMatchVec(s => s.will_free && s.fromC)
-  XSPerfAccumulate(cacheParams, s"${cacheParams.name}C_ReleaseCnt_Total", PopCount(releaseCnt))
+  XSPerfAccumulate(s"${cacheParams.name}C_ReleaseCnt_Total", PopCount(releaseCnt))
 
   // we can follow the counting logic of Directory to count
   // add reqSource in replacerInfo, set in MSHRAlloc, passes in Directory and get the result in DirResult
@@ -81,7 +80,7 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
     val sourceMatchVecMiss = dirResultMatchVec(r => r.replacerInfo.reqSource === i.U && !r.self.hit)
 
     val sourceName = MemReqSource.apply(i).toString
-    XSPerfAccumulate(cacheParams, s"E2_${cacheParams.name}AReqSource_${sourceName}_Total", PopCount(sourceMatchVec))
-    XSPerfAccumulate(cacheParams, s"E2_${cacheParams.name}AReqSource_${sourceName}_Miss", PopCount(sourceMatchVecMiss))
+    XSPerfAccumulate(s"E2_${cacheParams.name}AReqSource_${sourceName}_Total", PopCount(sourceMatchVec))
+    XSPerfAccumulate(s"E2_${cacheParams.name}AReqSource_${sourceName}_Miss", PopCount(sourceMatchVecMiss))
   }
 }
