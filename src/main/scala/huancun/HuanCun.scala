@@ -246,7 +246,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     BundleBridgeNexusNode[DecoupledIO[TPmetaReq]]()
   )
   val tpmeta_send_node = tpmetaOpt.map(_ =>
-    BundleBridgeSource(() => ValidIO(new TPmetaResp))
+    BundleBridgeSource[ValidIO[TPmetaResp]]()
   )
 
   lazy val module = new HuanCunImp(this)
@@ -327,7 +327,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     wrapper.tpmeta_recv_node match {
       case Some(x) =>
         // tpmeta.get.io.req <> x.in.head._1
-        val arb = Module(new FastArbiter(new TPmetaReq, x.in.size))
+        val arb = Module(new FastArbiter(new TPmetaReq(hartIdLen, wrapper.node.out.head._2.bundle.addressBits, offsetBits), x.in.size))
         for ((arb, req) <- arb.io.in.zip(x.in)) {
           arb <> req._1
         }
