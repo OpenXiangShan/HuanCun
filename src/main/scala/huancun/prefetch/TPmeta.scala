@@ -25,12 +25,12 @@ import utility._
 
 
 class TPmetaIO(implicit p: Parameters) extends TPmetaBundle {
-  val req = Flipped(DecoupledIO(new TPmetaReq))
-  val resp = ValidIO(new TPmetaResp)
+  val req = Flipped(DecoupledIO(new TPmetaReq(hartIdLen, fullAddressBits, offsetBits)))
+  val resp = ValidIO(new TPmetaResp(hartIdLen, fullAddressBits, offsetBits))
 }
 
 class metaEntry(implicit p:Parameters) extends TPmetaBundle {
-  val rawData = Vec(16, UInt((36-6).W))
+  val rawData = Vec(log2Floor(512 / (fullAddressBits - offsetBits)), UInt((fullAddressBits - offsetBits).W))
   val hartid = UInt(hartIdLen.W)
   // TODO: val compressedData = UInt(512.W)
 }
