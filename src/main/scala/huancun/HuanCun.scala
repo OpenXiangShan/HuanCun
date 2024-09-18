@@ -242,12 +242,15 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       Some(BundleBridgeSink(Some(() => new PrefetchRecv)))
     case _ => None
   }
+  /*
   val tpmeta_recv_node = tpmetaOpt.map(_ =>
     BundleBridgeNexusNode[DecoupledIO[TPmetaReq]]()
   )
   val tpmeta_send_node = tpmetaOpt.map(_ =>
     BundleBridgeSource(() => ValidIO(new TPmetaResp))
   )
+
+   */
 
   lazy val module = new HuanCunImp(this)
 
@@ -305,7 +308,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       out <> arbiter.io.out
     }
     val prefetcher = prefetchOpt.map(_ => Module(new Prefetcher()(pftParams)))
-    val tpmeta = tpmetaOpt.map(_ => Module(new TPmeta()(pftParams)))
+//    val tpmeta = tpmetaOpt.map(_ => Module(new TPmeta()(pftParams)))
     val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
@@ -324,6 +327,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         prefetcher.foreach(_.io.recv_addr := DontCare)
         prefetcher.foreach(_.io_l2_pf_en := DontCare)
     }
+    /*
     wrapper.tpmeta_recv_node match {
       case Some(x) =>
         // tpmeta.get.io.req <> x.in.head._1
@@ -340,6 +344,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         x.out.head._1 <> tpmeta.get.io.resp  // ValidIO[TPmetaResp]
       case None =>
     }
+
+     */
 
     def bank_eq(set: UInt, bankId: Int, bankBits: Int): Bool = {
       if(bankBits == 0) true.B else set(bankBits - 1, 0) === bankId.U
