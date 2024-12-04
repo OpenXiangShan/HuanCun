@@ -235,6 +235,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
+      val psetBits = Input(UInt(log2Ceil(setBits).W))
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -359,6 +360,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             }
         }
         io.perfEvents(i) := slice.perfinfo
+        slice.io.psetBits := io.psetBits
         slice
     }
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))

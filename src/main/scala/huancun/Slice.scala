@@ -36,6 +36,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
+    val psetBits = Input(UInt(log2Ceil(setBits).W))
   })
   println(s"clientBits: $clientBits")
 
@@ -380,7 +381,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   })
 
   // DSE parameters
-  directory.io.p
+  directory.io.psetBits := io.psetBits
 
   // Send tasks
 

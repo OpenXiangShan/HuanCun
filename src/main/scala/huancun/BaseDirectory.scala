@@ -50,7 +50,7 @@ abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrit
   val result:  Valid[T_RESULT]
   val dirWReq: DecoupledIO[T_DIR_W]
   val tagWReq:  DecoupledIO[T_TAG_W]
-  val psetBits:
+  val psetBits: UInt
 }
 
 abstract class BaseDirectory[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](

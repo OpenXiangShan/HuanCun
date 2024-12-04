@@ -40,6 +40,7 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Dir
   val result = ValidIO(new DirResult)
   val dirWReq = Flipped(DecoupledIO(new DirWrite))
   val tagWReq = Flipped(DecoupledIO(new TagWrite))
+  val psetBits = Input(UInt(log2Ceil(setBits).W))
 }
 
 class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite] {
@@ -70,6 +71,9 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
       replacement = cacheParams.replacement
     ) with UpdateOnAcquire
   )
+  // DSE parameters
+  dir.io.psetBits := io.psetBits
+
   val rport = dir.io.read
   val req = io.read
   rport.valid := req.valid
