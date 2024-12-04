@@ -379,6 +379,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     c.io.dir_result.bits := directory.io.result.bits
   })
 
+  // DSE parameters
+  directory.io.p
+
   // Send tasks
 
   def is_blocked(idx: Int): Bool = {

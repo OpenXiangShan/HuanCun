@@ -114,6 +114,7 @@ class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, Sel
   val tagWReq = Flipped(DecoupledIO(new SelfTagWrite))
   val clientDirWReq = Flipped(DecoupledIO(new ClientDirWrite))
   val clientTagWreq = Flipped(DecoupledIO(new ClientTagWrite))
+  val psetBits = Input(UInt(log2Ceil(setBits).W))
 }
 
 class Directory(implicit p: Parameters)
@@ -286,6 +287,10 @@ class Directory(implicit p: Parameters)
       s.alias.foreach(_ := dir.alias.get)
   }
   resp.bits.clients.tag_match := clientResp.bits.hit
+
+  // DSE parameters
+  selfDir.io.psetBits := io.psetBits
+  clientDir.io.psetBits := io.psetBits
 
   // Self Tag Write
   selfDir.io.tag_w.valid := io.tagWReq.valid

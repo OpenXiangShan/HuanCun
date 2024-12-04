@@ -50,6 +50,7 @@ abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrit
   val result:  Valid[T_RESULT]
   val dirWReq: DecoupledIO[T_DIR_W]
   val tagWReq:  DecoupledIO[T_TAG_W]
+  val psetBits:
 }
 
 abstract class BaseDirectory[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
@@ -98,7 +99,10 @@ class SubDirectory[T <: Data](
       val way = UInt(wayBits.W)
       val dir = dir_init.cloneType
     }))
+    val psetBits = Input(UInt(log2Ceil(setBits).W))
   })
+
+  val psetMask = (Fill(setBits, 1.U(1.W)) >> (setBits.U - io.psetBits)).asUInt
 
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val resetFinish = RegInit(false.B)
@@ -133,13 +137,13 @@ class SubDirectory[T <: Data](
     eccArray.io.w(
       io.tag_w.fire(),
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
-      io.tag_w.bits.set,
+      io.tag_w.bits.set & psetMask,
       UIntToOH(io.tag_w.bits.way)
     )
     if (clk_div_by_2) {
       eccArray.clock := masked_clock
     }
-    eccRead := eccArray.io.r(io.read.fire(), io.read.bits.set).resp.data
+    eccRead := eccArray.io.r(io.read.fire(), io.read.bits.set & psetMask).resp.data
   } else {
     eccRead.foreach(_ := 0.U)
   }
@@ -147,10 +151,10 @@ class SubDirectory[T <: Data](
   tagArray.io.w(
     io.tag_w.fire(),
     io.tag_w.bits.tag,
-    io.tag_w.bits.set,
+    io.tag_w.bits.set & psetMask,
     UIntToOH(io.tag_w.bits.way)
   )
-  tagRead := tagArray.io.r(io.read.fire(), io.read.bits.set).resp.data
+  tagRead := tagArray.io.r(io.read.fire(), io.read.bits.set & psetMask).resp.data
 
   if (clk_div_by_2) {
     metaArray.clock := masked_clock
@@ -176,16 +180,16 @@ class SubDirectory[T <: Data](
     0.U
   } else {
     val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, shouldReset = true))
-    val repl_sram_r = replacer_sram.io.r(io.read.fire(), io.read.bits.set).resp.data(0)
+    val repl_sram_r = replacer_sram.io.r(io.read.fire(), io.read.bits.set & psetMask).resp.data(0)
     val repl_state_hold = WireInit(0.U(repl.nBits.W))
     repl_state_hold := HoldUnless(repl_sram_r, RegNext(io.read.fire(), false.B))
     val next_state = repl.get_next_state(repl_state_hold, way_s1)
-    replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqReg.set), 1.U)
+    replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqReg.set & psetMask), 1.U)
     repl_state_hold
   }
 
   io.resp.valid := reqValidReg
-  val metas = metaArray.io.r(io.read.fire(), io.read.bits.set).resp.data
+  val metas = metaArray.io.r(io.read.fire(), io.read.bits.set & psetMask).resp.data
   val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
   val metaValidVec = metas.map(dir_hit_fn)
   val hitVec = tagMatchVec.zip(metaValidVec).map(x => x._1 && x._2)
@@ -222,7 +226,7 @@ class SubDirectory[T <: Data](
   metaArray.io.w(
     !resetFinish || dir_wen,
     Mux(resetFinish, io.dir_w.bits.dir, dir_init),
-    Mux(resetFinish, io.dir_w.bits.set, resetIdx),
+    Mux(resetFinish, io.dir_w.bits.set & psetMask, resetIdx),
     Mux(resetFinish, UIntToOH(io.dir_w.bits.way), Fill(ways, true.B))
   )
 

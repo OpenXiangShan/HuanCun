@@ -88,7 +88,7 @@ trait HasHuanCunParameters {
 
   // width params with bank idx (used in prefetcher / ctrl unit)
   lazy val fullAddressBits = edgeOut.bundle.addressBits
-  lazy val fullTagBits = fullAddressBits - setBits - offsetBits
+  lazy val fullTagBits = fullAddressBits - offsetBits
   // width params without bank idx (used in slice)
   lazy val addressBits = fullAddressBits - bankBits
   lazy val tagBits = fullTagBits - bankBits
