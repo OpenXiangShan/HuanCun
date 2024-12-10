@@ -18,7 +18,7 @@ jobs:
   # This workflow contains a single job called "build"
   tl-test_L2:
     # The type of runner that the job will run on
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -35,7 +35,7 @@ jobs:
         uses: coursier/cache-action@v5
 
       - name: Verilator
-        run: sudo apt install verilator libsqlite3-dev
+        run: sudo apt install verilator
 
       - name: Setup Mill
         uses: jodersky/setup-mill@v0.2.3
@@ -60,7 +60,7 @@ jobs:
 
   tl-test_L2L3:
     # The type of runner that the job will run on
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -77,7 +77,7 @@ jobs:
         uses: coursier/cache-action@v5
 
       - name: Verilator
-        run: sudo apt install verilator libsqlite3-dev
+        run: sudo apt install verilator
 
       - name: Setup Mill
         uses: jodersky/setup-mill@v0.2.3

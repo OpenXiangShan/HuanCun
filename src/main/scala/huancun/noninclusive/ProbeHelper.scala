@@ -5,7 +5,8 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink.{TLMessages, TLPermissions}
 import huancun.{HuanCunModule, MSHRRequest, MetaData}
-import utility.{MemReqSource, XSPerfAccumulate}
+import huancun.utils.XSPerfAccumulate
+import utility.MemReqSource
 
 class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
   extends HuanCunModule with HasClientInfo
@@ -64,7 +65,7 @@ class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
 
   io.probe <> queue.io.deq
 
-  XSPerfAccumulate("client_dir_conflict", queue.io.enq.fire)
+  XSPerfAccumulate(cacheParams, "client_dir_conflict", queue.io.enq.fire)
   //val perfinfo = IO(new Bundle(){
   //  val perfEvents = Output(new PerfEventsBundle(numPCntHcReqb))
   //})
