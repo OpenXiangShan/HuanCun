@@ -72,3 +72,29 @@ object ResetGen {
     resetReg.tail
   }
 }
+
+object RegNextN {
+  def apply[T <: Data](in: T, n: Int, initOpt: Option[T] = None): T = {
+    (0 until n).foldLeft(in){
+      (prev, _) =>
+        initOpt match {
+          case Some(init) => RegNext(prev, init)
+          case None => RegNext(prev)
+        }
+    }
+  }
+}
+
+object ValidIODelay {
+  def apply[T <: Data](in: Valid[T], n: Int = 1): Valid[T] = {
+    (0 until n).foldLeft(in){
+      (prev, _) =>
+        val v = RegNext(prev.valid, false.B)
+        val d = RegEnable(prev.bits, prev.valid)
+        val w = Wire(in.cloneType)
+        w.valid := v
+        w.bits := d
+        w
+    }
+  }
+}
