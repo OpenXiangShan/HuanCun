@@ -28,8 +28,8 @@ import freechips.rocketchip.tilelink._
 
 class MSHRSelector(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
-    val idle = Input(Vec(mshrs, Bool()))
-    val out = ValidIO(UInt(mshrs.W))
+    val idle = Input(Vec(mshrs_max, Bool()))
+    val out = ValidIO(UInt(mshrs_max.W))
   })
   io.out.valid := ParallelOR(io.idle)
   io.out.bits := ParallelPriorityMux(io.idle.zipWithIndex.map {
@@ -44,13 +44,13 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
     val b_req = Flipped(DecoupledIO(new MSHRRequest))
     val c_req = Flipped(DecoupledIO(new MSHRRequest))
     // From MSHRs
-    val status = Vec(mshrsAll, Flipped(ValidIO(new MSHRStatus)))
+    val status = Vec(mshrsAll_max, Flipped(ValidIO(new MSHRStatus)))
     // To MSHRs
-    val alloc = Vec(mshrsAll, ValidIO(new MSHRRequest))
+    val alloc = Vec(mshrsAll_max, ValidIO(new MSHRRequest))
     // To directory
     val dirRead = DecoupledIO(new DirRead)
-    val bc_mask = ValidIO(Vec(mshrsAll, Bool()))
-    val c_mask = ValidIO(Vec(mshrsAll, Bool()))
+    val bc_mask = ValidIO(Vec(mshrsAll_max, Bool()))
+    val c_mask = ValidIO(Vec(mshrsAll_max, Bool()))
 
   })
 
@@ -91,7 +91,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val conflict_b = b_match_vec.asUInt.orR
   val conflict_a = a_match_vec.asUInt.orR
 
-  val abc_mshr_status = io.status.init.init
+  val abc_mshr_status_max = io.status.init.init
   val bc_mshr_status = io.status.init.last
   val c_mshr_status = io.status.last
 
@@ -107,7 +107,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val nestB = may_nestB && !bc_mshr_status.valid && !c_mshr_status.valid
 
   val dirRead = io.dirRead
-  val mshrFree = Cat(abc_mshr_status.map(s => !s.valid)).orR
+  val mshrFree = Cat(io.status.zipWithIndex.map{case (s, i) => (i.U < dynParam.mshrs) && !s.valid}).orR
 
   //val can_accept_c = (mshrFree && !conflict_c) || nestC
   val can_accept_c = (!conflict_c && (mshrFree || !c_mshr_status.valid)) || nestC
@@ -131,7 +131,8 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   io.a_req.ready := dirRead.ready && can_accept_a
 
   val mshrSelector = Module(new MSHRSelector())
-  mshrSelector.io.idle := abc_mshr_status.map(s => !s.valid)
+  mshrSelector.io.idle := abc_mshr_status_max.zipWithIndex.map{case (s, i) => (i.U < dynParam.mshrs) && !s.valid}
+  mshrSelector.dynParam := dynParam
   val selectedMSHROH = mshrSelector.io.out.bits
   for ((mshr, i) <- abc_mshr_alloc.zipWithIndex) {
     mshr.valid := (
@@ -166,7 +167,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   dirRead.bits.idOH := Cat(
     nestC_valid || tmpC_valid,
     nestB_valid || tmpB_valid,
-    Mux(nestC_valid || tmpC_valid || nestB_valid || tmpB_valid, 0.U(mshrs.W), selectedMSHROH)
+    Mux(nestC_valid || tmpC_valid || nestB_valid || tmpB_valid, 0.U(mshrs_max.W), selectedMSHROH)
   )
   dirRead.bits.replacerInfo.channel := request.bits.channel
   dirRead.bits.replacerInfo.opcode := request.bits.opcode
@@ -180,7 +181,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   }
 
   if (cacheParams.enablePerf) {
-    val mshrCnt = RegInit(VecInit(Seq.fill(mshrsAll)(0.U(16.W))))
+    val mshrCnt = RegInit(VecInit(Seq.fill(mshrsAll_max)(0.U(16.W))))
     for ((cnt, i) <- mshrCnt.zipWithIndex) {
       when(!cntStart) {
         cnt := 0.U
@@ -204,7 +205,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   ))
 
   XSPerfAccumulate(cacheParams, "nrWorkingABCmshr", PopCount(io.status.init.init.map(_.valid)))
-  XSPerfAccumulate(cacheParams, "nrWorkingBmshr", io.status.take(mshrs+1).last.valid)
+  XSPerfAccumulate(cacheParams, "nrWorkingBmshr", io.status.take(mshrs_max+1).last.valid)
   XSPerfAccumulate(cacheParams, "nrWorkingCmshr", io.status.last.valid)
   XSPerfAccumulate(cacheParams, "conflictA", io.a_req.valid && conflict_a)
   XSPerfAccumulate(cacheParams, "conflictByPrefetch", io.a_req.valid && Cat(pretch_block_vec).orR)
@@ -216,7 +217,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val perfinfo = IO(Output(Vec(numPCntHcMSHR, (UInt(6.W)))))
   val perfEvents = Seq(
     ("nrWorkingABCmshr    ", PopCount(io.status.init.init.map(_.valid)) ),
-    ("nrWorkingBmshr      ", io.status.take(mshrs+1).last.valid         ),
+    ("nrWorkingBmshr      ", io.status.take(mshrs_max+1).last.valid),
     ("nrWorkingCmshr      ", io.status.last.valid                       ),
     ("conflictA           ", io.a_req.valid && conflict_a               ),
     ("conflictByPrefetch  ", io.a_req.valid && Cat(pretch_block_vec).orR),

@@ -29,13 +29,13 @@ import huancun.utils._
 import utility.{ClockGate, Code}
 
 trait BaseDirResult extends HuanCunBundle {
-  val idOH = UInt(mshrsAll.W) // which mshr the result should be sent to
+  val idOH = UInt(mshrsAll_max.W) // which mshr the result should be sent to
 }
 trait BaseDirWrite extends HuanCunBundle
 trait BaseTagWrite extends HuanCunBundle
 
 class DirRead(implicit p: Parameters) extends HuanCunBundle {
-  val idOH = UInt(mshrsAll.W)
+  val idOH = UInt(mshrsAll_max.W)
   val tag = UInt(tagBits.W)
   val set = UInt(setBits.W)
   val replacerInfo = new ReplacerInfo()

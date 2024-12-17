@@ -11,7 +11,7 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
   val banks = 1 << bankBits
   val io = IO(new Bundle() {
     val dirResult = Vec(banks, Flipped(ValidIO(new DirResult)))
-    val msStatus = Vec(banks, Vec(mshrsAll, Flipped(ValidIO(new MSHRStatus))))
+    val msStatus = Vec(banks, Vec(mshrsAll_max, Flipped(ValidIO(new MSHRStatus))))
     val debugTopDown = new Bundle {
       val robHeadPaddr = Vec(cacheParams.hartIds.length, Flipped(Valid(UInt(36.W))))
       val addrMatch = Vec(cacheParams.hartIds.length, Output(Bool()))
@@ -55,7 +55,7 @@ class TopDownMonitor()(implicit p: Parameters) extends HuanCunModule {
   val missVecPref = allMSHRMatchVec(s => s.fromA && s.is_miss &&  s.is_prefetch)
   // val missVecAll      = allMSHRMatchVec(s => s.fromA && s.is_miss)
 
-  val totalMSHRs = banks * mshrsAll
+  val totalMSHRs = banks * mshrsAll_max
   XSPerfHistogram(cacheParams, "parallel_misses_CPU" , PopCount(missVecCPU), true.B, 0, totalMSHRs, 1)
   XSPerfHistogram(cacheParams, "parallel_misses_Pref", PopCount(missVecPref), true.B, 0, totalMSHRs, 1)
   XSPerfHistogram(cacheParams, "parallel_misses_All" , PopCount(missVecCPU)+PopCount(missVecPref), true.B, 0, 32, 1)
