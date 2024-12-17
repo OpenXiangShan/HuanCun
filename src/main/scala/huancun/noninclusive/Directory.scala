@@ -179,7 +179,7 @@ class Directory(implicit p: Parameters)
 
   val clientDir = Module(
     new SubDirectory[Vec[ClientDirEntry]](
-      wports = mshrsAll,
+      wports = mshrsAll_max,
       sets = clientSets,
       ways = clientWays,
       tagBits = clientTagBits,
@@ -214,7 +214,7 @@ class Directory(implicit p: Parameters)
   }
   val selfDir = Module(
     new SubDirectoryDoUpdate[SelfDirEntry](
-      wports = mshrsAll,
+      wports = mshrsAll_max,
       sets = cacheParams.sets,
       ways = cacheParams.ways,
       tagBits = tagBits,

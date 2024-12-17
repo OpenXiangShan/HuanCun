@@ -56,7 +56,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
 
   val dir = Module(
     new SubDirectoryDoUpdate[DirectoryEntry](
-      wports = mshrsAll,
+      wports = mshrsAll_max,
       sets = cacheParams.sets,
       ways = cacheParams.ways,
       tagBits = tagBits,

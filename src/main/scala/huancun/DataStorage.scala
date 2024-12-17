@@ -244,6 +244,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     dataSel.io.sel(1) := Cat(c_sel(i).reverse)
     dataSel.io.en(0) := io.sourceD_raddr.fire
     dataSel.io.en(1) := io.sourceC_raddr.fire
+    dataSel.dynParam := dynParam
   }
 
   io.sourceD_rdata.data := Cat(dataSelModules.map(_.io.out(0)).reverse)

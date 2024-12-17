@@ -33,7 +33,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
     val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
-    val ms_status = topDownOpt.map(_ => Vec(mshrsAll, ValidIO(new MSHRStatus)))
+    val ms_status = topDownOpt.map(_ => Vec(mshrsAll_max, ValidIO(new MSHRStatus)))
     val dir_result = topDownOpt.map(_ => ValidIO(new DirResult))
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
@@ -75,10 +75,22 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val sinkD = Module(new SinkD(edgeOut))
   val sourceE = Module(new SourceE(edgeOut))
 
+  sinkA.dynParam := dynParam
+  sinkB.dynParam := dynParam
+  sinkC.dynParam := dynParam
+  sinkD.dynParam := dynParam
+  sinkE.dynParam := dynParam
+  sourceA.dynParam := dynParam
+  sourceB.dynParam := dynParam
+  sourceC.dynParam := dynParam
+  sourceD.dynParam := dynParam
+  sourceE.dynParam := dynParam
+
   val refillBuffer = Module(new RefillBuffer)
 
   refillBuffer.io.r <> sourceD.io.bypass_read
   refillBuffer.io.w <> sinkD.io.bypass_write
+  refillBuffer.dynParam := dynParam
 
   val outBuf = cacheParams.outerBuf
   io.out.a <> outBuf.a(sourceA.io.a)
@@ -90,15 +102,12 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   io.out.e <> outBuf.e(sourceE.io.e)
 
   // MSHRs
-  val ms = Seq.fill(mshrsAll) {
+  val ms = Seq.fill(mshrsAll_max) {
     if (cacheParams.inclusive)
       Module(new inclusive.MSHR())
     else Module(new noninclusive.MSHR())
   }
-  require(mshrsAll == mshrs + 2)
-  val ms_abc = ms.init.init
-  val ms_bc = ms.init.last
-  val ms_c = ms.last
+  require(mshrsAll_max == mshrs_max + 2)
 
   val dataStorage = Module(new DataStorage())
 
@@ -107,6 +116,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   sourceC.io.bs_rdata := dataStorage.io.sourceC_rdata
   if(ctrl.nonEmpty){
     ctrl.get.io.bs_r_data := dataStorage.io.sourceC_rdata
+    ctrl.get.dynParam := dynParam
   }
   sourceD.io.bs_rdata := dataStorage.io.sourceD_rdata
   dataStorage.io.sourceD_raddr <> sourceD.io.bs_raddr
@@ -120,6 +130,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       sinkC.io.bs_wdata
     )
   } else sinkC.io.bs_wdata)
+  dataStorage.dynParam := dynParam
 
 
   val mshrAlloc = Module(new MSHRAlloc)
@@ -134,6 +145,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     mshrAlloc.io.b_req <> sinkB.io.alloc
   } else {
     val probeHelper = probeHelperOpt.get
+    probeHelper.dynParam := dynParam
     block_decoupled(a_req, sinkA.io.alloc, probeHelper.io.full)
     val b_arb = Module(new Arbiter(new MSHRRequest, 2))
     b_arb.io.in(0) <> probeHelper.io.probe
@@ -162,18 +174,23 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   } else {
     mshrAlloc.io.c_req <> sinkC.io.alloc
   }
+  a_req_buffer.dynParam := dynParam
+  mshrAlloc.dynParam := dynParam
 
   ms.zipWithIndex.foreach {
     case (mshr, i) =>
       mshr.io.id := i.U
       mshr.io.alloc := mshrAlloc.io.alloc(i)
       mshrAlloc.io.status(i) := mshr.io.status
+      mshr.dynParam := dynParam
   }
+
+  /* MSHR: [abc][abc][abc] ... [abc][unused] ... [unused][bc][c] */
   val c_mshr = ms.last
   val bc_mshr = ms.init.last
-  val abc_mshr = ms.init.init
+  val abc_mshr_max = ms.init.init
 
-  abc_mshr.zipWithIndex.foreach{
+  abc_mshr_max.zipWithIndex.foreach{
     case (mshr, i) =>
       a_req_buffer.io.mshr_status(i) := mshr.io.status
   }
@@ -192,20 +209,20 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   when(mshrAlloc.io.c_mask.valid) {
     c_mask_latch := mshrAlloc.io.c_mask.bits
   }
-  abc_mshr.zipWithIndex.foreach {
+  abc_mshr_max.zipWithIndex.foreach {
     case (mshr, i) =>
       val bc_disable = bc_mask_latch(i) && select_bc
       val c_disable = c_mask_latch(i) && select_c
-      mshr.io.enable := !(bc_disable || c_disable)
+      mshr.io.enable := !(bc_disable || c_disable) && (i.U < dynParam.mshrs)
   }
-  bc_mshr.io.enable := !(c_mask_latch(mshrsAll-2) && select_c)
+  bc_mshr.io.enable := !(c_mask_latch(mshrsAll_max-2) && select_c)
   c_mshr.io.enable := true.B
 
   def non_inclusive[T <: RawModule](m: T): noninclusive.MSHR = {
     m.asInstanceOf[noninclusive.MSHR]
   }
 
-  abc_mshr.foreach {
+  abc_mshr_max.foreach {
     case mshr: noninclusive.MSHR =>
       mshr.io_c_status.set := c_mshr.io.status.bits.set
       mshr.io_c_status.tag := c_mshr.io.status.bits.tag
@@ -339,8 +356,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       assert(false)
   }
 
-  abc_mshr.foreach(_.io.nestedwb := nestedWb)
-  abc_mshr.zip(nestedWb_c_set_hit.init.init).foreach {
+  abc_mshr_max.foreach(_.io.nestedwb := nestedWb)
+  abc_mshr_max.zip(nestedWb_c_set_hit.init.init).foreach {
     case (m, set_hit) =>
       m.io.nestedwb.c_set_hit := set_hit
   }
@@ -354,7 +371,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     case mshr: noninclusive.MSHR =>
       mshr.io_releaseThrough := false.B
       mshr.io_probeAckDataThrough := Cat(
-        abc_mshr.map(non_inclusive).map(_.io_b_status.probeAckDataThrough)
+        abc_mshr_max.map(non_inclusive).zipWithIndex.map{case (m, i) => (i.U < dynParam.mshrs) && m.io_b_status.probeAckDataThrough}
       ).orR
     case _ => // skip
   }
@@ -371,8 +388,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     case mshr: noninclusive.MSHR =>
       mshr.io_probeAckDataThrough := false.B
       mshr.io_releaseThrough := Cat(
-        (abc_mshr :+ bc_mshr).map(non_inclusive).map(_.io_c_status.releaseThrough)
-      ).orR
+        abc_mshr_max.map(non_inclusive).zipWithIndex.map{case (m, i) => (i.U < dynParam.mshrs) && m.io_c_status.releaseThrough}
+      ).orR || non_inclusive(bc_mshr).io_c_status.releaseThrough
     case _: inclusive.MSHR =>
   }
 
@@ -385,11 +402,12 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     c.io.dir_result.valid := directory.io.result.valid && directory.io.result.bits.idOH(1, 0) === "b11".U
     c.io.dir_result.bits := directory.io.result.bits
   })
+  directory.dynParam := dynParam
 
   // Send tasks
 
   def is_blocked(idx: Int): Bool = {
-    if (idx < mshrs) block_abc else if (idx < mshrsAll - 1) block_bc else false.B
+    if (idx < mshrs_max) block_abc else if (idx < mshrsAll_max - 1) block_bc else false.B
   }
 
   def block_decoupled[T <: Data](sink: DecoupledIO[T], source: DecoupledIO[T], block: Bool) = {
@@ -467,8 +485,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     strict: Boolean = false,
     latch:  Boolean = false
   ) = {
-    require(!strict || in.size == mshrsAll)
-    if (in.size == mshrsAll) {
+    require(!strict || in.size == mshrsAll_max)
+    if (in.size == mshrsAll_max) {
       val abc = in.init.init
       val bc = in.init.last
       val c = in.last
@@ -514,12 +532,12 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     // connect abc mshrs to prefetcher
     arbTasks(
       pft.train,
-      abc_mshr.map(_.io.tasks.prefetch_train.get),
+      abc_mshr_max.map(_.io.tasks.prefetch_train.get),
       Some("prefetchTrain")
     )
     arbTasks(
       pft.resp,
-      abc_mshr.map(_.io.tasks.prefetch_resp.get),
+      abc_mshr_max.map(_.io.tasks.prefetch_resp.get),
       Some("prefetchResp")
     )
     for (mshr <- Seq(bc_mshr, c_mshr)) {
@@ -575,8 +593,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       bc_mshr.io.status.bits.set === sinkC.io.resp.bits.set,
     bc_mshr.io.status.bits.way,
     Mux1H(
-      abc_mshr.map(m => m.io.status.valid && m.io.status.bits.set === sinkC.io.resp.bits.set),
-      abc_mshr.map(m => m.io.status.bits.way)
+      abc_mshr_max.map(m => m.io.status.valid && m.io.status.bits.set === sinkC.io.resp.bits.set),
+      abc_mshr_max.map(m => m.io.status.bits.way)
     )
   )
 

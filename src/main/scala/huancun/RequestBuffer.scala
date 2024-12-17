@@ -11,13 +11,13 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   val io = IO(new Bundle() {
     val in = Flipped(DecoupledIO(new MSHRRequest))
     val out = DecoupledIO(new MSHRRequest)
-    val mshr_status = Vec(mshrs, Flipped(ValidIO(new MSHRStatus)))
+    val mshr_status = Vec(mshrs_max, Flipped(ValidIO(new MSHRStatus)))
   })
 
   val buffer = Mem(entries, new MSHRRequest)
   val valids = RegInit(VecInit(Seq.fill(entries){ false.B }))
   // which mshr the entry is waiting for
-  val wait_table = Reg(Vec(entries, UInt(mshrs.W)))
+  val wait_table = Reg(Vec(entries, UInt(mshrs_max.W)))
   /*
       buffer_dep_mask[i][j] => entry i should wait entry j
       this is used to make sure that same set requests will be sent
@@ -50,9 +50,9 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   def set_conflict(set_a: UInt, set_b: UInt): Bool = {
     set_a(block_granularity - 1, 0) === set_b(block_granularity - 1, 0)
   }
-  val conflict_mask = (0 until mshrs) map { i =>
+  val conflict_mask = (0 until mshrs_max) map { i =>
     val s = io.mshr_status(i)
-    val s_conflict = s.valid && set_conflict(s.bits.set, in_set) && !s.bits.will_free
+    val s_conflict = (i.U < dynParam.mshrs) && s.valid && set_conflict(s.bits.set, in_set) && !s.bits.will_free
     s_conflict
   }
   val conflict = Cat(conflict_mask).orR
@@ -75,7 +75,7 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
     rdys(insert_idx) := !conflict && !Cat(req_deps).orR
   }
 
-  val free_mask = VecInit(io.mshr_status.map(s => s.valid && s.bits.will_free)).asUInt
+  val free_mask = VecInit(io.mshr_status.zipWithIndex.map{case (s, i) => (i.U < dynParam.mshrs) && s.valid && s.bits.will_free}).asUInt
   for (i <- 0 until entries){
     when(valids(i)){
       val wait_next = WireInit(wait_table(i))

@@ -47,9 +47,9 @@ trait HasHuanCunParameters {
   val beatBytes = cacheParams.channelBytes.d.get
   val beatSize = blockBytes / beatBytes
 
-  val mshrs = cacheParams.mshrs
-  val mshrsAll = cacheParams.mshrs + 2
-  val mshrBits = log2Up(mshrsAll)
+  val mshrs_max = cacheParams.mshrs
+  val mshrsAll_max = cacheParams.mshrs + 2
+  val mshrBits = log2Up(mshrsAll_max)
   val blocks = cacheParams.ways * cacheParams.sets
   val sizeBytes = blocks * blockBytes
   val dirReadPorts = cacheParams.dirReadPorts
@@ -67,10 +67,10 @@ trait HasHuanCunParameters {
   val aliasBitsOpt = if(cacheParams.clientCaches.isEmpty) None
     else cacheParams.clientCaches.head.aliasBitsOpt
 
-  val bufBlocks = mshrs / 2
-  val sinkCbufBlocks = mshrsAll // sinkC buffer require more blocks to avoid deadlock
+  val bufBlocks = mshrs_max / 2
+  val sinkCbufBlocks = mshrsAll_max // sinkC buffer require more blocks to avoid deadlock
   require(sinkCbufBlocks >= bufBlocks, "sinkCbufBlocks should bigger than bufBlocks")
-  val bufIdxBits = log2Ceil(mshrsAll) // should be MAX{bufBlocks, sinkCBufBlocks}
+  val bufIdxBits = log2Ceil(mshrsAll_max) // should be MAX{bufBlocks, sinkCBufBlocks}
 
   val alwaysReleaseData = cacheParams.alwaysReleaseData
 
@@ -177,6 +177,11 @@ trait DontCareInnerLogic { this: Module =>
 abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with HasHuanCunParameters
 
 abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
+{
+  val dynParam = IO(new Bundle() {
+    val mshrs = Input(UInt(log2Up(mshrs_max).W))
+  })
+}
 
 class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
 
@@ -191,7 +196,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         supports = TLSlaveToMasterTransferSizes(
           probe = xfer
         ),
-        sourceId = IdRange(0, mshrsAll)
+        sourceId = IdRange(0, mshrsAll_max)
       )
     ),
     channelBytes = cacheParams.channelBytes,
@@ -225,7 +230,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         minLatency = 2,
         responseFields = cacheParams.respField,
         requestKeys = cacheParams.reqKey,
-        endSinkId = mshrsAll
+        endSinkId = mshrsAll_max
       )
     }
   )
@@ -260,6 +265,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         val robHeadPaddr = Vec(cacheParams.hartIds.length, Flipped(Valid(UInt(36.W))))
         val addrMatch = Vec(cacheParams.hartIds.length, Output(Bool()))
       }
+      val mshrs = Input(UInt(64.W))
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -401,6 +407,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             }
         }
         io.perfEvents(i) := slice.perfinfo
+        slice.dynParam.mshrs := io.mshrs
         slice
     }
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
@@ -457,6 +464,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
           case (res, s) => res := s.io.dir_result.get
         }
         t.io.debugTopDown <> io.debugTopDown
+        t.dynParam.mshrs := io.mshrs
       case None => io.debugTopDown.addrMatch.foreach(_ := false.B)
     }
   }
