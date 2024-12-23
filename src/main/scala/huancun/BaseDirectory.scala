@@ -36,8 +36,8 @@ trait BaseTagWrite extends HuanCunBundle
 
 class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val idOH = UInt(mshrsAll_max.W)
-  val tag = UInt(tagBits.W)
-  val set = UInt(setBits.W)
+  val tag = UInt(tagBits_max.W)
+  val set = UInt(setBits_max.W)
   val replacerInfo = new ReplacerInfo()
   val source = UInt(sourceIdBits.W)
   val wayMode = Bool()
@@ -61,23 +61,24 @@ abstract class BaseDirectory[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite,
 
 class SubDirectory[T <: Data](
   wports:      Int,
-  sets:        Int,
+  sets_max:    Int,
   ways:        Int,
-  tagBits:     Int,
+  tagBits_max: Int,
+
   dir_init_fn: () => T,
   dir_hit_fn: T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
   replacement: String)(implicit p: Parameters)
     extends Module {
 
-  val setBits = log2Ceil(sets)
+  val setBits_max = log2Ceil(sets_max)
   val wayBits = log2Ceil(ways)
   val dir_init = dir_init_fn()
 
   val io = IO(new Bundle() {
     val read = Flipped(DecoupledIO(new Bundle() {
-      val tag = UInt(tagBits.W)
-      val set = UInt(setBits.W)
+      val tag = UInt(tagBits_max.W)
+      val set = UInt(setBits_max.W)
       val replacerInfo = new ReplacerInfo()
       val wayMode = Bool()
       val way = UInt(wayBits.W)
@@ -85,17 +86,17 @@ class SubDirectory[T <: Data](
     val resp = ValidIO(new Bundle() {
       val hit = Bool()
       val way = UInt(wayBits.W)
-      val tag = UInt(tagBits.W)
+      val tag = UInt(tagBits_max.W)
       val dir = dir_init.cloneType
       val error = Bool()
     })
     val tag_w = Flipped(DecoupledIO(new Bundle() {
-      val tag = UInt(tagBits.W)
-      val set = UInt(setBits.W)
+      val tag = UInt(tagBits_max.W)
+      val set = UInt(setBits_max.W)
       val way = UInt(wayBits.W)
     }))
     val dir_w = Flipped(DecoupledIO(new Bundle() {
-      val set = UInt(setBits.W)
+      val set = UInt(setBits_max.W)
       val way = UInt(wayBits.W)
       val dir = dir_init.cloneType
     }))
@@ -103,8 +104,8 @@ class SubDirectory[T <: Data](
 
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val resetFinish = RegInit(false.B)
-  val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val resetIdx = RegInit((sets_max - 1).U)
+  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets_max, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
 
   val clk_en = RegInit(false.B)
   clk_en := ~clk_en
@@ -119,14 +120,14 @@ class SubDirectory[T <: Data](
 
   def tagCode: Code = Code.fromString(p(HCCacheParamsKey).tagECC)
 
-  val eccTagBits = tagCode.width(tagBits)
-  val eccBits = eccTagBits - tagBits
+  /* Remove ECC for DSE */
+  val eccBits = 0
   println(s"Tag ECC bits:$eccBits")
-  val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
+  val tagRead = Wire(Vec(ways, UInt(tagBits_max.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val tagArray = Module(new SRAMTemplate(UInt(tagBits_max.W), sets_max, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
   if(eccBits > 0){
-    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets_max, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
     eccArray.io.w(
       io.tag_w.fire,
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
@@ -172,7 +173,7 @@ class SubDirectory[T <: Data](
     }
     0.U
   } else {
-    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, shouldReset = true))
+    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets_max, singlePort = true, shouldReset = true))
     val repl_sram_r = replacer_sram.io.r(io.read.fire, io.read.bits.set).resp.data(0)
     val repl_state_hold = WireInit(0.U(repl.nBits.W))
     repl_state_hold := HoldUnless(repl_sram_r, RegNext(io.read.fire, false.B))
@@ -183,7 +184,7 @@ class SubDirectory[T <: Data](
 
   io.resp.valid := reqValidReg
   val metas = metaArray.io.r(io.read.fire, io.read.bits.set).resp.data
-  val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
+  val tagMatchVec = tagRead.map(_ === reqReg.tag)
   val metaValidVec = metas.map(dir_hit_fn)
   val hitVec = tagMatchVec.zip(metaValidVec).map(x => x._1 && x._2)
   val hitWay = OHToUInt(hitVec)
@@ -252,15 +253,15 @@ trait UpdateOnAcquire extends HasUpdate {
 
 abstract class SubDirectoryDoUpdate[T <: Data](
   wports:      Int,
-  sets:        Int,
+  sets_max:    Int,
   ways:        Int,
-  tagBits:     Int,
+  tagBits_max: Int,
   dir_init_fn: () => T,
   dir_hit_fn:  T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
   replacement: String)(implicit p: Parameters)
     extends SubDirectory[T](
-      wports, sets, ways, tagBits,
+      wports, sets_max, ways, tagBits_max,
       dir_init_fn, dir_hit_fn, invalid_way_sel,
       replacement
     ) with HasUpdate {

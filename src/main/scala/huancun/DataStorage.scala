@@ -104,7 +104,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     // Remap address
     // [beat, set, way, block] => [way, set, beat, block]
     //                            [index, stack, block]
-    val innerAddr = Cat(addr.bits.way, addr.bits.set, addr.bits.beat)
+    val innerAddr = Cat((addr.bits.way << setBits) | addr.bits.set, addr.bits.beat)
     val innerIndex = innerAddr >> stackBits
     val stackIdx = innerAddr(stackBits - 1, 0)
     val stackSel = UIntToOH(stackIdx, stackSize) // Select which stack to access

@@ -4,7 +4,7 @@ import huancun.utils.SRAMTemplate
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
-import huancun.HasHuanCunParameters
+import huancun.{HuanCunModule, HasHuanCunParameters}
 import utility.MemReqSource
 
 case class BOPParameters(
@@ -57,6 +57,13 @@ trait HasBOPParams extends HasHuanCunParameters {
     } else {
       Cat(Fill(width - x.getWidth, x.head(1)), x)
     }
+  }
+
+  def signedExtend(x: UInt, width: UInt): UInt = {
+    Mux(x.getWidth.U >= width || x(x.getWidth.U-1.U) === 0.U,
+      x,
+      (((1.U << (width - x.getWidth.U)) - 1.U) << x.getWidth.U) | x
+    )
   }
 }
 
@@ -227,7 +234,7 @@ class OffsetScoreTable(implicit p: Parameters) extends BOPModule {
 
 }
 
-class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
+class BestOffsetPrefetch(implicit p: Parameters) extends HuanCunModule with HasBOPParams {
   val io = IO(new Bundle() {
     val train = Flipped(DecoupledIO(new PrefetchTrain))
     val req = DecoupledIO(new PrefetchReq)
@@ -238,12 +245,12 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
   val scoreTable = Module(new OffsetScoreTable)
 
   val prefetchOffset = scoreTable.io.prefetchOffset
-  val oldAddr = io.train.bits.addr
+  val oldAddr = Cat(((io.train.bits.tag << setBits) | io.train.bits.set), 0.U(offsetBits.W))
   val newAddr = oldAddr + signedExtend((prefetchOffset << offsetBits), fullAddressBits)
 
   rrTable.io.r <> scoreTable.io.test
   rrTable.io.w.valid := io.resp.valid
-  rrTable.io.w.bits := Cat(Cat(io.resp.bits.tag, io.resp.bits.set) - signedExtend(prefetchOffset, setBits + fullTagBits), 0.U(offsetBits.W))
+  rrTable.io.w.bits := Cat(((io.resp.bits.tag << setBits) | io.resp.bits.set) - signedExtend(prefetchOffset, setBits + fullTagBits), 0.U(offsetBits.W))
   scoreTable.io.req.valid := io.train.valid
   scoreTable.io.req.bits := oldAddr
 
@@ -254,8 +261,8 @@ class BestOffsetPrefetch(implicit p: Parameters) extends BOPModule {
     req_valid := false.B
   }
   when(scoreTable.io.req.fire) {
-    req.tag := parseFullAddress(newAddr)._1
-    req.set := parseFullAddress(newAddr)._2
+    req.tag := parseFullAddress(newAddr, setBits, fullTagBits)._1
+    req.set := parseFullAddress(newAddr, setBits, fullTagBits)._2
     req.needT := io.train.bits.needT
     req.source := io.train.bits.source
     req_valid := !crossPage // stop prefetch when prefetch req crosses pages

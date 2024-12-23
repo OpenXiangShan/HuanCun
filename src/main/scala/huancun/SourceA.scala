@@ -53,7 +53,7 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_acquire.bits.param := io.task.bits.param
   a_acquire.bits.size := offsetBits.U
   a_acquire.bits.source := io.task.bits.source
-  a_acquire.bits.address := Cat(io.task.bits.tag, io.task.bits.set, 0.U(offsetBits.W))
+  a_acquire.bits.address := ((io.task.bits.tag << setBits) | io.task.bits.set) << offsetBits
   a_acquire.bits.mask := Fill(edgeOut.manager.beatBytes, 1.U(1.W))
   a_acquire.bits.data := DontCare
   a_acquire.bits.corrupt := false.B
@@ -102,7 +102,7 @@ class SourceA(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   a_put.bits.param := s1_task.param
   a_put.bits.size := s1_task.size
   a_put.bits.source := s1_task.source
-  a_put.bits.address := Cat(s1_task.tag, s1_task.set, s1_task.off)
+  a_put.bits.address := ((s1_task.tag << setBits) | s1_task.set) << offsetBits
   a_put.bits.mask := s1_pb_latch.mask
   a_put.bits.data := s1_pb_latch.data
   a_put.bits.corrupt := false.B

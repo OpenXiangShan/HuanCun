@@ -11,8 +11,8 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   val beats = blockBytes / beatBytes
   val buffer = Reg(Vec(sinkCbufBlocks, Vec(beats, UInt((beatBytes * 8).W))))
-  val bufferTag = Reg(Vec(sinkCbufBlocks, UInt(tagBits.W)))
-  val bufferSet = Reg(Vec(sinkCbufBlocks, UInt(setBits.W)))
+  val bufferTag = Reg(Vec(sinkCbufBlocks, UInt(tagBits_max.W)))
+  val bufferSet = Reg(Vec(sinkCbufBlocks, UInt(setBits_max.W)))
   val bufferSetVals = RegInit(VecInit(Seq.fill(sinkCbufBlocks)(false.B)))
   val beatValsSave = RegInit(VecInit(Seq.fill(sinkCbufBlocks) {
     VecInit(Seq.fill(beats) { false.B })
@@ -51,7 +51,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val noSpace = full && hasData
   val insertIdx = PriorityEncoder(~bufVals)
   val insertIdxReg = RegEnable(insertIdx, c.fire && first)
-  val (tag, set, off) = parseAddress(c.bits.address)
+  val (tag, set, off) = parseAddress(c.bits.address, setBits)
 
   c.ready := Mux(first, !noSpace && !(isReq && !io.alloc.ready), true.B)
 
@@ -160,7 +160,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   io.bs_wdata.corrupt := false.B
 
   io.release.valid := busy && task_r.release && beatValsThrough(task_r.bufIdx)(w_counter_through) && !w_through_done_r
-  io.release.bits.address := Cat(task_r.tag, task_r.set, 0.U(offsetBits.W))
+  io.release.bits.address := ((task_r.tag << setBits) | task_r.set) << offsetBits
   io.release.bits.data := buffer(task_r.bufIdx)(w_counter_through)
   io.release.bits.opcode := task_r.opcode
   io.release.bits.param := task_r.param

@@ -82,7 +82,7 @@ class SinkA(implicit p: Parameters) extends HuanCunModule {
     assert(false.B, "buffer leak at index 0")
   }
 
-  val (tag, set, offset) = parseAddress(a.bits.address)
+  val (tag, set, offset) = parseAddress(a.bits.address, setBits)
 
   io.alloc.valid := a.valid && first && !noSpace
   a.ready := Mux(first, io.alloc.ready && !noSpace, true.B)

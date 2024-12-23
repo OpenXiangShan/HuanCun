@@ -27,8 +27,8 @@ import utility.MemReqSource
 
 abstract class InnerTask(implicit p: Parameters) extends HuanCunBundle {
   val sourceId = UInt(sourceIdBits.W)
-  val set = UInt(setBits.W)
-  val tag = UInt(tagBits.W)
+  val set = UInt(setBits_max.W)
+  val tag = UInt(tagBits_max.W)
 }
 
 class SinkAReq(implicit p: Parameters) extends InnerTask {
@@ -36,8 +36,8 @@ class SinkAReq(implicit p: Parameters) extends InnerTask {
   val off = UInt(offsetBits.W)
 }
 class SourceBReq(implicit p: Parameters) extends HuanCunBundle {
-  val set = UInt(setBits.W)
-  val tag = UInt(tagBits.W)
+  val set = UInt(setBits_max.W)
+  val tag = UInt(tagBits_max.W)
   val param = UInt(3.W)
   val clients = UInt(clientBits.W)
   val alias = aliasBitsOpt.map(w => Vec(clientBits, UInt(w.W)))
@@ -72,8 +72,8 @@ class SourceDReq(implicit p: Parameters) extends InnerTask with HasChannelBits {
 }
 
 class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
-  val tag = UInt(tagBits.W)
-  val set = UInt(setBits.W)
+  val tag = UInt(tagBits_max.W)
+  val set = UInt(setBits_max.W)
   val off = UInt(offsetBits.W)
   val mask = UInt(beatBytes.W)
   val opcode = UInt(3.W)
@@ -87,8 +87,8 @@ class SourceAReq(implicit p: Parameters) extends HuanCunBundle {
 }
 class SourceCReq(implicit p: Parameters) extends HuanCunBundle {
   val opcode = UInt(3.W)
-  val tag = UInt(tagBits.W)
-  val set = UInt(setBits.W)
+  val tag = UInt(tagBits_max.W)
+  val set = UInt(setBits_max.W)
   val param = UInt(3.W)
   val source = UInt(mshrBits.W)
   val way = UInt(wayBits.W)
@@ -104,7 +104,7 @@ class SinkCResp(implicit p: Parameters) extends HuanCunBundle {
   val param = UInt(3.W)
   val source = UInt(sourceIdBits.W)
   val last = Bool()
-  val set = UInt(setBits.W) // The target address of the transfer, but only set is enough
+  val set = UInt(setBits_max.W) // The target address of the transfer, but only set is enough
   val bufIdx = UInt(bufIdxBits.W)
 }
 class SinkDResp(implicit p: Parameters) extends HuanCunBundle {
@@ -144,8 +144,8 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
   val param = UInt(3.W)
   val size = UInt(msgSizeBits.W)
   val source = UInt(sourceIdBits.W) // 0 when this req is a Hint
-  val set = UInt(setBits.W)
-  val tag = UInt(tagBits.W)
+  val set = UInt(setBits_max.W)
+  val tag = UInt(tagBits_max.W)
   val off = UInt(offsetBits.W)
   val mask = UInt(beatBytes.W)
   val bufIdx = UInt(bufIdxBits.W)
@@ -163,8 +163,8 @@ class MSHRRequest(implicit p: Parameters) extends HuanCunBundle with HasChannelB
 }
 
 class MSHRStatus(implicit p: Parameters) extends HuanCunBundle with HasChannelBits {
-  val set = UInt(setBits.W)
-  val tag = UInt(tagBits.W)
+  val set = UInt(setBits_max.W)
+  val tag = UInt(tagBits_max.W)
   val way = UInt(wayBits.W)
   val way_reg = UInt(wayBits.W)
   val is_miss = Bool()
@@ -193,7 +193,7 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle with HasChannelBi
 
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
   val way = UInt(width = wayBits.W)
-  val set = UInt(width = setBits.W)
+  val set = UInt(width = setBits_max.W)
   val beat = UInt(width = beatBits.W)
   val write = Bool()
   val noop = Bool()
@@ -206,7 +206,7 @@ class DSData(implicit p: Parameters) extends HuanCunBundle {
 
 class SourceDHazard(implicit p: Parameters) extends HuanCunBundle {
   val way = UInt(width = wayBits.W)
-  val set = UInt(width = setBits.W)
+  val set = UInt(width = setBits_max.W)
 
   def safe(s: UInt, w: UInt): Bool = {
     set === s && way === w

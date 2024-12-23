@@ -8,8 +8,8 @@ import huancun._
 import utility._
 
 class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
-  val tag = UInt(fullTagBits.W)
-  val set = UInt(setBits.W)
+  val tag = UInt(fullTagBits_max.W)
+  val set = UInt(setBits_max.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
   val pfSource = UInt(MemReqSource.reqSourceBits.W)
@@ -21,21 +21,19 @@ class PrefetchReq(implicit p: Parameters) extends PrefetchBundle {
 
 class PrefetchResp(implicit p: Parameters) extends PrefetchBundle {
   // val id = UInt(sourceIdBits.W)
-  val tag = UInt(fullTagBits.W)
-  val set = UInt(setBits.W)
-  def addr = Cat(tag, set, 0.U(offsetBits.W))
+  val tag = UInt(fullTagBits_max.W)
+  val set = UInt(setBits_max.W)
 }
 
 class PrefetchTrain(implicit p: Parameters) extends PrefetchBundle {
   // val addr = UInt(addressBits.W)
-  val tag = UInt(fullTagBits.W)
-  val set = UInt(setBits.W)
+  val tag = UInt(fullTagBits_max.W)
+  val set = UInt(setBits_max.W)
   val needT = Bool()
   val source = UInt(sourceIdBits.W)
   // prefetch only when L2 receives a miss or prefetched hit req
   // val miss = Bool()
   // val prefetched = Bool()
-  def addr = Cat(tag, set, 0.U(offsetBits.W))
 }
 
 class PrefetchIO(implicit p: Parameters) extends PrefetchBundle {
@@ -81,7 +79,7 @@ class PrefetchQueue(implicit p: Parameters) extends PrefetchModule {
   io.deq.bits := Mux(empty, io.enq.bits, queue(head))
 }
 
-class Prefetcher(implicit p: Parameters) extends PrefetchModule {
+class Prefetcher(implicit p: Parameters) extends HuanCunModule with HasPrefetchParameters {
   val io = IO(new PrefetchIO)
   val io_l2_pf_en = IO(Input(Bool()))
 
@@ -120,6 +118,9 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       bop.io.req.ready := true.B
       pipe.io.in <> pftQueue.io.deq
       io.req <> pipe.io.out
+
+      l1_pf.dynParam := dynParam
+      bop.dynParam := dynParam
     case receiver: L3PrefetchReceiverParams =>
       val l1_pf = Module(new PrefetchReceiver())
       val pftQueue = Module(new PrefetchQueue)
@@ -138,6 +139,8 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
       l1_pf.io.req.ready := true.B
       pipe.io.in <> pftQueue.io.deq
       io.req <> pipe.io.out
+
+      l1_pf.dynParam := dynParam
     case _ => assert(cond = false, "Unknown prefetcher")
   }
 }

@@ -11,9 +11,9 @@ import utility.{ParallelMax, ParallelPriorityMux}
 // TODO: inclusive may have cache aliase too
 
 class TagWrite(implicit p: Parameters) extends BaseTagWrite {
-  val set = UInt(setBits.W)
+  val set = UInt(setBits_max.W)
   val way = UInt(wayBits.W)
-  val tag = UInt(tagBits.W)
+  val tag = UInt(tagBits_max.W)
 }
 
 class DirectoryEntry(implicit p: Parameters) extends HuanCunBundle {
@@ -24,7 +24,7 @@ class DirectoryEntry(implicit p: Parameters) extends HuanCunBundle {
 }
 
 class DirWrite(implicit p: Parameters) extends BaseDirWrite {
-  val set = UInt(setBits.W)
+  val set = UInt(setBits_max.W)
   val way = UInt(wayBits.W)
   val data = new DirectoryEntry
 }
@@ -32,7 +32,7 @@ class DirWrite(implicit p: Parameters) extends BaseDirWrite {
 class DirResult(implicit p: Parameters) extends DirectoryEntry with BaseDirResult {
   val hit = Bool()
   val way = UInt(wayBits.W)
-  val tag = UInt(tagBits.W)
+  val tag = UInt(tagBits_max.W)
   val error = Bool()
 }
 
@@ -57,9 +57,9 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
   val dir = Module(
     new SubDirectoryDoUpdate[DirectoryEntry](
       wports = mshrsAll_max,
-      sets = cacheParams.sets,
+      sets_max = cacheParams.sets,
       ways = cacheParams.ways,
-      tagBits = tagBits,
+      tagBits_max = tagBits_max,
       dir_init_fn = () => {
         val init = Wire(new DirectoryEntry())
         init := DontCare

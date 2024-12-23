@@ -34,7 +34,7 @@ class SinkB(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   io.b.ready := io.alloc.ready
   io.alloc.valid := io.b.valid
 
-  val (tag, set, off) = parseAddress(io.b.bits.address)
+  val (tag, set, off) = parseAddress(io.b.bits.address, setBits)
 
   io.alloc.bits.opcode := io.b.bits.opcode
   io.alloc.bits.param := io.b.bits.param

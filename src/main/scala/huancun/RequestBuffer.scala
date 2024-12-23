@@ -48,7 +48,7 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   val in_set = io.in.bits.set
 
   def set_conflict(set_a: UInt, set_b: UInt): Bool = {
-    set_a(block_granularity - 1, 0) === set_b(block_granularity - 1, 0)
+    dynMask(set_a, block_granularity - 1.U, 0.U) === dynMask(set_b, block_granularity - 1.U, 0.U)
   }
   val conflict_mask = (0 until mshrs_max) map { i =>
     val s = io.mshr_status(i)

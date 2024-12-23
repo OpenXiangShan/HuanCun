@@ -29,11 +29,11 @@ class SliceCtrl()(implicit p: Parameters) extends HuanCunModule {
   val done = RegInit(false.B)
 
   val full_address = Cat(
-    io.req.bits.tag(fullTagBits - 1, 0),
-    io.req.bits.set(setBits - 1, 0),
+    dynMask(io.req.bits.tag, fullTagBits - 1.U, 0.U),
+    dynMask(io.req.bits.set, setBits - 1.U, 0.U),
     0.U(offsetBits.W)
   )
-  val (tag, set, _) = parseAddress(full_address)
+  val (tag, set, _) = parseAddress(full_address, setBits)
   when(io.req.fire){
     req_reg := io.req.bits
     req_reg.set := set

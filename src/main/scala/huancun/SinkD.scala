@@ -31,7 +31,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
     val bs_wdata = Output(new DSData)
     val bypass_write = Flipped(new SinkDBufferWrite)
     val way = Input(UInt(wayBits.W))
-    val set = Input(UInt(setBits.W))
+    val set = Input(UInt(setBits_max.W))
     val inner_grant = Input(Bool())  // sourceD will use bypass data
     val save_data_in_bs = Input(Bool())
     val resp = ValidIO(new SinkDResp)
