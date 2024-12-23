@@ -38,7 +38,7 @@ class ClientDirEntry(implicit p: Parameters) extends HuanCunBundle {
 class SelfDirResult(implicit p: Parameters) extends SelfDirEntry {
   val hit = Bool()
   val way = UInt(wayBits.W)
-  val tag = UInt(tagBits.W)
+  val tag = UInt(tagBits_max.W)
   val error = Bool()
 }
 
@@ -60,14 +60,14 @@ class DirResult(implicit p: Parameters) extends BaseDirResult with HasClientInfo
   val self = new SelfDirResult
   val clients = new ClientDirResult
   val sourceId = UInt(sourceIdBits.W)
-  val set = UInt(setBits.W)
+  val set = UInt(setBits_max.W)
   val replacerInfo = new ReplacerInfo
 }
 
 class SelfTagWrite(implicit p: Parameters) extends BaseTagWrite {
-  val set = UInt(setBits.W)
+  val set = UInt(setBits_max.W)
   val way = UInt(wayBits.W)
-  val tag = UInt(tagBits.W)
+  val tag = UInt(tagBits_max.W)
 }
 
 class ClientTagWrite(implicit p: Parameters) extends HuanCunBundle with HasClientInfo {
@@ -83,7 +83,7 @@ class ClientTagWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
 }
 
 class SelfDirWrite(implicit p: Parameters) extends BaseDirWrite {
-  val set = UInt(setBits.W)
+  val set = UInt(setBits_max.W)
   val way = UInt(wayBits.W)
   val data = new SelfDirEntry
 }
@@ -180,9 +180,9 @@ class Directory(implicit p: Parameters)
   val clientDir = Module(
     new SubDirectory[Vec[ClientDirEntry]](
       wports = mshrsAll_max,
-      sets = clientSets,
+      sets_max = clientSets,
       ways = clientWays,
-      tagBits = clientTagBits,
+      tagBits_max = clientTagBits,
       dir_init_fn = () => {
         val init = Wire(Vec(clientBits, new ClientDirEntry))
         init.foreach(_.state := MetaData.INVALID)
@@ -215,9 +215,9 @@ class Directory(implicit p: Parameters)
   val selfDir = Module(
     new SubDirectoryDoUpdate[SelfDirEntry](
       wports = mshrsAll_max,
-      sets = cacheParams.sets,
+      sets_max = cacheParams.sets,
       ways = cacheParams.ways,
-      tagBits = tagBits,
+      tagBits_max = tagBits_max,
       dir_init_fn = () => {
         val init = Wire(new SelfDirEntry())
         init := DontCare
@@ -237,23 +237,33 @@ class Directory(implicit p: Parameters)
     ltag := addr.head(ltag.getWidth)
   }
 
-  val rports = Seq(clientDir.io.read, selfDir.io.read)
+  val rports = Seq(clientDir, selfDir)
   val req = io.read
-  rports.foreach { p =>
-    p.valid := req.valid
-    addrConnect(p.bits.set, p.bits.tag, req.bits.set, req.bits.tag)
-    p.bits.replacerInfo := req.bits.replacerInfo
-    p.bits.wayMode := req.bits.wayMode
-    p.bits.way := req.bits.way
-    when(req.fire && req.bits.wayMode){
-      assert(req.bits.idOH(1, 0) === "b11".U)
-    }
+  when(req.fire && req.bits.wayMode){
+    assert(req.bits.idOH(1, 0) === "b11".U)
   }
+
+  clientDir.io.read.valid := req.valid
+  val clientDirAddr = (req.bits.tag << setBits) | req.bits.set
+  clientDir.io.read.bits.set := dynMask(clientDirAddr, clientSetBits.U - 1.U, 0.U)
+  clientDir.io.read.bits.tag := dynMask(clientDirAddr, clientDirAddr.getWidth.U - 1.U, clientSetBits.U)
+  clientDir.io.read.bits.replacerInfo := req.bits.replacerInfo
+  clientDir.io.read.bits.wayMode := req.bits.wayMode
+  clientDir.io.read.bits.way := req.bits.way
+
+  selfDir.io.read.valid := req.valid
+  val selfDirAddr = (req.bits.tag << setBits) | req.bits.set
+  selfDir.io.read.bits.set := dynMask(selfDirAddr, Log2(dynParam.sets) - 1.U, 0.U)
+  selfDir.io.read.bits.tag := dynMask(selfDirAddr, selfDirAddr.getWidth.U - 1.U, Log2(dynParam.sets))
+  selfDir.io.read.bits.replacerInfo := req.bits.replacerInfo
+  selfDir.io.read.bits.wayMode := req.bits.wayMode
+  selfDir.io.read.bits.way := req.bits.way
+
 
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val cycleCnt = Counter(true.B, 2)
   val readyMask = if (clk_div_by_2) cycleCnt._1(0) else true.B
-  req.ready := Cat(rports.map(_.ready)).andR && readyMask
+  req.ready := Cat(rports.map(_.io.read.ready)).andR && readyMask
   val reqValidReg = RegNext(req.fire, false.B)
   val reqIdOHReg = RegEnable(req.bits.idOH, req.fire) // generate idOH in advance to index MSHRs
   val sourceIdReg = RegEnable(RegEnable(req.bits.source, req.fire), reqValidReg)

@@ -48,7 +48,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   c.ready := Mux(isResp, can_recv_resp, can_recv_req)
 
-  val (tag, set, off) = parseAddress(c.bits.address)
+  val (tag, set, off) = parseAddress(c.bits.address, setBits)
 
   assert(!c.valid || (c.bits.size === log2Up(blockBytes).U && off === 0.U), "SinkC must receive aligned message!")
 

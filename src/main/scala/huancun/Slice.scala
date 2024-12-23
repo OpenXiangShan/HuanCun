@@ -638,8 +638,8 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   def pftReqToMSHRReq(pftReq: DecoupledIO[PrefetchReq]): DecoupledIO[MSHRRequest] = {
     val mshrReq = Wire(DecoupledIO(new MSHRRequest()))
-    val address = Cat(pftReq.bits.tag, pftReq.bits.set, 0.U(offsetBits.W))
-    val (tag, set, off) = parseAddress(address)
+    val address = Cat((pftReq.bits.tag << setBits) | pftReq.bits.set, 0.U(offsetBits.W))
+    val (tag, set, off) = parseAddress(address, setBits)
     mshrReq.valid := pftReq.valid
     mshrReq.bits.opcode := TLMessages.Hint
     mshrReq.bits.param := Mux(pftReq.bits.needT, TLHints.PREFETCH_WRITE, TLHints.PREFETCH_READ)

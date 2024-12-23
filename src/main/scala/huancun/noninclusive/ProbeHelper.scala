@@ -27,8 +27,8 @@ class ProbeHelper(entries: Int = 5, enqDelay: Int = 1)(implicit p: Parameters)
 
   // addr without bankIdx
   val addr = Cat(dir.clients.tag, dir.set(clientSetBits - 1, 0))
-  val tgt_tag = addr.head(tagBits)
-  val tgt_set = addr.tail(tagBits).head(setBits)
+  val tgt_tag = dynMask(addr, addr.getWidth.U - 1.U, addr.getWidth.U - tagBits)
+  val tgt_set = dynMask(addr, addr.getWidth.U - tagBits - 1.U, addr.getWidth.U - tagBits - setBits)
 
   req.fromProbeHelper := true.B
   req.opcode := TLMessages.Probe

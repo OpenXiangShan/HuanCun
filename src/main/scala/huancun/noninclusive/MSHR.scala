@@ -13,8 +13,8 @@ import utility.{MemReqSource, ParallelMax}
 
 class C_Status(implicit p: Parameters) extends HuanCunBundle {
   // When C nest A, A needs to know the status of C and tells C to release through to next level
-  val set = Input(UInt(setBits.W))
-  val tag = Input(UInt(tagBits.W))
+  val set = Input(UInt(setBits_max.W))
+  val tag = Input(UInt(tagBits_max.W))
   val way = Input(UInt(wayBits.W))
   val nestedReleaseData = Input(Bool())
   val releaseThrough = Output(Bool())
@@ -23,8 +23,8 @@ class C_Status(implicit p: Parameters) extends HuanCunBundle {
 }
 
 class B_Status(implicit p: Parameters) extends HuanCunBundle {
-  val set = Input(UInt(setBits.W))
-  val tag = Input(UInt(tagBits.W))
+  val set = Input(UInt(setBits_max.W))
+  val tag = Input(UInt(tagBits_max.W))
   val way = Input(UInt(wayBits.W))
   val nestedProbeAckData = Input(Bool())
   val probeHelperFinish = Input(Bool())
@@ -475,7 +475,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
     }
   }
 
-  val debug_addr = Cat(req.tag, req.set, 0.U(offsetBits.W))
+  val debug_addr = Cat((req.tag << setBits) | req.set, 0.U(offsetBits.W))
   assert(RegNext(!meta_valid || !req.fromC || req.fromCmoHelper || clients_meta(iam).hit),
     s"${cacheParams.name} Release should always hit: mshrId:[%d] addr: [%x]",
     io.id, debug_addr
@@ -485,7 +485,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val change_self_meta = meta_valid && self_meta.state =/= INVALID &&
     io.nestedwb.set === req.set && io.nestedwb.tag === self_meta.tag
   val nested_client_match = (
-    meta.clients.parseTag(Cat(io.nestedwb.tag, io.nestedwb.set)) === meta.clients.tag &&
+    meta.clients.parseTag((io.nestedwb.tag << setBits) | io.nestedwb.set) === meta.clients.tag &&
       io.nestedwb.set(clientSetBits - 1, 0) === req.set(clientSetBits - 1, 0)
   )
   val change_clients_meta = clients_meta.zipWithIndex.map {
@@ -1243,7 +1243,7 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   io.tasks.tag_write.bits.way := meta_reg.self.way
   io.tasks.tag_write.bits.tag := req.tag
 
-  val req_line_addr = Cat(req.tag, req.set)
+  val req_line_addr = (req.tag << setBits) | req.set
   io.tasks.client_dir_write.bits.apply(
     req_line_addr,
     meta_reg.clients.way,

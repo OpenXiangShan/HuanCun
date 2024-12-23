@@ -68,8 +68,8 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   /* Whether selected request can be accepted */
 
-  def get_match_vec(req: MSHRRequest, granularity: Int = setBits): Vec[Bool] = {
-    VecInit(io.status.map(s => s.valid && s.bits.set(granularity - 1, 0) === req.set(granularity - 1, 0)))
+  def get_match_vec(req: MSHRRequest, granularity: UInt): Vec[Bool] = {
+    VecInit(io.status.map(s => s.valid && dynMask(s.bits.set, granularity - 1.U, 0.U) === dynMask(req.set, granularity - 1.U, 0.U)))
   }
 
 //  val c_block_vec = get_match_vec(io.c_req.bits, block_granularity)
@@ -201,7 +201,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   val pretch_block_vec = VecInit(io.status.map(s =>
     s.valid && s.bits.is_prefetch &&
-      (s.bits.set(block_granularity - 1, 0) === io.a_req.bits.set(block_granularity - 1, 0))
+      (dynMask(s.bits.set, block_granularity - 1.U, 0.U) === dynMask(io.a_req.bits.set, block_granularity - 1.U, 0.U))
   ))
 
   XSPerfAccumulate(cacheParams, "nrWorkingABCmshr", PopCount(io.status.init.init.map(_.valid)))

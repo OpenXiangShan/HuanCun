@@ -50,12 +50,14 @@ trait HasHuanCunParameters {
   val mshrs_max = cacheParams.mshrs
   val mshrsAll_max = cacheParams.mshrs + 2
   val mshrBits = log2Up(mshrsAll_max)
+
+  val sets_max = cacheParams.sets
   val blocks = cacheParams.ways * cacheParams.sets
   val sizeBytes = blocks * blockBytes
   val dirReadPorts = cacheParams.dirReadPorts
 
   val wayBits = log2Ceil(cacheParams.ways)
-  val setBits = log2Ceil(cacheParams.sets)
+  val setBits_max = log2Ceil(cacheParams.sets)
   val offsetBits = log2Ceil(blockBytes)
   val beatBits = offsetBits - log2Ceil(beatBytes)
   val pageOffsetBits = log2Ceil(cacheParams.pageBytes)
@@ -97,18 +99,20 @@ trait HasHuanCunParameters {
 
   // width params with bank idx (used in prefetcher / ctrl unit)
   lazy val fullAddressBits = edgeOut.bundle.addressBits
-  lazy val fullTagBits = fullAddressBits - setBits - offsetBits
+  lazy val fullTagBits_min = fullAddressBits - setBits_max - offsetBits
+  lazy val fullTagBits_max = fullAddressBits - offsetBits
   // width params without bank idx (used in slice)
   lazy val addressBits = fullAddressBits - bankBits
-  lazy val tagBits = fullTagBits - bankBits
+  lazy val tagBits_min = fullTagBits_min - bankBits
+  lazy val tagBits_max = fullTagBits_max - bankBits
 
   lazy val outerSinkBits = edgeOut.bundle.sinkBits
 
   lazy val hartIdLen: Int = p(MaxHartIdBits)
 
-  val block_granularity = if (!cacheParams.inclusive && cacheParams.clientCaches.nonEmpty) {
+  val block_granularity_max = if (!cacheParams.inclusive && cacheParams.clientCaches.nonEmpty) {
     cacheParams.clientCaches.head.blockGranularity
-  } else setBits
+  } else setBits_max
 
   def getClientBitOH(sourceId: UInt): UInt = {
     if (clientBits == 0) {
@@ -138,32 +142,6 @@ trait HasHuanCunParameters {
     }
   }
 
-  def parseFullAddress(x: UInt): (UInt, UInt, UInt) = {
-    val offset = x // TODO: check address mapping
-    val set = offset >> offsetBits
-    val tag = set >> setBits
-    (tag(fullTagBits - 1, 0), set(setBits - 1, 0), offset(offsetBits - 1, 0))
-  }
-
-  def parseAddress(x: UInt): (UInt, UInt, UInt) = {
-    val offset = x
-    val set = offset >> (offsetBits + bankBits)
-    val tag = set >> setBits
-    (tag(tagBits - 1, 0), set(setBits - 1, 0), offset(offsetBits - 1, 0))
-  }
-
-  def getPPN(x: UInt): UInt = {
-    x(x.getWidth - 1, pageOffsetBits)
-  }
-
-  def startBeat(offset: UInt): UInt = {
-    (offset >> log2Up(beatBytes)).asUInt
-  }
-
-  def totalBeats(size: UInt): UInt = {
-    (UIntToOH1(size, log2Up(blockBytes)) >> log2Ceil(beatBytes)).asUInt
-  }
-
 }
 
 trait DontCareInnerLogic { this: Module =>
@@ -179,8 +157,49 @@ abstract class HuanCunBundle(implicit val p: Parameters) extends Bundle with Has
 abstract class HuanCunModule(implicit val p: Parameters) extends Module with HasHuanCunParameters
 {
   val dynParam = IO(new Bundle() {
-    val mshrs = Input(UInt(log2Up(mshrs_max).W))
+    val mshrs = Input(UInt(log2Up(mshrs_max + 1).W))
+    val sets = Input(UInt(log2Up(sets_max + 1).W))
   })
+
+  assert(dynParam.sets > 0.U && ((dynParam.sets & (dynParam.sets - 1.U)) === 0.U))
+  val setBits: UInt = Log2(dynParam.sets)
+  lazy val fullTagBits: UInt = fullAddressBits.U - setBits - offsetBits.U
+  lazy val tagBits: UInt = fullTagBits - bankBits.U
+
+  val block_granularity: UInt = if (!cacheParams.inclusive && cacheParams.clientCaches.nonEmpty) {
+    cacheParams.clientCaches.head.blockGranularity.U
+  } else setBits
+
+  def dynMask(x: UInt, high: UInt, low: UInt): UInt = {
+    val mask = (1.U << (high + 1.U)) - 1.U
+    (x >> low) & mask
+  }
+
+  def parseFullAddress(x: UInt, setBits: UInt, fullTagBits: UInt): (UInt, UInt, UInt) = {
+    val offset = x // TODO: check address mapping
+    val set = offset >> offsetBits
+    val tag = set >> setBits
+    (dynMask(tag, fullTagBits - 1.U, 0.U), dynMask(set, setBits - 1.U, 0.U), offset(offsetBits - 1, 0))
+  }
+
+  def parseAddress(x: UInt, setBits: UInt): (UInt, UInt, UInt) = {
+    val offset = x
+    val set = offset >> (offsetBits + bankBits)
+    val tag = set >> setBits
+    (dynMask(tag, tagBits - 1.U, 0.U), dynMask(set, setBits - 1.U, 0.U), offset(offsetBits - 1, 0))
+  }
+
+  def getPPN(x: UInt): UInt = {
+    x(x.getWidth - 1, pageOffsetBits)
+  }
+
+  def startBeat(offset: UInt): UInt = {
+    (offset >> log2Up(beatBytes)).asUInt
+  }
+
+  def totalBeats(size: UInt): UInt = {
+    (UIntToOH1(size, log2Up(blockBytes)) >> log2Ceil(beatBytes)).asUInt
+  }
 }
 
 class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParameters {
@@ -266,6 +285,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         val addrMatch = Vec(cacheParams.hartIds.length, Output(Bool()))
       }
       val mshrs = Input(UInt(64.W))
+      val sets = Input(UInt(64.W))
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -286,7 +306,6 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       println(s"[client] size:${sizeBytesToStr(clientParam.capacity.toDouble)}")
       println(s"[client] sets:${clientParam.sets} ways:${clientParam.ways} blockBytes:${clientParam.blockBytes}")
     }
-    println(s"blockGranularityBits: ${block_granularity}")
     def print_bundle_fields(fs: Seq[BundleFieldBase], prefix: String) = {
       if(fs.nonEmpty){
         println(fs.map{f => s"$prefix/${f.key.name}: (${f.data.getWidth}-bit)"}.mkString("\n"))
@@ -320,6 +339,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         arbTasks(prefetcher.get.io.train, prefetchTrains.get, Some("prefetch_train"))
         prefetcher.get.io.req.ready := Cat(prefetchReqsReady).orR
         arbTasks(prefetcher.get.io.resp, prefetchResps.get, Some("prefetch_resp"))
+        prefetcher.get.dynParam.mshrs := io.mshrs
+        prefetcher.get.dynParam.sets := io.sets
     }
     wrapper.pf_recv_node match {
       case Some(x) =>
@@ -392,14 +413,16 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
             prefetchResps.get(i) <> resp
             // restore to full address
             if(bankBits != 0){
+              val setBits: UInt = Log2(io.sets)
+              val fullTagBits: UInt = edgeOut.bundle.addressBits.U - setBits - offsetBits.U
               val train_full_addr = Cat(
-                train.bits.tag, train.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
+                ((train.bits.tag << setBits) | train.bits.set), i.U(bankBits.W), 0.U(offsetBits.W)
               )
-              val (train_tag, train_set, _) = s.parseFullAddress(train_full_addr)
+              val (train_tag, train_set, _) = slice.parseFullAddress(train_full_addr, setBits, fullTagBits)
               val resp_full_addr = Cat(
-                resp.bits.tag, resp.bits.set, i.U(bankBits.W), 0.U(offsetBits.W)
+                ((resp.bits.tag << setBits) | resp.bits.set), i.U(bankBits.W), 0.U(offsetBits.W)
               )
-              val (resp_tag, resp_set, _) = s.parseFullAddress(resp_full_addr)
+              val (resp_tag, resp_set, _) = slice.parseFullAddress(resp_full_addr, setBits, fullTagBits)
               prefetchTrains.get(i).bits.tag := train_tag
               prefetchTrains.get(i).bits.set := train_set
               prefetchResps.get(i).bits.tag := resp_tag
@@ -408,6 +431,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         }
         io.perfEvents(i) := slice.perfinfo
         slice.dynParam.mshrs := io.mshrs
+        slice.dynParam.sets := io.sets
         slice
     }
     val ecc_arb = Module(new Arbiter(new EccInfo, slices.size))
@@ -465,6 +489,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         }
         t.io.debugTopDown <> io.debugTopDown
         t.dynParam.mshrs := io.mshrs
+        t.dynParam.sets := io.sets
       case None => io.debugTopDown.addrMatch.foreach(_ := false.B)
     }
   }
