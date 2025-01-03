@@ -41,15 +41,14 @@ class SRAMWrapper[T <: Data]
       gen, innerSet, 1, singlePort = true, input_clk_div_by_2 = clk_div_by_2
     ))
 
-    val clkGate = Module(new STD_CLKGT_func)
-    val clk_en = RegInit(false.B)
-    clk_en := ~clk_en
-    clkGate.io.TE := false.B
-    clkGate.io.E := clk_en
-    clkGate.io.CK := clock
-    val masked_clock = clkGate.io.Q
-
     if (clk_div_by_2) {
+      val clkGate = Module(new STD_CLKGT_func)
+      val clk_en = RegInit(false.B)
+      clk_en := ~clk_en
+      clkGate.io.TE := false.B
+      clkGate.io.E := clk_en
+      clkGate.io.CK := clock
+      val masked_clock = clkGate.io.Q
       sram.clock := masked_clock
     }
     sram.io.r.req.valid := io.r.req.valid && ren
