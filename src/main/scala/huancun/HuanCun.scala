@@ -260,6 +260,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         val robHeadPaddr = Vec(cacheParams.hartIds.length, Flipped(Valid(UInt(36.W))))
         val addrMatch = Vec(cacheParams.hartIds.length, Output(Bool()))
       }
+      val l3Miss = Output(Bool())
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -459,6 +460,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         t.io.debugTopDown <> io.debugTopDown
       case None => io.debugTopDown.addrMatch.foreach(_ := false.B)
     }
+
+    io.l3Miss := RegNext(slices.map(_.io.l3Miss).reduce(_ || _))
   }
 
 }

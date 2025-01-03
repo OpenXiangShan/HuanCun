@@ -38,6 +38,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
+    val l3Miss = Output(Bool())
   })
   println(s"clientBits: $clientBits")
 
@@ -657,6 +658,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       io.dir_result.get := directory.io.result
     }
   )
+  io.l3Miss := ms.map(_.io.status.valid).reduce(_ || _)
 
   val perfinfo = IO(Output(Vec(numPCntHc, (UInt(6.W)))))
   perfinfo := DontCare
