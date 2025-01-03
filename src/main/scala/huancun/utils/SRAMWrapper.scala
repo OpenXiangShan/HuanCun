@@ -31,11 +31,10 @@ class SRAMWrapper[T <: Data]
       gen, innerSet, 1, singlePort = true, input_clk_div_by_2 = clk_div_by_2
     ))
 
-    val clk_en = RegInit(false.B)
-    clk_en := ~clk_en
-    val masked_clock = ClockGate(false.B, clk_en, clock)
-
     if (clk_div_by_2) {
+      val clk_en = RegInit(false.B)
+      clk_en := ~clk_en
+      val masked_clock = ClockGate(false.B, clk_en, clock)
       sram.clock := masked_clock
     }
     sram.io.r.req.valid := io.r.req.valid && ren
