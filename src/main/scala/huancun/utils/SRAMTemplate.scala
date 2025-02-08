@@ -23,6 +23,7 @@ package huancun.utils
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink.LFSR64
+import freechips.rocketchip.diplomacy.ValName
 
 object HoldUnless {
   def apply[T <: Data](x: T, en: Bool): T = Mux(en, x, RegEnable(x, 0.U.asTypeOf(x), en))
@@ -103,14 +104,14 @@ class SRAMTemplate[T <: Data]
   shouldReset: Boolean = false, holdRead: Boolean = false,
   singlePort: Boolean = false, bypassWrite: Boolean = false,
   clk_div_by_2: Boolean = false, input_clk_div_by_2: Boolean = false
-) extends Module {
+)(implicit valName: ValName) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
   })
   override def desiredName: String = if (input_clk_div_by_2) s"ClkDiv2SRAMTemplate" else super.desiredName
   val wordType = UInt(gen.getWidth.W)
-  val array = SyncReadMem(set, Vec(way, wordType))
+  val array = SyncReadMem(set, Vec(way, wordType)).suggestName(valName.name)
   val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
 
   if (shouldReset) {
@@ -177,8 +178,12 @@ class SRAMTemplate[T <: Data]
 
 }
 
-class SRAMTemplateWithArbiter[T <: Data](nRead: Int, gen: T, set: Int, way: Int = 1,
-                                         shouldReset: Boolean = false) extends Module {
+class SRAMTemplateWithArbiter[T <: Data]
+(
+  nRead: Int,
+  gen: T, set: Int, way: Int = 1,
+  shouldReset: Boolean = false
+)(implicit valName: ValName) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(Vec(nRead, new SRAMReadBus(gen, set, way)))
     val w = Flipped(new SRAMWriteBus(gen, set, way))

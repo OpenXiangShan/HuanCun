@@ -116,27 +116,27 @@ class RecentRequestTable(implicit p: Parameters) extends BOPModule {
     val tag = UInt(rrTagBits.W)
   }
 
-  val rrTable = Module(
+  val hcRrTable = Module(
     new SRAMTemplate(rrTableEntry(), set = rrTableEntries, way = 1, shouldReset = true, singlePort = true)
   )
 
   val wAddr = io.w.bits
-  rrTable.io.w.req.valid := io.w.valid && !io.r.req.valid
-  rrTable.io.w.req.bits.setIdx := idx(wAddr)
-  rrTable.io.w.req.bits.data(0).valid := true.B
-  rrTable.io.w.req.bits.data(0).tag := tag(wAddr)
+  hcRrTable.io.w.req.valid := io.w.valid && !io.r.req.valid
+  hcRrTable.io.w.req.bits.setIdx := idx(wAddr)
+  hcRrTable.io.w.req.bits.data(0).valid := true.B
+  hcRrTable.io.w.req.bits.data(0).tag := tag(wAddr)
 
   val rAddr = io.r.req.bits.addr - signedExtend((io.r.req.bits.testOffset << offsetBits), fullAddressBits)
   val rData = Wire(rrTableEntry())
-  rrTable.io.r.req.valid := io.r.req.fire
-  rrTable.io.r.req.bits.setIdx := idx(rAddr)
-  rData := rrTable.io.r.resp.data(0)
+  hcRrTable.io.r.req.valid := io.r.req.fire
+  hcRrTable.io.r.req.bits.setIdx := idx(rAddr)
+  rData := hcRrTable.io.r.resp.data(0)
 
   assert(!RegNext(io.w.fire && io.r.req.fire), "single port SRAM should not read and write at the same time")
 
-  io.w.ready := rrTable.io.w.req.ready && !io.r.req.valid
+  io.w.ready := hcRrTable.io.w.req.ready && !io.r.req.valid
   io.r.req.ready := true.B
-  io.r.resp.valid := RegNext(rrTable.io.r.req.fire)
+  io.r.resp.valid := RegNext(hcRrTable.io.r.req.fire)
   io.r.resp.bits.ptr := RegNext(io.r.req.bits.ptr)
   io.r.resp.bits.hit := rData.valid && rData.tag === RegNext(tag(rAddr))
 

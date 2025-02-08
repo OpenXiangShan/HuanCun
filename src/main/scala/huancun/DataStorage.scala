@@ -61,7 +61,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val eccBits = dataCode.width(8 * bankBytes) - 8 * bankBytes
   println(s"Data ECC bits:$eccBits")
 
-  val bankedData = Seq.fill(nrBanks) {
+  val hcBankedData = Seq.fill(nrBanks) {
     Module(
       new SRAMWrapper(
         gen = UInt((8 * bankBytes).W),
@@ -71,7 +71,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
       )
     )
   }
-  val dataEccArray = if (eccBits > 0) {
+  val hcDataEccArray = if (eccBits > 0) {
     Seq.fill(nrStacks) {
       Module(new SRAMWrapper(
         gen = UInt((eccBits * stackSize).W),
@@ -179,8 +179,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
       // Write
       val wen = en && selectedReq.wen
       val wen_latch = RegNext(wen, false.B)
-      bankedData(i).io.w.req.valid := wen_latch
-      bankedData(i).io.w.req.bits.apply(
+      hcBankedData(i).io.w.req.valid := wen_latch
+      hcBankedData(i).io.w.req.bits.apply(
         setIdx = RegNext(selectedReq.index),
         data = RegNext(selectedReq.data(i)),
         waymask = 1.U
@@ -188,31 +188,31 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
       // Read
       val ren = en && !selectedReq.wen
       val ren_latch = RegNext(ren, false.B)
-      bankedData(i).io.r.req.valid := ren_latch
-      bankedData(i).io.r.req.bits.apply(setIdx = RegNext(selectedReq.index))
+      hcBankedData(i).io.r.req.valid := ren_latch
+      hcBankedData(i).io.r.req.bits.apply(setIdx = RegNext(selectedReq.index))
     } else {
       // Write
       val wen = en && selectedReq.wen
-      bankedData(i).io.w.req.valid := wen
-      bankedData(i).io.w.req.bits.apply(
+      hcBankedData(i).io.w.req.valid := wen
+      hcBankedData(i).io.w.req.bits.apply(
         setIdx = selectedReq.index,
         data = selectedReq.data(i),
         waymask = 1.U
       )
       // Read
       val ren = en && !selectedReq.wen
-      bankedData(i).io.r.req.valid := ren
-      bankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
+      hcBankedData(i).io.r.req.valid := ren
+      hcBankedData(i).io.r.req.bits.apply(setIdx = selectedReq.index)
     }
     // Ecc
-    outData(i) := bankedData(i).io.r.resp.data(0)
+    outData(i) := hcBankedData(i).io.r.resp.data(0)
   }
 
   if (eccBits > 0) {
     for (((banks, ecc), eccArray) <-
-           bankedData.grouped(stackSize).toList
+           hcBankedData.grouped(stackSize).toList
              .zip(eccData.get)
-             .zip(dataEccArray)
+             .zip(hcDataEccArray)
          ) {
       eccArray.io.w.req.valid := banks.head.io.w.req.valid
       eccArray.io.w.req.bits.apply(

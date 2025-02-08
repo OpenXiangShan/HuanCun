@@ -27,6 +27,7 @@ import freechips.rocketchip.tilelink.TLMessages
 import freechips.rocketchip.util.{Pow2ClockDivider, ReplacementPolicy}
 import huancun.utils._
 import utility.{ClockGate, Code}
+import freechips.rocketchip.diplomacy.ValName
 
 trait BaseDirResult extends HuanCunBundle {
   val idOH = UInt(mshrsAll.W) // which mshr the result should be sent to
@@ -67,7 +68,7 @@ class SubDirectory[T <: Data](
   dir_init_fn: () => T,
   dir_hit_fn: T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
-  replacement: String)(implicit p: Parameters)
+  replacement: String)(implicit p: Parameters, valName: ValName)
     extends Module {
 
   val setBits = log2Ceil(sets)
@@ -104,7 +105,7 @@ class SubDirectory[T <: Data](
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
   val resetFinish = RegInit(false.B)
   val resetIdx = RegInit((sets - 1).U)
-  val metaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val hcMetaArray = Module(new SRAMTemplate(chiselTypeOf(dir_init), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2)(ValName(s"hcMetaArray_${valName.name}")))
 
   val clk_en = RegInit(false.B)
   clk_en := ~clk_en
@@ -124,34 +125,34 @@ class SubDirectory[T <: Data](
   println(s"Tag ECC bits:$eccBits")
   val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val hcTagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2)(ValName(s"hcTagArray_${valName.name}")))
   if(eccBits > 0){
-    val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
-    eccArray.io.w(
+    val hcEccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2)(ValName(s"hcEccArray_${valName.name}")))
+    hcEccArray.io.w(
       io.tag_w.fire,
       tagCode.encode(io.tag_w.bits.tag).head(eccBits),
       io.tag_w.bits.set,
       UIntToOH(io.tag_w.bits.way)
     )
     if (clk_div_by_2) {
-      eccArray.clock := masked_clock
+      hcEccArray.clock := masked_clock
     }
-    eccRead := eccArray.io.r(io.read.fire, io.read.bits.set).resp.data
+    eccRead := hcEccArray.io.r(io.read.fire, io.read.bits.set).resp.data
   } else {
     eccRead.foreach(_ := 0.U)
   }
 
-  tagArray.io.w(
+  hcTagArray.io.w(
     io.tag_w.fire,
     io.tag_w.bits.tag,
     io.tag_w.bits.set,
     UIntToOH(io.tag_w.bits.way)
   )
-  tagRead := tagArray.io.r(io.read.fire, io.read.bits.set).resp.data
+  tagRead := hcTagArray.io.r(io.read.fire, io.read.bits.set).resp.data
 
   if (clk_div_by_2) {
-    metaArray.clock := masked_clock
-    tagArray.clock := masked_clock
+    hcMetaArray.clock := masked_clock
+    hcTagArray.clock := masked_clock
   }
 
   val reqReg = RegEnable(io.read.bits, io.read.fire)
@@ -172,17 +173,17 @@ class SubDirectory[T <: Data](
     }
     0.U
   } else {
-    val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, shouldReset = true))
-    val repl_sram_r = replacer_sram.io.r(io.read.fire, io.read.bits.set).resp.data(0)
+    val hc_replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, shouldReset = true)(ValName(s"hc_replacer_sram_${valName.name}")))
+    val repl_sram_r = hc_replacer_sram.io.r(io.read.fire, io.read.bits.set).resp.data(0)
     val repl_state_hold = WireInit(0.U(repl.nBits.W))
     repl_state_hold := HoldUnless(repl_sram_r, RegNext(io.read.fire, false.B))
     val next_state = repl.get_next_state(repl_state_hold, way_s1)
-    replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqReg.set), 1.U)
+    hc_replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqReg.set), 1.U)
     repl_state_hold
   }
 
   io.resp.valid := reqValidReg
-  val metas = metaArray.io.r(io.read.fire, io.read.bits.set).resp.data
+  val metas = hcMetaArray.io.r(io.read.fire, io.read.bits.set).resp.data
   val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
   val metaValidVec = metas.map(dir_hit_fn)
   val hitVec = tagMatchVec.zip(metaValidVec).map(x => x._1 && x._2)
@@ -216,7 +217,7 @@ class SubDirectory[T <: Data](
   io.resp.bits.tag := tag_s2
   io.resp.bits.error := io.resp.bits.hit && error_s2
 
-  metaArray.io.w(
+  hcMetaArray.io.w(
     !resetFinish || dir_wen,
     Mux(resetFinish, io.dir_w.bits.dir, dir_init),
     Mux(resetFinish, io.dir_w.bits.set, resetIdx),
@@ -258,7 +259,7 @@ abstract class SubDirectoryDoUpdate[T <: Data](
   dir_init_fn: () => T,
   dir_hit_fn:  T => Bool,
   invalid_way_sel: (Seq[T], UInt) => (Bool, UInt),
-  replacement: String)(implicit p: Parameters)
+  replacement: String)(implicit p: Parameters, valName: ValName)
     extends SubDirectory[T](
       wports, sets, ways, tagBits,
       dir_init_fn, dir_hit_fn, invalid_way_sel,

@@ -38,20 +38,20 @@ class metaEntry(implicit p:Parameters) extends TPmetaBundle {
 class TPmeta(implicit p: Parameters) extends TPmetaModule
 {
   val io = IO(new TPmetaIO())
-  val tpDataTable = Module(
+  val hcTpDataTable = Module(
     new SRAMTemplate(new metaEntry(), set = nrSet, way = metaAssoc, shouldReset = false, singlePort = true)
   )
 
   val readReqValid = io.req.valid && !io.req.bits.wmode
   val writeReqValid = io.req.valid && io.req.bits.wmode
 
-  tpDataTable.io.r.req.valid := readReqValid
-  tpDataTable.io.r.req.bits.setIdx := io.req.bits.set
+  hcTpDataTable.io.r.req.valid := readReqValid
+  hcTpDataTable.io.r.req.bits.setIdx := io.req.bits.set
 
   val wdata = Wire(new metaEntry())
   wdata.rawData := io.req.bits.rawData
   wdata.hartid := io.req.bits.hartid
-  tpDataTable.io.w.apply(
+  hcTpDataTable.io.w.apply(
     valid = writeReqValid,
     data = wdata,
     setIdx = io.req.bits.set,
@@ -63,7 +63,7 @@ class TPmeta(implicit p: Parameters) extends TPmetaModule
 
   val rdata = Reg(new metaEntry())
   when(readReqValidReg) {
-    rdata := tpDataTable.io.r.resp.data(readReqReg.way)
+    rdata := hcTpDataTable.io.r.resp.data(readReqReg.way)
   }
 
   io.resp.valid := RegNext(readReqValidReg) && (rdata.hartid === RegNext(readReqReg).hartid)
