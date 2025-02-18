@@ -15,11 +15,11 @@ trait RandomSampleUtil {
   }
 
   final def sample[A](dist: Map[A, Double], r: scala.util.Random): A = {
-    val p = r.nextDouble
+    val p = r.nextDouble()
     val it = dist.iterator
     var accum = 0.0
     while (it.hasNext) {
-      val (item, itemProb) = it.next
+      val (item, itemProb) = it.next()
       accum += itemProb
       if (accum >= p)
         return item // return so that we don't have to search through the whole distribution

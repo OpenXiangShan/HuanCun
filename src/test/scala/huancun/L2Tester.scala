@@ -5,15 +5,14 @@ import org.chipsalliance.cde.config.Config
 import chiseltest._
 import chiseltest.{VerilatorBackendAnnotation, WriteVcdAnnotation}
 import chiseltest.simulator.{VerilatorCFlags, VerilatorFlags}
-import firrtl.AnnotationSeq
-import firrtl.stage.RunFirrtlTransformAnnotation
+import firrtl2.AnnotationSeq
 import org.scalatest.flatspec._
 import org.scalatest.matchers.should._
 import huancun.prefetch._
 
 abstract class L2Tester extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
   behavior of "L2"
-  implicit val defaultConfig = new Config((_, _, _) => {
+  implicit val defaultConfig: Config = new Config((_, _, _) => {
     case HCCacheParamsKey => HCCacheParameters(
       prefetch = Some(BOPParameters()),// None,
       inclusive = false,

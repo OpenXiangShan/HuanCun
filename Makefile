@@ -10,16 +10,16 @@ test:
 
 
 test-top-l2:
-	mill -i HuanCun.test.runMain huancun.TestTop_L2 -td build
+	mill -i HuanCun.test.runMain huancun.TestTop_L2 -td build --target systemverilog --split-verilog
 
 test-top-l2standalone:
-	mill -i HuanCun.test.runMain huancun.TestTop_L2_Standalone -td build
+	mill -i HuanCun.test.runMain huancun.TestTop_L2_Standalone -td build --target systemverilog --split-verilog
 
 test-top-l2l3:
-	mill -i HuanCun.test.runMain huancun.TestTop_L2L3 -td build
+	mill -i HuanCun.test.runMain huancun.TestTop_L2L3 -td build --target systemverilog --split-verilog
 
 test-top-fullsys:
-	mill -i HuanCun.test.runMain huancun.TestTop_FullSys -td build
+	mill -i HuanCun.test.runMain huancun.TestTop_FullSys -td build --target systemverilog --split-verilog
 
 basic-test:
 	mill -i HuanCun.test.testOnly -o -s huancun.ConnectionTester

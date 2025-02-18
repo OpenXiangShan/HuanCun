@@ -246,10 +246,10 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     dataSel.io.en(1) := io.sourceC_raddr.fire
   }
 
-  io.sourceD_rdata.data := Cat(dataSelModules.map(_.io.out(0)).reverse)
-  io.sourceD_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(0))).orR
-  io.sourceC_rdata.data := Cat(dataSelModules.map(_.io.out(1)).reverse)
-  io.sourceC_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(1))).orR
+  io.sourceD_rdata.data := Cat(dataSelModules.map(_.io.out(0)).reverse.toIndexedSeq)
+  io.sourceD_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(0)).toIndexedSeq).orR
+  io.sourceC_rdata.data := Cat(dataSelModules.map(_.io.out(1)).reverse.toIndexedSeq)
+  io.sourceC_rdata.corrupt := Cat(dataSelModules.map(_.io.err_out(1)).toIndexedSeq).orR
 
   val d_addr_reg = RegNextN(io.sourceD_raddr.bits, sramLatency)
   val c_addr_reg = RegNextN(io.sourceC_raddr.bits, sramLatency)

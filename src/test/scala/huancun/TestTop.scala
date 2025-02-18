@@ -1,11 +1,12 @@
 package huancun
 
 import chisel3._
+import circt.stage.{ChiselStage, FirtoolOption}
 import chisel3.util._
 import utility._
 import huancun.debug._
 import org.chipsalliance.cde.config._
-import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+import chisel3.stage.ChiselGeneratorAnnotation
 import freechips.rocketchip.util._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
@@ -526,7 +527,8 @@ object TestTop_L2 extends App {
   val top = DisableMonitors(p => LazyModule(new TestTop_L2()(p)) )(config)
 
   (new ChiselStage).execute(args, Seq(
-    ChiselGeneratorAnnotation(() => top.module)
+    ChiselGeneratorAnnotation(() => top.module),
+    FirtoolOption("--disable-annotation-unknown")
   ))
   ChiselDB.addToFileRegisters
   FileRegisters.write(fileDir = "./build")
@@ -544,7 +546,8 @@ object TestTop_L2_Standalone extends App {
   val top = DisableMonitors(p => LazyModule(new TestTop_L2_Standalone()(p)) )(config)
 
   (new ChiselStage).execute(args, Seq(
-    ChiselGeneratorAnnotation(() => top.module)
+    ChiselGeneratorAnnotation(() => top.module),
+    FirtoolOption("--disable-annotation-unknown")
   ))
   ChiselDB.addToFileRegisters
   FileRegisters.write(fileDir = "./build")
@@ -562,7 +565,8 @@ object TestTop_L2L3 extends App {
 
 
   (new ChiselStage).execute(args, Seq(
-    ChiselGeneratorAnnotation(() => top.module)
+    ChiselGeneratorAnnotation(() => top.module),
+    FirtoolOption("--disable-annotation-unknown")
   ))
   ChiselDB.addToFileRegisters
   FileRegisters.write(fileDir = "./build")
@@ -579,7 +583,8 @@ object TestTop_FullSys extends App {
   val top = DisableMonitors( p => LazyModule(new TestTop_FullSys()(p)) )(config)
 
   (new ChiselStage).execute(args, Seq(
-    ChiselGeneratorAnnotation(() => top.module)
+    ChiselGeneratorAnnotation(() => top.module),
+    FirtoolOption("--disable-annotation-unknown")
   ))
   ChiselDB.addToFileRegisters
   FileRegisters.write(fileDir = "./build")
