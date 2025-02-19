@@ -265,8 +265,8 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
     def sizeBytesToStr(sizeBytes: Double): String = sizeBytes match {
-      case _ if sizeBytes >= 1024 * 1024 => (sizeBytes / 1024 / 1024) + "MB"
-      case _ if sizeBytes >= 1024        => (sizeBytes / 1024) + "KB"
+      case _ if sizeBytes >= 1024 * 1024 => s"${sizeBytes / 1024 / 1024}MB"
+      case _ if sizeBytes >= 1024        => s"${sizeBytes / 1024}KB"
       case _                            => "B"
     }
     val sizeStr = sizeBytesToStr(sizeBytes)
