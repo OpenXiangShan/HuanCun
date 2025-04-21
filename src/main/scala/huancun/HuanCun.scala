@@ -286,6 +286,13 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
       val mshrs = Input(UInt(64.W))
       val sets = Input(UInt(64.W))
+      val perf = Output(new Bundle {
+        val read_access = Output(UInt(64.W))
+        val write_access = Output(UInt(64.W))
+        val read_miss = Output(UInt(64.W))
+        val write_miss = Output(UInt(64.W))
+        val conflit = Output(UInt(64.W))
+      })
     })
 
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
@@ -385,6 +392,19 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       }
     }
 
+    val slices_num = wrapper.node.in.size
+    val read_acc_vec = Wire(Vec(slices_num, Bool()))
+    val write_acc_vec = Wire(Vec(slices_num, Bool()))
+    val read_miss_vec = Wire(Vec(slices_num, Bool()))
+    val write_miss_vec = Wire(Vec(slices_num, Bool()))
+    val conflit_vec = Wire(Vec(slices_num, Bool()))
+
+    io.perf.read_access := PopCount(read_acc_vec)
+    io.perf.write_access := PopCount(write_acc_vec)
+    io.perf.read_miss := PopCount(read_miss_vec)
+    io.perf.write_miss := PopCount(write_miss_vec)
+    io.perf.conflit := PopCount(conflit_vec)
+
     val slices = wrapper.node.in.zip(wrapper.node.out).zipWithIndex.map {
       case (((in, edgeIn), (out, edgeOut)), i) =>
         require(in.params.dataBits == out.params.dataBits)
@@ -401,6 +421,13 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
         out <> slice.io.out
         out.a.bits.address := restoreAddress(slice.io.out.a.bits.address, i)
         out.c.bits.address := restoreAddress(slice.io.out.c.bits.address, i)
+
+        read_acc_vec(i) := slice.io.perf.read_access
+        write_acc_vec(i) := slice.io.perf.write_access
+        read_miss_vec(i) := slice.io.perf.read_miss
+        write_miss_vec(i) := slice.io.perf.write_miss
+        conflit_vec(i) := slice.io.perf.conflit
+
 
         slice.io.prefetch.zip(prefetcher).foreach {
           case (s, p) =>

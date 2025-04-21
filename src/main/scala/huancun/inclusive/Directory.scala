@@ -36,14 +36,24 @@ class DirResult(implicit p: Parameters) extends DirectoryEntry with BaseDirResul
   val error = Bool()
 }
 
-class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, DirWrite, TagWrite] {
+class PerfBundle(implicit p: Parameters) extends BasePerf {
+  val read_access = Bool()
+  val read_miss = Bool()
+  val write_access = Bool()
+  val write_miss = Bool()
+  val conflit = Bool()
+}
+
+
+class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, DirWrite, TagWrite, PerfBundle] {
   val read = Flipped(DecoupledIO(new DirRead))
   val result = ValidIO(new DirResult)
   val dirWReq = Flipped(DecoupledIO(new DirWrite))
   val tagWReq = Flipped(DecoupledIO(new TagWrite))
+  val perf = Output(new PerfBundle)
 }
 
-class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite] {
+class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrite, TagWrite, PerfBundle] {
 
   val io = IO(new DirectoryIO())
 
@@ -105,4 +115,5 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
   dir.io.dir_w.bits.way := io.dirWReq.bits.way
   dir.io.dir_w.bits.dir := io.dirWReq.bits.data
   io.dirWReq.ready := dir.io.dir_w.ready
+  io.perf := DontCare
 }

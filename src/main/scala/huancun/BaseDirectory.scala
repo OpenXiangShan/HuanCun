@@ -33,6 +33,7 @@ trait BaseDirResult extends HuanCunBundle {
 }
 trait BaseDirWrite extends HuanCunBundle
 trait BaseTagWrite extends HuanCunBundle
+trait BasePerf extends HuanCunBundle
 
 class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val idOH = UInt(mshrsAll_max.W)
@@ -44,19 +45,20 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
   val way = UInt(log2Ceil(maxWays).W)
 }
 
-abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
+abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite, T_PERF <: BasePerf](
   implicit p: Parameters)
     extends HuanCunBundle {
   val read:    DecoupledIO[DirRead]
   val result:  Valid[T_RESULT]
   val dirWReq: DecoupledIO[T_DIR_W]
   val tagWReq:  DecoupledIO[T_TAG_W]
+  val perf: T_PERF
 }
 
-abstract class BaseDirectory[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
+abstract class BaseDirectory[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite, T_PERF <: BasePerf](
   implicit p: Parameters)
     extends HuanCunModule {
-  val io: BaseDirectoryIO[T_RESULT, T_DIR_W, T_TAG_W]
+  val io: BaseDirectoryIO[T_RESULT, T_DIR_W, T_TAG_W, T_PERF]
 }
 
 class SubDirectory[T <: Data](
@@ -100,6 +102,7 @@ class SubDirectory[T <: Data](
       val way = UInt(wayBits.W)
       val dir = dir_init.cloneType
     }))
+    val inv = Output(Bool())
   })
 
   val clk_div_by_2 = p(HCCacheParamsKey).sramClkDivBy2
@@ -191,6 +194,8 @@ class SubDirectory[T <: Data](
   val replaceWay = repl.get_replace_way(repl_state)
   val (inv, invalidWay) = invalid_way_sel(metas, replaceWay)
   val chosenWay = Mux(inv, invalidWay, replaceWay)
+
+  io.inv := inv
 
   /* stage 0: io.read.fire
      stage #: wait for sram

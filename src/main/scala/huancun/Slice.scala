@@ -28,6 +28,15 @@ import huancun.noninclusive.{MSHR, ProbeHelper, SliceCtrl, DirResult}
 import huancun.prefetch._
 import utility._
 
+class PerfBundle(implicit p: Parameters) extends BasePerf {
+  val read_access = Bool()
+  val read_miss = Bool()
+  val write_access = Bool()
+  val write_miss = Bool()
+  val conflit = Bool()
+}
+
+
 class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
     val in = Flipped(TLBundle(edgeIn.bundle))
@@ -38,6 +47,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val ctl_req = Flipped(DecoupledIO(new CtrlReq()))
     val ctl_resp = DecoupledIO(new CtrlResp())
     val ctl_ecc = DecoupledIO(new EccInfo())
+    val perf = Output(new PerfBundle())
   })
   println(s"clientBits: $clientBits")
 
@@ -398,6 +408,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     else new noninclusive.Directory()
   })
   directory.io.read <> ctrl_arb(mshrAlloc.io.dirRead, ctrl.map(_.io.dir_read))
+  io.perf := directory.io.perf
   ctrl.map(c => {
     c.io.dir_result.valid := directory.io.result.valid && directory.io.result.bits.idOH(1, 0) === "b11".U
     c.io.dir_result.bits := directory.io.result.bits

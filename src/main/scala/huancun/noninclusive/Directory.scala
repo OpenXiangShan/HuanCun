@@ -100,6 +100,14 @@ class ClientDirWrite(implicit p: Parameters) extends HuanCunBundle with HasClien
   }
 }
 
+class PerfBundle(implicit p: Parameters) extends BasePerf {
+  val read_access = Bool()
+  val read_miss = Bool()
+  val write_access = Bool()
+  val write_miss = Bool()
+  val conflit = Bool()
+}
+
 trait NonInclusiveCacheReplacerUpdate { this: HasUpdate =>
   override def doUpdate(info: ReplacerInfo): Bool = {
     val release_update = info.channel(2) && info.opcode === TLMessages.ReleaseData
@@ -108,17 +116,18 @@ trait NonInclusiveCacheReplacerUpdate { this: HasUpdate =>
   }
 }
 
-class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, SelfDirWrite, SelfTagWrite] {
+class DirectoryIO(implicit p: Parameters) extends BaseDirectoryIO[DirResult, SelfDirWrite, SelfTagWrite, PerfBundle] {
   val read = Flipped(DecoupledIO(new DirRead))
   val result = ValidIO(new DirResult)
   val dirWReq = Flipped(DecoupledIO(new SelfDirWrite))
   val tagWReq = Flipped(DecoupledIO(new SelfTagWrite))
   val clientDirWReq = Flipped(DecoupledIO(new ClientDirWrite))
   val clientTagWreq = Flipped(DecoupledIO(new ClientTagWrite))
+  val perf = Output(new PerfBundle)
 }
 
 class Directory(implicit p: Parameters)
-    extends BaseDirectory[DirResult, SelfDirWrite, SelfTagWrite]
+    extends BaseDirectory[DirResult, SelfDirWrite, SelfTagWrite, PerfBundle]
     with HasClientInfo {
   val io = IO(new DirectoryIO())
 
@@ -332,6 +341,12 @@ class Directory(implicit p: Parameters)
   XSPerfAccumulate(cacheParams, "selfdir_B_hit", RegNext(req_r.replacerInfo.channel(1) && resp.valid) && resp.bits.self.hit)
   XSPerfAccumulate(cacheParams, "selfdir_C_req", req_r.replacerInfo.channel(2) && resp.valid)
   XSPerfAccumulate(cacheParams, "selfdir_C_hit", RegNext(req_r.replacerInfo.channel(2) && resp.valid) && resp.bits.self.hit)
+
+  io.perf.read_access := req_r.replacerInfo.channel(0) && resp.valid
+  io.perf.read_miss := RegNext(req_r.replacerInfo.channel(0) && resp.valid) && !resp.bits.self.hit
+  io.perf.write_access := req_r.replacerInfo.channel(2) && resp.valid
+  io.perf.write_miss := RegNext(req_r.replacerInfo.channel(2) && resp.valid) && !resp.bits.self.hit
+  io.perf.conflit := (io.perf.read_miss || io.perf.write_miss) && !selfDir.io.inv
 
   XSPerfAccumulate(cacheParams, "selfdir_dirty", RegNext(resp.valid) && resp.bits.self.dirty)
   XSPerfAccumulate(cacheParams, "selfdir_TIP", RegNext(resp.valid) && resp.bits.self.state === TIP)
