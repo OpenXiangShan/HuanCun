@@ -32,7 +32,7 @@ jobs:
 
       - name: Cache
         id: cache
-        uses: coursier/cache-action@v5
+        uses: coursier/cache-action@v6
 
       - name: Verilator
         run: sudo apt install verilator libsqlite3-dev
@@ -74,7 +74,7 @@ jobs:
 
       - name: Cache
         id: cache
-        uses: coursier/cache-action@v5
+        uses: coursier/cache-action@v6
 
       - name: Verilator
         run: sudo apt install verilator libsqlite3-dev
