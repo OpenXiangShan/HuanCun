@@ -28,8 +28,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages._
 import freechips.rocketchip.util.{BundleField, BundleFieldBase, UIntToOH1}
 import huancun.prefetch._
-import utils.ResetGen
-import utility.{Pipeline, FastArbiter}
+import utility.{FastArbiter, Pipeline, ResetGen}
 import huancun.noninclusive.MSHR
 
 trait HasHuanCunParameters {

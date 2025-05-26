@@ -64,6 +64,7 @@ class TestTop_L2()(implicit p: Parameters) extends LazyModule {
     case PerfCounterOptionsKey => PerfCounterOptions(
       here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
       false,
+      XSPerfLevel.withName("VERBOSE"),
       0
     )
   })))
@@ -168,6 +169,7 @@ class TestTop_L2_Standalone()(implicit p: Parameters) extends LazyModule {
     case PerfCounterOptionsKey => PerfCounterOptions(
       here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
       false,
+      XSPerfLevel.withName("VERBOSE"),
       0
     )
   })))
@@ -260,6 +262,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
     case PerfCounterOptionsKey => PerfCounterOptions(
       here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
       false,
+      XSPerfLevel.withName("VERBOSE"),
       i
     )
   }))).node)
@@ -282,6 +285,7 @@ class TestTop_L2L3()(implicit p: Parameters) extends LazyModule {
     case PerfCounterOptionsKey => PerfCounterOptions(
       here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
       false,
+      XSPerfLevel.withName("VERBOSE"),
       0
     )
   })))
@@ -402,6 +406,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
     case PerfCounterOptionsKey => PerfCounterOptions(
       here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
       false,
+      XSPerfLevel.withName("VERBOSE"),
       i
     )
   }))).node)
@@ -426,6 +431,7 @@ class TestTop_FullSys()(implicit p: Parameters) extends LazyModule {
     case PerfCounterOptionsKey => PerfCounterOptions(
       here(HCCacheParamsKey).enablePerf && !here(HCCacheParamsKey).FPGAPlatform,
       false,
+      XSPerfLevel.withName("VERBOSE"),
       0
     )
   })))
