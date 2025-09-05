@@ -67,7 +67,9 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
         gen = UInt((8 * bankBytes).W),
         set = nrRows,
         n = cacheParams.sramDepthDiv,
-        clk_div_by_2 = cacheParams.sramClkDivBy2
+        clk_div_by_2 = cacheParams.sramClkDivBy2,
+        dummy = false
+        // dummy = p(DebugOptionsKey).TraceRTLMode
       )
     )
   }
