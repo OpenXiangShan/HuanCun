@@ -2,7 +2,7 @@ package huancun
 
 import chisel3._
 import chisel3.util._
-import chiseltest._
+import chisel3.simulator.ChiselSim
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp, TransferSizes}
 import freechips.rocketchip.tilelink.{TLBundle, TLChannelBeatBytes, TLClientNode, TLMasterParameters, TLMasterPortParameters, TLPermissions}
@@ -107,9 +107,9 @@ class MasterAgent
   probe: Boolean,
   serialList: ArrayBuffer[(Int, TLCTrans)],
   scoreboard: scala.collection.mutable.Map[BigInt, ScoreboardData]
-)(
-  implicit p: Parameters)
-  extends BaseFakeClient(name, 1, probe) {
+)(implicit p: Parameters)
+  extends BaseFakeClient(name, 1, probe) with ChiselSim {
+
   val addrStateList = scala.collection.mutable.Map[BigInt, AddrState]()
   lazy val agent = new TLCMasterAgent(
     id,
@@ -231,9 +231,8 @@ class MasterULAgent
   probe: Boolean,
   serialList: ArrayBuffer[(Int, TLCTrans)],
   scoreboard: scala.collection.mutable.Map[BigInt, ScoreboardData]
-)(
-  implicit p: Parameters)
-  extends BaseFakeClient(name, 1, probe) {
+)(implicit p: Parameters)
+  extends BaseFakeClient(name, 1, probe) with ChiselSim {
   val addrStateList = scala.collection.mutable.Map[BigInt, AddrState]()
   lazy val agent = new TLULMasterAgent(
     id,

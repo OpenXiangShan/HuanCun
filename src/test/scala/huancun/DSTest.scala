@@ -1,12 +1,11 @@
 package huancun
 
-import chiseltest._
-import freechips.rocketchip.diplomacy.LazyModule
+import freechips.rocketchip.diplomacy.{DisableMonitors, LazyModule}
 
 class DSTest extends L2Tester {
 
-  val system = LazyModule(new ExampleSystem())
-  circt.stage.ChiselStage.convert(system.module)
+  val system = DisableMonitors(p => LazyModule(new ExampleSystem()(p)))(defaultConfig)
+  circt.stage.ChiselStage.elaborate(system.module)
 
   val datastorage = chisel3.aop.Select.collectDeep[DataStorage](system.module){
     case ds: DataStorage =>
@@ -14,7 +13,7 @@ class DSTest extends L2Tester {
   }.head
 
   it should "pass" in {
-    test(new DataStorage()(datastorage.p)){ dut =>
+    simulate(new DataStorage()(datastorage.p)){ dut =>
       dut.clock.step(10)
     }
   }

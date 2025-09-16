@@ -21,7 +21,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import huancun.{TPmetaReq, TPmetaResp}
-import utility._
+import utility.sram.SRAMTemplate
 
 
 class TPmetaIO(implicit p: Parameters) extends TPmetaBundle {

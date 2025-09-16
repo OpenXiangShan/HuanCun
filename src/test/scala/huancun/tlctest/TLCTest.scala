@@ -79,7 +79,7 @@ class TestTop
 abstract class TLCTest extends L2Tester {
   val serialList = ArrayBuffer[(Int, TLCTrans)]()
   val scoreboard = mutable.Map[BigInt, ScoreboardData]()
-  val testTop = LazyModule(new TestTop(serialList, scoreboard, dcacheNum = 2))
+  val testTop = DisableMonitors(p => LazyModule(new TestTop(serialList, scoreboard, dcacheNum = 2)(p)))(defaultConfig)
 
   def l1d_map(func: TLCMasterAgent => Unit) = testTop.l1d_list.map(_.agent).foreach(func)
   def l1i_map(func: TLULMasterAgent => Unit) = testTop.l1i_list.map(_.agent).foreach(func)

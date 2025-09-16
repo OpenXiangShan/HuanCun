@@ -1,20 +1,25 @@
 package huancun
 
-import chisel3._
-import chiseltest._
-import freechips.rocketchip.diplomacy.{AddressSet, InModuleBody, LazyModule, LazyModuleImp}
-import freechips.rocketchip.tilelink.{BankBinder, TLCacheCork, TLEphemeralNode, TLFragmenter, TLFuzzer, TLRAM, TLWidthWidget, TLXbar}
+import freechips.rocketchip.diplomacy.{DisableMonitors, LazyModule}
+import freechips.rocketchip.diplomacy.DisableMonitors
 
-class AcquireTester extends L2Tester with DumpVCD with UseVerilatorBackend {
+class AcquireTester extends L2Tester {
 
   it should "send outer acquire" in {
 
-    val top = LazyModule(new ExampleSystem(l1dReq = 2))
+    implicit val sim = L2Tester.verilatorWithVcd
 
-    test(top.module).withAnnotations(testAnnos) { dut =>
-      dut.clock.setTimeout(2000)
-      while (!dut.success.peek().litToBoolean){
+    val top = DisableMonitors(p => LazyModule(new ExampleSystem(l1dReq = 2)(p)))(defaultConfig)
+
+    simulate(top.module) { dut =>
+      var stepCount = 0
+      val timeout = 2000
+      while (!dut.success.peek().litToBoolean && stepCount < timeout) {
         dut.clock.step(1)
+        stepCount += 1
+      }
+      if (stepCount >= timeout) {
+        throw new Exception(s"timeout on ${dut.clock} at $timeout idle cycles")
       }
     }
   }

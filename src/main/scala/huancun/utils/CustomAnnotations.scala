@@ -1,7 +1,6 @@
 package huancun.utils
 
 import chisel3._
-import chisel3.experimental.ChiselAnnotation
 
 case class SRAMClkDivBy2Annotation(mod: firrtl.annotations.ModuleName)
   extends firrtl.annotations.SingleTargetAnnotation[firrtl.annotations.ModuleName] {
@@ -19,13 +18,9 @@ case class SRAMSpecialDepthAnnotation(mod: firrtl.annotations.ModuleName)
 
 object CustomAnnotations {
   def annotateClkDivBy2(mod: Module) = {
-    chisel3.experimental.annotate(new ChiselAnnotation {
-      override def toFirrtl: firrtl.annotations.Annotation = SRAMClkDivBy2Annotation(mod.toNamed)
-    })
+    chisel3.experimental.annotate(mod)(Seq(SRAMClkDivBy2Annotation(mod.toNamed)))
   }
   def annotateSpecialDepth(mod: Module) = {
-    chisel3.experimental.annotate(new ChiselAnnotation {
-      override def toFirrtl: firrtl.annotations.Annotation = SRAMSpecialDepthAnnotation(mod.toNamed)
-    })
+    chisel3.experimental.annotate(mod)(Seq(SRAMSpecialDepthAnnotation(mod.toNamed)))
   }
 }

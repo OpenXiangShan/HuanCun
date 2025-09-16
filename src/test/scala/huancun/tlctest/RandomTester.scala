@@ -1,13 +1,12 @@
 package huancun.tlctest
 
-import chiseltest._
-import huancun.{DumpVCD, UseVerilatorBackend}
 import tltest._
 import tltest.TLMessagesBigInt._
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
+import huancun.L2Tester
 
 trait RandomSampleUtil {
   def getRandomElement[A](l: List[A], r: scala.util.Random): A = {
@@ -28,7 +27,7 @@ trait RandomSampleUtil {
   }
 }
 
-class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVerilatorBackend {
+class RandomTester extends TLCTest with RandomSampleUtil {
   it should "random run" in {
 
     val totalTick = 50000
@@ -47,7 +46,8 @@ class RandomTester extends TLCTest with RandomSampleUtil with DumpVCD with UseVe
     var total_release = 0
     var total_get = 0
 
-    test(testTop.module).withAnnotations(testAnnos) { dut =>
+    simulate(testTop.module) { dut =>
+      implicit val sim = L2Tester.verilatorWithVcd
 
       for (_ <- 0 to totalTick) {
 
