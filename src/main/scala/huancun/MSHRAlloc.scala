@@ -174,6 +174,10 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   dirRead.bits.wayMode := false.B
   dirRead.bits.way := DontCare
 
+  XSPerfAccumulate("l3_mshr_alloc_A", (dirRead.valid && request.bits.fromA).asUInt)
+  XSPerfAccumulate("l3_mshr_alloc_B", (dirRead.valid && request.bits.fromB).asUInt)
+  XSPerfAccumulate("l3_mshr_alloc_C", (dirRead.valid && request.bits.fromC).asUInt)
+
   val cntStart = RegInit(false.B)
   when(dirRead.ready) {
     cntStart := true.B
@@ -196,6 +200,41 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
       XSPerfHistogram("mshr_latency_" + Integer.toString(i, 10), cnt, cntEnable, 300, 1000, 50, right_strict = true)
       XSPerfMax("mshr_latency", cnt, cntEnable)
     }
+	val mshrType = RegInit(VecInit(Seq.fill(mshrsAll)(0.U(3.W))))
+	for ((alloc, i) <- io.alloc.zipWithIndex) {
+		when (alloc.valid) { mshrType(i) := alloc.bits.channel }
+	}
+
+	for ((status, i) <- io.status.zipWithIndex) {
+		val cntVal = mshrCnt(i)
+		val cntEnableByType = !status.valid && cntVal =/= 0.U && cntStart && cntVal < 5000.U
+		val isA = mshrType(i)(0)
+		val isB = mshrType(i)(1)
+		val isC = mshrType(i)(2)
+
+		XSPerfHistogram("l3_mshr_latency_A", cntVal, cntEnableByType && isA, 0, 300, 10, right_strict = true)
+		XSPerfHistogram("l3_mshr_latency_A", cntVal, cntEnableByType && isA, 300, 1000, 50, right_strict = true)
+
+		XSPerfHistogram("l3_mshr_latency_B", cntVal, cntEnableByType && isB, 0, 300, 10, right_strict = true)
+		XSPerfHistogram("l3_mshr_latency_B", cntVal, cntEnableByType && isB, 300, 1000, 50, right_strict = true)
+
+		XSPerfHistogram("l3_mshr_latency_C", cntVal, cntEnableByType && isC, 0, 300, 10, right_strict = true)
+		XSPerfHistogram("l3_mshr_latency_C", cntVal, cntEnableByType && isC, 300, 1000, 50, right_strict = true)
+	}
+
+	val occA = PopCount(io.status.map(s => s.valid && s.bits.fromA))
+	val occB = PopCount(io.status.map(s => s.valid && s.bits.fromB))
+	val occC = PopCount(io.status.map(s => s.valid && s.bits.fromC))
+
+	XSPerfHistogram("l3_mshr_occupancy_A", occA, true.B, 0, mshrsAll, 1)
+	XSPerfHistogram("l3_mshr_occupancy_B", occB, true.B, 0, mshrsAll, 1)
+	XSPerfHistogram("l3_mshr_occupancy_C", occC, true.B, 0, mshrsAll, 1)
+
+	val hasAcquireIn = io.a_req.valid
+	val hasBCInFlight = Cat(io.status.map(s => s.valid && (s.bits.fromB || s.bits.fromC))).orR
+
+	XSPerfAccumulate("l3_acq_blocked_by_BC_on_full", (hasAcquireIn && !mshrFree && hasBCInFlight).asUInt)
+	XSPerfAccumulate("l3_acq_total_cycles", hasAcquireIn.asUInt)
   }
 
   val pretch_block_vec = VecInit(io.status.map(s =>
