@@ -30,7 +30,7 @@ class TPmetaIO(implicit p: Parameters) extends TPmetaBundle {
 }
 
 class metaEntry(implicit p:Parameters) extends TPmetaBundle {
-  val rawData = Vec(log2Floor(512 / (fullAddressBits - offsetBits)), UInt((fullAddressBits - offsetBits).W))
+  val rawData = Vec(512 / (fullAddressBits - offsetBits), UInt((fullAddressBits - offsetBits).W))
   val hartid = UInt(hartIdLen.W)
   // TODO: val compressedData = UInt(512.W)
 }

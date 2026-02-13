@@ -39,17 +39,18 @@ case class DefaultTPmetaParameters() extends TPmetaParameters {
 }
 
 trait HasTPmetaParameters extends HasHuanCunParameters {
-  val metaEntries = tpmetaOpt.get.metaEntries
-  val metaAssoc = tpmetaOpt.get.metaAssoc
+  private val tpmetaParams = tpmetaOpt.getOrElse(DefaultTPmetaParameters())
+  val metaEntries = tpmetaParams.metaEntries
+  val metaAssoc = tpmetaParams.metaAssoc
   val nrSet = metaEntries / metaAssoc
   val SetBits = log2Ceil(nrSet)
-  val busBytes = tpmetaOpt.get.busBytes
+  val busBytes = tpmetaParams.busBytes
   val busBits = busBytes * 8
   // val nrTPBeat = cacheParams.blockBytes / busBytes
   val nrTPBeat = 1
   val tpbeatBits = if (nrTPBeat == 1) 1 else log2Ceil(nrTPBeat)
-  val deltaBits = tpmetaOpt.get.deltaBits
-  val nrDelta = tpmetaOpt.get.nrDelta
+  val deltaBits = tpmetaParams.deltaBits
+  val nrDelta = tpmetaParams.nrDelta
 }
 
 abstract class TPmetaBundle(implicit val p: Parameters) extends Bundle with HasTPmetaParameters
