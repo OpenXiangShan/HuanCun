@@ -97,6 +97,21 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
       Module(new inclusive.MSHR())
     else Module(new noninclusive.MSHR())
   }
+
+  val l3mshrSnapshotDB = ChiselDB.createTable("L3MSHRSnapshotDB", new L3MSHRSnapshotEntry, basicDB = true)
+  val l3mshrSnapshotTick = RegInit(0.U(4.W))
+  val l3mshrSnapshotPeriod = 10
+  val l3mshrSnapshotTickNext = l3mshrSnapshotTick + 1.U
+  l3mshrSnapshotTick := Mux(l3mshrSnapshotTick === (l3mshrSnapshotPeriod - 1).U, 0.U, l3mshrSnapshotTickNext)
+  val l3mshrLogCond = l3mshrSnapshotTick === (l3mshrSnapshotPeriod - 1).U
+  ms.zipWithIndex.foreach {
+    case (m, i) =>
+      val entry = Wire(new L3MSHRSnapshotEntry)
+      entry.valid := m.io.status.valid
+      entry.channel := m.io.status.bits.channel
+      l3mshrSnapshotDB.log(entry, l3mshrLogCond, i.toString, clock, reset)
+  }
+
   require(mshrsAll == mshrs + 2)
   val ms_abc = ms.init.init
   val ms_bc = ms.init.last

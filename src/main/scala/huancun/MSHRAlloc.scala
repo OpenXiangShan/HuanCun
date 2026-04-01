@@ -210,6 +210,20 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   XSPerfAccumulate("conflictByPrefetch", io.a_req.valid && Cat(pretch_block_vec).orR)
   XSPerfAccumulate("conflictB", io.b_req.valid && conflict_b)
   XSPerfAccumulate("conflictC", io.c_req.valid && conflict_c)
+
+  if (cacheParams.enablePerf) {
+    val a_fire = io.a_req.fire
+    val b_fire = io.b_req.fire
+    val c_fire = io.c_req.fire
+    XSPerfAccumulate("hc_req_acquire_block", a_fire && io.a_req.bits.opcode === TLMessages.AcquireBlock)
+    XSPerfAccumulate("hc_req_acquire_perm",  a_fire && io.a_req.bits.opcode === TLMessages.AcquirePerm)
+    XSPerfAccumulate("hc_req_get",           a_fire && io.a_req.bits.opcode === TLMessages.Get)
+    XSPerfAccumulate("hc_req_put",           a_fire && (io.a_req.bits.opcode === TLMessages.PutFullData || io.a_req.bits.opcode === TLMessages.PutPartialData))
+    XSPerfAccumulate("hc_req_probe",         b_fire) // Probe is the only opcode on B channel
+    XSPerfAccumulate("hc_req_release",       c_fire && io.c_req.bits.opcode === TLMessages.Release)
+    XSPerfAccumulate("hc_req_release_data",  c_fire && io.c_req.bits.opcode === TLMessages.ReleaseData)
+  }
+
   //val perfinfo = IO(new Bundle(){
   //  val perfEvents = Output(new PerfEventsBundle(numPCntHcMSHR))
   //})

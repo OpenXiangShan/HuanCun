@@ -191,6 +191,11 @@ class MSHRStatus(implicit p: Parameters) extends HuanCunBundle with HasChannelBi
   val reqSource = UInt(MemReqSource.reqSourceBits.W)
 }
 
+class L3MSHRSnapshotEntry extends Bundle {
+  val channel = UInt(3.W)
+  val valid = Bool()
+}
+
 class DSAddress(implicit p: Parameters) extends HuanCunBundle {
   val way = UInt(width = wayBits.W)
   val set = UInt(width = setBits.W)
