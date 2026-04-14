@@ -440,23 +440,23 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     add_ctrl(ms.map(_.io.tasks.tag_write), ctrl.map(_.io.s_tag_w)),
     Some("tagWrite")
   )
-  (directory, ms) match {
-    case (dir: noninclusive.Directory, ms: Seq[noninclusive.MSHR]) =>
+  directory match {
+    case dir: noninclusive.Directory =>
       block_b_c(
         Pipeline.pipeTo(dir.io.clientDirWReq),
         add_ctrl(
-          ms.map(_.io.tasks.client_dir_write),
+          ms.map(_.asInstanceOf[noninclusive.MSHR].io.tasks.client_dir_write),
           ctrl.map(_.io.c_dir_w)
         )
       )
       arbTasks(
         Pipeline.pipeTo(dir.io.clientTagWreq),
         add_ctrl(
-          ms.map(_.io.tasks.client_tag_write),
+          ms.map(_.asInstanceOf[noninclusive.MSHR].io.tasks.client_tag_write),
           ctrl.map(_.io.c_tag_w)
         )
       )
-    case (_: inclusive.Directory, _: Seq[inclusive.MSHR]) =>
+    case _: inclusive.Directory =>
     // skip
     case _ =>
       assert(false)

@@ -2,7 +2,6 @@ package huancun.debug
 
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
-import chisel3.experimental.{IntParam, StringParam}
 import chisel3.util._
 import huancun.HCCacheParamsKey
 import utility._
@@ -28,11 +27,10 @@ class DirectoryInfo extends Bundle with HasCLikeTypes {
 }
 
 class DirLogWriter(prefix: String)
-    extends BlackBox(
+    extends ExtModule(
       Map("prefix" -> StringParam(prefix))
-    )
-    with HasBlackBoxInline {
-  val io = IO(Input(new DirectoryInfo {
+    ) {
+  val io = FlatIO(Input(new DirectoryInfo {
     val wen = Bool()
     val clock = Clock()
     val reset = Reset()
