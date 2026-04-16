@@ -8,6 +8,7 @@ import utility.{FastArbiter, XSPerfAccumulate}
 class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Parameters) extends HuanCunModule {
 
   val io = IO(new Bundle() {
+    val dynSets = Input(UInt(64.W))
     val in = Flipped(DecoupledIO(new MSHRRequest))
     val out = DecoupledIO(new MSHRRequest)
     val mshr_status = Vec(mshrs, Flipped(ValidIO(new MSHRStatus)))
@@ -45,9 +46,10 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   io.in.ready := !full
 
   val in_set = io.in.bits.set
+  val dynSetBits = DynamicSetHardware.dynSetBits(io.dynSets)
 
   def set_conflict(set_a: UInt, set_b: UInt): Bool = {
-    set_a(block_granularity - 1, 0) === set_b(block_granularity - 1, 0)
+    DynamicSetHardware.physicalSetConflict(set_a, set_b, dynSetBits, block_granularity.U)
   }
   val conflict_mask = (0 until mshrs) map { i =>
     val s = io.mshr_status(i)

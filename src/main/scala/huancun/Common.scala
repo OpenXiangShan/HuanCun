@@ -208,8 +208,8 @@ class SourceDHazard(implicit p: Parameters) extends HuanCunBundle {
   val way = UInt(width = wayBits.W)
   val set = UInt(width = setBits.W)
 
-  def safe(s: UInt, w: UInt): Bool = {
-    set === s && way === w
+  def safe(s: UInt, w: UInt, dynSets: UInt): Bool = {
+    DynamicSetHardware.dataHazardConflict(set, way, s, w, dynSets, setBits)
   }
 }
 

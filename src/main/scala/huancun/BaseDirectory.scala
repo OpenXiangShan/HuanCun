@@ -47,6 +47,7 @@ class DirRead(implicit p: Parameters) extends HuanCunBundle {
 abstract class BaseDirectoryIO[T_RESULT <: BaseDirResult, T_DIR_W <: BaseDirWrite, T_TAG_W <: BaseTagWrite](
   implicit p: Parameters)
     extends HuanCunBundle {
+  val dynSets = Input(UInt(64.W))
   val read:    DecoupledIO[DirRead]
   val result:  Valid[T_RESULT]
   val dirWReq: DecoupledIO[T_DIR_W]
@@ -75,6 +76,7 @@ class SubDirectory[T <: Data](
   val dir_init = dir_init_fn()
 
   val io = IO(new Bundle() {
+    val dynSets = Input(UInt(64.W))
     val read = Flipped(DecoupledIO(new Bundle() {
       val tag = UInt(tagBits.W)
       val set = UInt(setBits.W)
@@ -86,6 +88,7 @@ class SubDirectory[T <: Data](
       val hit = Bool()
       val way = UInt(wayBits.W)
       val tag = UInt(tagBits.W)
+      val set = UInt(setBits.W)
       val dir = dir_init.cloneType
       val error = Bool()
     })
@@ -121,35 +124,40 @@ class SubDirectory[T <: Data](
 
   def tagCode: Code = Code.fromString(p(HCCacheParamsKey).tagECC)
 
-  val eccTagBits = tagCode.width(tagBits)
-  val eccBits = eccTagBits - tagBits
+  val dynSetBits = DynamicSetHardware.dynSetBits(io.dynSets)
+  def maskedSet(set: UInt): UInt = DynamicSetHardware.dynSetMask(set, dynSetBits)
+
+  val tagStorageBits = tagBits + setBits
+  val eccTagBits = tagCode.width(tagStorageBits)
+  val eccBits = eccTagBits - tagStorageBits
   println(s"Tag ECC bits:$eccBits")
-  val tagRead = Wire(Vec(ways, UInt(tagBits.W)))
+  val tagRead = Wire(Vec(ways, UInt(tagStorageBits.W)))
   val eccRead = Wire(Vec(ways, UInt(eccBits.W)))
-  val tagArray = Module(new SRAMTemplate(UInt(tagBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val tagArray = Module(new SRAMTemplate(UInt(tagStorageBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
+  val extendedTagWrite = DynamicSetHardware.extendTag(io.tag_w.bits.tag, io.tag_w.bits.set, dynSetBits)
   if(eccBits > 0){
     val eccArray = Module(new SRAMTemplate(UInt(eccBits.W), sets, ways, singlePort = true, input_clk_div_by_2 = clk_div_by_2))
     eccArray.io.w(
       io.tag_w.fire,
-      tagCode.encode(io.tag_w.bits.tag).head(eccBits),
-      io.tag_w.bits.set,
+      tagCode.encode(extendedTagWrite).head(eccBits),
+      maskedSet(io.tag_w.bits.set),
       UIntToOH(io.tag_w.bits.way)
     )
     if (clk_div_by_2) {
       eccArray.clock := masked_clock.get
     }
-    eccRead := eccArray.io.r(io.read.fire, io.read.bits.set).resp.data
+    eccRead := eccArray.io.r(io.read.fire, maskedSet(io.read.bits.set)).resp.data
   } else {
     eccRead.foreach(_ := 0.U)
   }
 
   tagArray.io.w(
     io.tag_w.fire,
-    io.tag_w.bits.tag,
-    io.tag_w.bits.set,
+    extendedTagWrite,
+    maskedSet(io.tag_w.bits.set),
     UIntToOH(io.tag_w.bits.way)
   )
-  tagRead := tagArray.io.r(io.read.fire, io.read.bits.set).resp.data
+  tagRead := tagArray.io.r(io.read.fire, maskedSet(io.read.bits.set)).resp.data
 
   if (clk_div_by_2) {
     metaArray.clock := masked_clock.get
@@ -157,6 +165,8 @@ class SubDirectory[T <: Data](
   }
 
   val reqReg = RegEnable(io.read.bits, io.read.fire)
+  val reqDynSetBits = RegEnable(dynSetBits, 0.U.asTypeOf(dynSetBits), io.read.fire)
+  val reqMaskedSet = RegEnable(maskedSet(io.read.bits.set), 0.U(setBits.W), io.read.fire)
   val reqValidReg = RegInit(false.B)
   if (clk_div_by_2) {
     reqValidReg := RegNext(io.read.fire)
@@ -175,17 +185,18 @@ class SubDirectory[T <: Data](
     0.U
   } else {
     val replacer_sram = Module(new SRAMTemplate(UInt(repl.nBits.W), sets, singlePort = true, shouldReset = true))
-    val repl_sram_r = replacer_sram.io.r(io.read.fire, io.read.bits.set).resp.data(0)
+    val repl_sram_r = replacer_sram.io.r(io.read.fire, maskedSet(io.read.bits.set)).resp.data(0)
     val repl_state_hold = WireInit(0.U(repl.nBits.W))
     repl_state_hold := HoldUnless(repl_sram_r, RegNext(io.read.fire, false.B))
     val next_state = repl.get_next_state(repl_state_hold, way_s1)
-    replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqReg.set), 1.U)
+    replacer_sram.io.w(replacer_wen, RegNext(next_state), RegNext(reqMaskedSet), 1.U)
     repl_state_hold
   }
 
   io.resp.valid := reqValidReg
-  val metas = metaArray.io.r(io.read.fire, io.read.bits.set).resp.data
-  val tagMatchVec = tagRead.map(_(tagBits - 1, 0) === reqReg.tag)
+  val metas = metaArray.io.r(io.read.fire, maskedSet(io.read.bits.set)).resp.data
+  val reqExtTag = DynamicSetHardware.extendTag(reqReg.tag, reqReg.set, reqDynSetBits)
+  val tagMatchVec = tagRead.map(_ === reqExtTag)
   val metaValidVec = metas.map(dir_hit_fn)
   val hitVec = tagMatchVec.zip(metaValidVec).map(x => x._1 && x._2)
   val hitWay = OHToUInt(hitVec)
@@ -205,8 +216,11 @@ class SubDirectory[T <: Data](
   val way_s2 = RegEnable(way_s1, 0.U, reqValidReg)
   val metaAll_s2 = RegEnable(metas, reqValidReg)
   val tagAll_s2 = RegEnable(tagRead, reqValidReg)
+  val reqDynSetBits_s2 = RegEnable(reqDynSetBits, 0.U.asTypeOf(reqDynSetBits), reqValidReg)
+  val reqMaskedSet_s2 = RegEnable(reqMaskedSet, 0.U(setBits.W), reqValidReg)
   val meta_s2 = metaAll_s2(way_s2)
   val tag_s2 = tagAll_s2(way_s2)
+  val set_s2 = DynamicSetHardware.reconstructSet(tag_s2, reqMaskedSet_s2, reqDynSetBits_s2, setBits)
 
   val errorAll_s1 = VecInit(eccRead.zip(tagRead).map{x => tagCode.decode(x._1 ## x._2).error})
   val errorAll_s2 = RegEnable(errorAll_s1, reqValidReg)
@@ -215,13 +229,14 @@ class SubDirectory[T <: Data](
   io.resp.bits.hit := hit_s2
   io.resp.bits.way := way_s2
   io.resp.bits.dir := meta_s2
-  io.resp.bits.tag := tag_s2
+  io.resp.bits.tag := tag_s2(tagStorageBits - 1, setBits)
+  io.resp.bits.set := set_s2
   io.resp.bits.error := io.resp.bits.hit && error_s2
 
   metaArray.io.w(
     !resetFinish || dir_wen,
     Mux(resetFinish, io.dir_w.bits.dir, dir_init),
-    Mux(resetFinish, io.dir_w.bits.set, resetIdx),
+    Mux(resetFinish, maskedSet(io.dir_w.bits.set), resetIdx),
     Mux(resetFinish, UIntToOH(io.dir_w.bits.way), Fill(ways, true.B))
   )
 

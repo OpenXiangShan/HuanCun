@@ -71,6 +71,7 @@ class Directory(implicit p: Parameters) extends BaseDirectory[DirResult, DirWrit
       replacement = cacheParams.replacement
     ) with UpdateOnAcquire
   )
+  dir.io.dynSets := io.dynSets
   val rport = dir.io.read
   val req = io.read
   rport.valid := req.valid

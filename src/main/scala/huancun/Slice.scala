@@ -33,6 +33,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle {
     val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
+    val dynSets = Input(UInt(64.W))
     val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
     val ms_status = topDownOpt.map(_ => Vec(mshrsAll, ValidIO(new MSHRStatus)))
     val dir_result = topDownOpt.map(_ => ValidIO(new DirResult))
@@ -62,6 +63,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val sinkC = Module(if (cacheParams.inclusive) new inclusive.SinkC else new noninclusive.SinkC)
   val sourceD = Module(new SourceD)
   val sinkE = Module(new SinkE)
+  sinkC.io.dynSets := io.dynSets
 
   val inBuf = cacheParams.innerBuf
   sinkA.io.a <> inBuf.a(io.in.a)
@@ -75,6 +77,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val sinkB = Module(new SinkB(edgeOut))
   val sourceC = Module(new SourceC(edgeOut))
   val sinkD = Module(new SinkD(edgeOut))
+  sinkD.io.dynSets := io.dynSets
   val sourceE = Module(new SourceE(edgeOut))
 
   val refillBuffer = Module(new RefillBuffer)
@@ -103,6 +106,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
   val ms_c = ms.last
 
   val dataStorage = Module(new DataStorage())
+  dataStorage.io.dynSets := io.dynSets
 
   dataStorage.io.sinkD_wdata := sinkD.io.bs_wdata
   dataStorage.io.sinkD_waddr <> sinkD.io.bs_waddr
@@ -125,7 +129,9 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
 
   val mshrAlloc = Module(new MSHRAlloc)
+  mshrAlloc.io.dynSets := io.dynSets
   val a_req_buffer = Module(new RequestBuffer(entries = 4))
+  a_req_buffer.io.dynSets := io.dynSets
   val probeHelperOpt = if(cacheParams.inclusive) None else {
     Some(Module(new ProbeHelper(enqDelay = if (cacheParams.sramClkDivBy2) 3 else (if(cacheParams.dirReg) 2 else 1))))
   }
@@ -382,6 +388,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     if (cacheParams.inclusive) new inclusive.Directory()
     else new noninclusive.Directory()
   })
+  directory.io.dynSets := io.dynSets
   directory.io.read <> ctrl_arb(mshrAlloc.io.dirRead, ctrl.map(_.io.dir_read))
   ctrl.map(c => {
     c.io.dir_result.valid := directory.io.result.valid && directory.io.result.bits.idOH(1, 0) === "b11".U

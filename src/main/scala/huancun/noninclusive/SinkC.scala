@@ -131,7 +131,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
   val w_counter_save = RegInit(0.U(beatBits.W))
   val w_counter_through = RegInit(0.U(beatBits.W))
   val task_w_safe = !(io.sourceD_r_hazard.valid &&
-    io.sourceD_r_hazard.bits.safe(task.set, task.way))
+    io.sourceD_r_hazard.bits.safe(task.set, task.way, io.dynSets))
 
   val w_save_done_r = RegInit(false.B)
   val w_through_done_r = RegInit(false.B)

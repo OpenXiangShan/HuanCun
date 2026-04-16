@@ -165,6 +165,66 @@ trait HasHuanCunParameters {
 
 }
 
+object DynamicSetMath {
+  def isPow2(value: Int): Boolean = value > 0 && (value & (value - 1)) == 0
+
+  def dynSetBits(runtimeSets: Int): Int = {
+    require(isPow2(runtimeSets), s"runtimeSets must be power-of-two, got $runtimeSets")
+    var bits = 0
+    var value = runtimeSets
+    while (value > 1) {
+      value = value >> 1
+      bits += 1
+    }
+    bits
+  }
+
+  // In this repository HuanCun `sets` is already a per-bank quantity, so legality here
+  // intentionally checks only positivity, static upper bound, and power-of-two shape.
+  def isValidRuntimeSets(runtimeSets: Int, staticSets: Int): Boolean = {
+    runtimeSets > 0 &&
+    runtimeSets <= staticSets &&
+    isPow2(runtimeSets)
+  }
+
+  def physicalSetConflict(setA: BigInt, setB: BigInt, runtimeSets: Int, granularity: Int): Boolean = {
+    val effectiveBits = math.min(dynSetBits(runtimeSets), granularity)
+    val mask = if (effectiveBits == 0) BigInt(0) else (BigInt(1) << effectiveBits) - 1
+    (setA & mask) == (setB & mask)
+  }
+}
+
+object DynamicSetHardware {
+  def dynSetBits(runtimeSets: UInt): UInt = Log2(runtimeSets)
+
+  def dynSetMask(set: UInt, dynSetBits: UInt): UInt = {
+    val setWidth = set.getWidth
+    val fullMask = ((BigInt(1) << setWidth) - 1).U(setWidth.W)
+    Mux(dynSetBits === 0.U, 0.U(setWidth.W), set & (fullMask >> (setWidth.U - dynSetBits)))
+  }
+
+  def extendTag(tag: UInt, set: UInt, dynSetBits: UInt): UInt = {
+    Cat(tag, set >> dynSetBits)
+  }
+
+  def physicalSetConflict(setA: UInt, setB: UInt, dynSetBits: UInt, granularity: UInt): Bool = {
+    val effectiveBits = Mux(granularity < dynSetBits, granularity, dynSetBits)
+    dynSetMask(setA, effectiveBits) === dynSetMask(setB, effectiveBits)
+  }
+
+  def dataHazardConflict(hazardSet: UInt, hazardWay: UInt, set: UInt, way: UInt, dynSets: UInt, setBits: Int): Bool = {
+    val dynamicSetBits = dynSetBits(dynSets)
+    physicalSetConflict(hazardSet, set, dynamicSetBits, setBits.U) && hazardWay === way
+  }
+
+  def reconstructSet(storedExtTag: UInt, maskedSet: UInt, dynSetBits: UInt, staticSetBits: Int): UInt = {
+    val fullSet = Wire(UInt(staticSetBits.W))
+    val storedSetFrag = storedExtTag(staticSetBits - 1, 0)
+    fullSet := ((storedSetFrag << dynSetBits) | maskedSet)(staticSetBits - 1, 0)
+    fullSet
+  }
+}
+
 trait DontCareInnerLogic { this: Module =>
   def IO[T <: Data](iodef: T): T = {
     val p = chisel3.IO.apply(iodef)
@@ -255,6 +315,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
     val io = IO(new Bundle {
       val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
+      val sets = Input(UInt(64.W))
       val debugTopDown = new Bundle {
         val robHeadPaddr = Vec(cacheParams.hartIds.length, Flipped(Valid(UInt(36.W))))
         val addrMatch = Vec(cacheParams.hartIds.length, Output(Bool()))
@@ -369,6 +430,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
           case EdgeOutKey => edgeOut
           case BankBitsKey => bankBits
         })) }
+        slice.io.dynSets := io.sets
         slice.io.in <> in
         in.b.bits.address := restoreAddress(slice.io.in.b.bits.address, i)
         out <> slice.io.out

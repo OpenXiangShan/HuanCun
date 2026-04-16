@@ -194,6 +194,7 @@ class Directory(implicit p: Parameters)
       replacement = "random"
     )
   )
+  clientDir.io.dynSets := clientSets.U
 
   def selfHitFn(dir: SelfDirEntry): Bool = dir.state =/= MetaData.INVALID
   def self_invalid_way_sel(metaVec: Seq[SelfDirEntry], repl: UInt): (Bool, UInt) = {
@@ -229,6 +230,7 @@ class Directory(implicit p: Parameters)
       replacement = cacheParams.replacement
     ) with NonInclusiveCacheReplacerUpdate
   )
+  selfDir.io.dynSets := io.dynSets
 
   def addrConnect(lset: UInt, ltag: UInt, rset: UInt, rtag: UInt) = {
     assert(lset.getWidth + ltag.getWidth == rset.getWidth + rtag.getWidth)
@@ -257,7 +259,6 @@ class Directory(implicit p: Parameters)
   val reqValidReg = RegNext(req.fire, false.B)
   val reqIdOHReg = RegEnable(req.bits.idOH, req.fire) // generate idOH in advance to index MSHRs
   val sourceIdReg = RegEnable(RegEnable(req.bits.source, req.fire), reqValidReg)
-  val setReg = RegEnable(RegEnable(req.bits.set, req.fire), reqValidReg)
   val replacerInfoReg = RegEnable(RegEnable(req.bits.replacerInfo, req.fire), reqValidReg)
   val resp = io.result
   val clientResp = clientDir.io.resp
@@ -267,7 +268,7 @@ class Directory(implicit p: Parameters)
   assert(valids.andR || !valids.orR, "valids must be all 1s or 0s")
   resp.bits.idOH := reqIdOHReg
   resp.bits.sourceId := sourceIdReg
-  resp.bits.set := setReg
+  resp.bits.set := selfResp.bits.set
   resp.bits.replacerInfo := replacerInfoReg
   resp.bits.self.hit := selfResp.bits.hit
   resp.bits.self.way := selfResp.bits.way

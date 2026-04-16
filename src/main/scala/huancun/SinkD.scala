@@ -27,6 +27,7 @@ import TLMessages.{AccessAckData, ReleaseAck}
 class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val d = Flipped(DecoupledIO(new TLBundleD(edge.bundle)))
+    val dynSets = Input(UInt(64.W))
     val bs_waddr = DecoupledIO(new DSAddress)
     val bs_wdata = Output(new DSData)
     val bypass_write = Flipped(new SinkDBufferWrite)
@@ -50,7 +51,7 @@ class SinkD(edge: TLEdgeOut)(implicit p: Parameters) extends HuanCunModule {
   val new_source = first_resp || io.d.bits.source =/= source_latch
   val indexed_set = RegEnable(io.set, io.d.valid)
   val indexed_way = RegEnable(io.way, io.d.valid)
-  val w_safe = !new_source && !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(indexed_set, indexed_way))
+  val w_safe = !new_source && !(io.sourceD_r_hazard.valid && io.sourceD_r_hazard.bits.safe(indexed_set, indexed_way, io.dynSets))
 
   assert(!io.d.valid || !needData || io.d.bits.size === log2Up(blockBytes).U, "SinkD must receive aligned message when needData")
 

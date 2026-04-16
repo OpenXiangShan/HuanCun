@@ -108,7 +108,7 @@ class SinkC(implicit p: Parameters) extends BaseSinkC {
 
   val bs_w_task = Mux(busy_r, task_r, io.task.bits)
   val task_w_safe = !(io.sourceD_r_hazard.valid &&
-    io.sourceD_r_hazard.bits.safe(io.task.bits.set, io.task.bits.way))
+    io.sourceD_r_hazard.bits.safe(io.task.bits.set, io.task.bits.way, io.dynSets))
 
   val isProbeAckDataReg = RegEnable(isProbeAckData, io.c.fire)
   val resp_way = Mux(io.c.valid, io.way, RegEnable(io.way, io.c.fire))

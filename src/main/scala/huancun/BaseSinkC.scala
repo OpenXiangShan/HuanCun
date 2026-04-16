@@ -27,6 +27,7 @@ import freechips.rocketchip.tilelink._
 abstract class BaseSinkC(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     val c = Flipped(DecoupledIO(new TLBundleC(edgeIn.bundle)))
+    val dynSets = Input(UInt(64.W))
     val way = Input(UInt(wayBits.W))
     val alloc = DecoupledIO(new MSHRRequest)
     val resp = ValidIO(new SinkCResp)

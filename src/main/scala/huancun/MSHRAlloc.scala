@@ -40,6 +40,7 @@ class MSHRSelector(implicit p: Parameters) extends HuanCunModule {
 class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     // requests
+    val dynSets = Input(UInt(64.W))
     val a_req = Flipped(DecoupledIO(new MSHRRequest))
     val b_req = Flipped(DecoupledIO(new MSHRRequest))
     val c_req = Flipped(DecoupledIO(new MSHRRequest))
@@ -67,9 +68,14 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val request = Wire(ValidIO(new MSHRRequest()))
 
   /* Whether selected request can be accepted */
+  val dynSetBits = DynamicSetHardware.dynSetBits(io.dynSets)
+
+  def set_conflict(setA: UInt, setB: UInt, granularity: Int): Bool = {
+    DynamicSetHardware.physicalSetConflict(setA, setB, dynSetBits, granularity.U)
+  }
 
   def get_match_vec(req: MSHRRequest, granularity: Int = setBits): Vec[Bool] = {
-    VecInit(io.status.map(s => s.valid && s.bits.set(granularity - 1, 0) === req.set(granularity - 1, 0)))
+    VecInit(io.status.map(s => s.valid && set_conflict(s.bits.set, req.set, granularity)))
   }
 
 //  val c_block_vec = get_match_vec(io.c_req.bits, block_granularity)
@@ -200,7 +206,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
 
   val pretch_block_vec = VecInit(io.status.map(s =>
     s.valid && s.bits.is_prefetch &&
-      (s.bits.set(block_granularity - 1, 0) === io.a_req.bits.set(block_granularity - 1, 0))
+      set_conflict(s.bits.set, io.a_req.bits.set, block_granularity)
   ))
 
   XSPerfAccumulate("nrWorkingABCmshr", PopCount(io.status.init.init.map(_.valid)))

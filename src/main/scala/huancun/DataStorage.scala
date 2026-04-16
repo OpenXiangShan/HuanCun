@@ -27,6 +27,7 @@ import utility._
 
 class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
+    val dynSets = Input(UInt(64.W))
     val sourceC_raddr = Flipped(DecoupledIO(new DSAddress))
     val sourceC_rdata = Output(new DSData)
     val sinkD_waddr = Flipped(DecoupledIO(new DSAddress))
@@ -50,6 +51,7 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val rowBits = log2Ceil(nrRows)
   val stackSize = nrBanks / nrStacks
   val sramSinglePort = true
+  val dynSetBits = DynamicSetHardware.dynSetBits(io.dynSets)
 
   // Suppose * as one bank
   // All banks can be grouped by nrStacks. We call such group as stack
@@ -104,7 +106,8 @@ class DataStorage(implicit p: Parameters) extends HuanCunModule {
     // Remap address
     // [beat, set, way, block] => [way, set, beat, block]
     //                            [index, stack, block]
-    val innerAddr = Cat(addr.bits.way, addr.bits.set, addr.bits.beat)
+    val maskedSet = DynamicSetHardware.dynSetMask(addr.bits.set, dynSetBits)
+    val innerAddr = Cat(addr.bits.way, maskedSet, addr.bits.beat)
     val innerIndex = innerAddr >> stackBits
     val stackIdx = innerAddr(stackBits - 1, 0)
     val stackSel = UIntToOH(stackIdx, stackSize) // Select which stack to access
