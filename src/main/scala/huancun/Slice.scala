@@ -34,6 +34,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
     val in = Flipped(TLBundle(edgeIn.bundle))
     val out = TLBundle(edgeOut.bundle)
     val dynSets = Input(UInt(64.W))
+    val dynMshrs = Input(UInt(64.W))
     val prefetch = prefetchOpt.map(_ => Flipped(new PrefetchIO))
     val ms_status = topDownOpt.map(_ => Vec(mshrsAll, ValidIO(new MSHRStatus)))
     val dir_result = topDownOpt.map(_ => ValidIO(new DirResult))
@@ -130,6 +131,7 @@ class Slice()(implicit p: Parameters) extends HuanCunModule {
 
   val mshrAlloc = Module(new MSHRAlloc)
   mshrAlloc.io.dynSets := io.dynSets
+  mshrAlloc.io.dynMshrs := io.dynMshrs
   val a_req_buffer = Module(new RequestBuffer(entries = 4))
   a_req_buffer.io.dynSets := io.dynSets
   val probeHelperOpt = if(cacheParams.inclusive) None else {

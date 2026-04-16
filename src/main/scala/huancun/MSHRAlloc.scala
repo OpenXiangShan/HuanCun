@@ -41,6 +41,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
     // requests
     val dynSets = Input(UInt(64.W))
+    val dynMshrs = Input(UInt(64.W))
     val a_req = Flipped(DecoupledIO(new MSHRRequest))
     val b_req = Flipped(DecoupledIO(new MSHRRequest))
     val c_req = Flipped(DecoupledIO(new MSHRRequest))
@@ -113,7 +114,8 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   val nestB = may_nestB && !bc_mshr_status.valid && !c_mshr_status.valid
 
   val dirRead = io.dirRead
-  val mshrFree = Cat(abc_mshr_status.map(s => !s.valid)).orR
+  val dynAbcIdle = DynamicMshrHardware.limitAbcIdle(abc_mshr_status.map(s => !s.valid), io.dynMshrs)
+  val mshrFree = DynamicMshrHardware.hasFreeAbc(abc_mshr_status.map(s => !s.valid), io.dynMshrs)
 
   //val can_accept_c = (mshrFree && !conflict_c) || nestC
   val can_accept_c = (!conflict_c && (mshrFree || !c_mshr_status.valid)) || nestC
@@ -137,7 +139,7 @@ class MSHRAlloc(implicit p: Parameters) extends HuanCunModule {
   io.a_req.ready := dirRead.ready && can_accept_a
 
   val mshrSelector = Module(new MSHRSelector())
-  mshrSelector.io.idle := abc_mshr_status.map(s => !s.valid)
+  mshrSelector.io.idle := VecInit(dynAbcIdle)
   val selectedMSHROH = mshrSelector.io.out.bits
   for ((mshr, i) <- abc_mshr_alloc.zipWithIndex) {
     mshr.valid := (

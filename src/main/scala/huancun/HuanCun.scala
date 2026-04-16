@@ -225,6 +225,26 @@ object DynamicSetHardware {
   }
 }
 
+object DynamicMshrMath {
+  def isValidRuntimeMshrs(runtimeMshrs: Int, staticMshrs: Int): Boolean = {
+    runtimeMshrs > 0 && runtimeMshrs <= staticMshrs
+  }
+
+  def eligibleAbcIdleMask(idle: Seq[Boolean], runtimeMshrs: Int): Seq[Boolean] = {
+    idle.zipWithIndex.map { case (isIdle, idx) => isIdle && idx < runtimeMshrs }
+  }
+}
+
+object DynamicMshrHardware {
+  def limitAbcIdle(idle: Seq[Bool], dynMshrs: UInt): Seq[Bool] = {
+    idle.zipWithIndex.map { case (isIdle, idx) => isIdle && (idx.U < dynMshrs) }
+  }
+
+  def hasFreeAbc(idle: Seq[Bool], dynMshrs: UInt): Bool = {
+    VecInit(limitAbcIdle(idle, dynMshrs)).asUInt.orR
+  }
+}
+
 trait DontCareInnerLogic { this: Module =>
   def IO[T <: Data](iodef: T): T = {
     val p = chisel3.IO.apply(iodef)
@@ -316,6 +336,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
       val perfEvents = Vec(banks, Vec(numPCntHc,Output(UInt(6.W))))
       val ecc_error = Valid(UInt(64.W))
       val sets = Input(UInt(64.W))
+      val mshrs = Input(UInt(64.W))
       val debugTopDown = new Bundle {
         val robHeadPaddr = Vec(cacheParams.hartIds.length, Flipped(Valid(UInt(36.W))))
         val addrMatch = Vec(cacheParams.hartIds.length, Output(Bool()))
@@ -431,6 +452,7 @@ class HuanCun(implicit p: Parameters) extends LazyModule with HasHuanCunParamete
           case BankBitsKey => bankBits
         })) }
         slice.io.dynSets := io.sets
+        slice.io.dynMshrs := io.mshrs
         slice.io.in <> in
         in.b.bits.address := restoreAddress(slice.io.in.b.bits.address, i)
         out <> slice.io.out
