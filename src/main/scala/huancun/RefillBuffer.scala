@@ -3,6 +3,7 @@ package huancun
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
+import utility.PriorityEncoder
 
 class SourceDBufferRead(implicit p: Parameters) extends HuanCunBundle {
   val valid = Input(Bool())

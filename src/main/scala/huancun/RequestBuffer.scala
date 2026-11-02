@@ -4,6 +4,7 @@ import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import utility.{FastArbiter, XSPerfAccumulate}
+import utility.PriorityEncoder
 
 class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Parameters) extends HuanCunModule {
 
@@ -63,7 +64,9 @@ class RequestBuffer(flow: Boolean = true, entries: Int = 16)(implicit p: Paramet
   val req_deps = (0 until entries) map { i =>
     valids(i) && set_conflict(buffer(i).set, in_set)
   }
-  val insert_idx = PriorityEncoder(~valids.asUInt)
+  // Keep the validity vector distributed for the simulation utility. The
+  // previous packed complement erased this layout before PriorityEncoder.
+  val insert_idx = PriorityEncoder(valids.map(v => !v))
   val alloc = !full && io.in.valid && !(flow.B && no_ready_entry && io.out.ready) && !dup
   when(alloc){
     buffer(insert_idx) := io.in.bits

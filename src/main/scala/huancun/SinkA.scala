@@ -24,6 +24,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tilelink._
 import utility.MemReqSource
+import utility.PriorityEncoder
 
 class SinkA(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
