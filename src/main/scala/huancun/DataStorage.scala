@@ -24,6 +24,7 @@ import chisel3._
 import chisel3.util._
 import huancun.utils.SRAMWrapper
 import utility._
+import utility.PopCount
 
 class DataStorage(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {

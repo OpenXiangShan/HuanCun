@@ -25,6 +25,7 @@ import chisel3.util._
 import huancun.utils._
 import utility._
 import freechips.rocketchip.tilelink._
+import utility.PopCount
 
 class MSHRSelector(implicit p: Parameters) extends HuanCunModule {
   val io = IO(new Bundle() {
