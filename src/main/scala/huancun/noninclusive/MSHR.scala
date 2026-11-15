@@ -723,18 +723,21 @@ class MSHR()(implicit p: Parameters) extends BaseMSHR[DirResult, SelfDirWrite, S
   val preferCache = (req.preferCache && !bypassPut_all) || cache_alias
   val bypassGet = req.opcode === Get && !preferCache
 
+  val acquirePermMiss = req.opcode === AcquirePerm && !self_meta.hit
+
   def set_probe(): Unit = {
     a_do_probe := true.B
     s_probe := false.B
     w_probeackfirst := false.B
     w_probeacklast := false.B
     w_probeack := false.B
-    when(!self_meta.hit){
+    // AcquirePerm on a self miss only upgrades an existing client's copy.
+    // ProbeAck may have no data: preserve the victim's self tag and data.
+    when(!self_meta.hit && !acquirePermMiss){
       s_wbselfdir := false.B
       s_wbselftag := false.B
     }
   }
-  val acquirePermMiss = req.opcode === AcquirePerm && !self_meta.hit
 
   def a_schedule(): Unit = {
     // A channel requests
